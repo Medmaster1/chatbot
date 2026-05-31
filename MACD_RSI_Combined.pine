@@ -1,0 +1,138 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0
+// © MACD + RSI Combined Indicator
+
+//@version=6
+indicator(title="MACD + RSI Combined", shorttitle="MACD+RSI", overlay=false, timeframe="", timeframe_gaps=true)
+
+// ─────────────────────────────────────────────
+//  INPUTS — RSI
+// ─────────────────────────────────────────────
+grpRSI = "RSI Settings"
+rsiLen      = input.int(14,    title="RSI Length",           group=grpRSI, minval=1)
+rsiSrc      = input.source(close, title="RSI Source",        group=grpRSI)
+rsiOB       = input.int(70,    title="Overbought Level",     group=grpRSI, minval=50, maxval=100)
+rsiOS       = input.int(30,    title="Oversold Level",       group=grpRSI, minval=0,  maxval=50)
+showRSI     = input.bool(true, title="Show RSI",             group=grpRSI)
+
+// ─────────────────────────────────────────────
+//  INPUTS — MACD
+// ─────────────────────────────────────────────
+grpMACD = "MACD Settings"
+fastLen     = input.int(12,    title="Fast EMA Length",      group=grpMACD, minval=1)
+slowLen     = input.int(26,    title="Slow EMA Length",      group=grpMACD, minval=1)
+sigLen      = input.int(9,     title="Signal Length",        group=grpMACD, minval=1)
+macdSrc     = input.source(close, title="MACD Source",       group=grpMACD)
+showMACD    = input.bool(true, title="Show MACD",            group=grpMACD)
+
+// ─────────────────────────────────────────────
+//  INPUTS — SIGNALS
+// ─────────────────────────────────────────────
+grpSIG = "Signal Settings"
+showSignals = input.bool(true, title="Show Buy/Sell Labels", group=grpSIG)
+requireBoth = input.bool(true, title="Require Both Indicators to Agree", group=grpSIG)
+
+// ─────────────────────────────────────────────
+//  RSI CALCULATION
+// ─────────────────────────────────────────────
+rsiVal = ta.rsi(rsiSrc, rsiLen)
+
+// ─────────────────────────────────────────────
+//  MACD CALCULATION
+// ─────────────────────────────────────────────
+[macdLine, signalLine, histLine] = ta.macd(macdSrc, fastLen, slowLen, sigLen)
+
+// ─────────────────────────────────────────────
+//  SIGNAL CONDITIONS
+// ─────────────────────────────────────────────
+// RSI conditions
+rsiBull = ta.crossover(rsiVal, rsiOS)   // RSI crosses above oversold
+rsiBear = ta.crossunder(rsiVal, rsiOB)  // RSI crosses below overbought
+
+// MACD conditions
+macdBull = ta.crossover(macdLine, signalLine)   // MACD crosses above signal
+macdBear = ta.crossunder(macdLine, signalLine)  // MACD crosses below signal
+
+// Combined buy/sell signals
+buySignal  = requireBoth ? (macdBull and rsiVal < 50) : (macdBull or rsiBull)
+sellSignal = requireBoth ? (macdBear and rsiVal > 50) : (macdBear or rsiBear)
+
+// ─────────────────────────────────────────────
+//  COLORS
+// ─────────────────────────────────────────────
+colorRSI     = color.new(color.purple, 0)
+colorOB      = color.new(color.red,    0)
+colorOS      = color.new(color.green,  0)
+colorMid     = color.new(color.gray,   50)
+
+colorMACD    = color.new(color.blue,   0)
+colorSignal  = color.new(color.orange, 0)
+
+histColor = histLine >= 0
+          ? (histLine > histLine[1] ? color.new(#26a69a, 0) : color.new(#26a69a, 50))
+          : (histLine < histLine[1] ? color.new(#ef5350, 0) : color.new(#ef5350, 50))
+
+// ─────────────────────────────────────────────
+//  SCALE MACD INTO RSI PANE  (optional visual trick)
+//  We plot RSI on its natural 0-100 scale and MACD
+//  normalised alongside it.
+// ─────────────────────────────────────────────
+// Normalise MACD histogram so its range fits 40-60 band for readability
+macdMax = ta.highest(math.abs(histLine), 100)
+histNorm  = macdMax != 0 ? (histLine  / macdMax) * 10 + 50 : 50.0
+macdNorm  = macdMax != 0 ? (macdLine  / macdMax) * 10 + 50 : 50.0
+sigNorm   = macdMax != 0 ? (signalLine/ macdMax) * 10 + 50 : 50.0
+
+// ─────────────────────────────────────────────
+//  PLOTS — RSI
+// ─────────────────────────────────────────────
+plotRSI = plot(showRSI ? rsiVal : na, title="RSI", color=colorRSI, linewidth=2)
+
+hline(rsiOB,  "Overbought", color=colorOB,  linestyle=hline.style_dashed, linewidth=1)
+hline(rsiOS,  "Oversold",   color=colorOS,  linestyle=hline.style_dashed, linewidth=1)
+hline(50,     "Midline",    color=colorMid, linestyle=hline.style_dotted,  linewidth=1)
+
+// Shade overbought / oversold zones
+obBand = plot(rsiOB, color=na, display=display.none)
+osBand = plot(rsiOS, color=na, display=display.none)
+fill(plotRSI, obBand, color=color.new(color.red,   88), title="OB Zone")
+fill(plotRSI, osBand, color=color.new(color.green, 88), title="OS Zone")
+
+// ─────────────────────────────────────────────
+//  PLOTS — MACD (normalised, same pane)
+// ─────────────────────────────────────────────
+plot(showMACD ? macdNorm   : na, title="MACD (norm)",   color=colorMACD,   linewidth=1)
+plot(showMACD ? sigNorm    : na, title="Signal (norm)",  color=colorSignal, linewidth=1)
+plot(showMACD ? histNorm   : na, title="Hist (norm)",    color=histColor,   style=plot.style_histogram, linewidth=3)
+
+// ─────────────────────────────────────────────
+//  BUY / SELL LABELS
+// ─────────────────────────────────────────────
+if showSignals and buySignal
+    label.new(bar_index, rsiVal, "BUY",
+              color=color.new(color.green, 0),
+              textcolor=color.white,
+              style=label.style_label_up,
+              size=size.small)
+
+if showSignals and sellSignal
+    label.new(bar_index, rsiVal, "SELL",
+              color=color.new(color.red, 0),
+              textcolor=color.white,
+              style=label.style_label_down,
+              size=size.small)
+
+// ─────────────────────────────────────────────
+//  BACKGROUND HIGHLIGHT on active signal bar
+// ─────────────────────────────────────────────
+bgcolor(buySignal  ? color.new(color.green, 88) : na, title="Buy Background")
+bgcolor(sellSignal ? color.new(color.red,   88) : na, title="Sell Background")
+
+// ─────────────────────────────────────────────
+//  ALERTS
+// ─────────────────────────────────────────────
+alertcondition(buySignal,  title="BUY Signal",  message="MACD+RSI — BUY signal on {{ticker}} ({{interval}})")
+alertcondition(sellSignal, title="SELL Signal", message="MACD+RSI — SELL signal on {{ticker}} ({{interval}})")
+alertcondition(rsiBull,    title="RSI Oversold Cross",    message="RSI crossed above oversold on {{ticker}}")
+alertcondition(rsiBear,    title="RSI Overbought Cross",  message="RSI crossed below overbought on {{ticker}}")
+alertcondition(macdBull,   title="MACD Bullish Cross",    message="MACD bullish crossover on {{ticker}}")
+alertcondition(macdBear,   title="MACD Bearish Cross",    message="MACD bearish crossover on {{ticker}}")
