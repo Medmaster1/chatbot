@@ -2,7 +2,7 @@
 // © MACD + RSI Combined Indicator
 
 //@version=6
-indicator(title="MACD + RSI Combined", shorttitle="MACD+RSI", overlay=false, timeframe="", timeframe_gaps=true)
+indicator(title="MACD + RSI Combined", shorttitle="MACD+RSI", overlay=false)
 
 // ─────────────────────────────────────────────
 //  INPUTS — RSI
