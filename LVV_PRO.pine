@@ -1,0 +1,201 @@
+//@version=6
+indicator("Liquidity · Volume Bubble · Volatility [XAUUSD]",
+     shorttitle="LVV PRO", overlay=true, max_bars_back=500)
+
+// ════════════════════════════════════════════════════════════════════════════
+//  ► TOGGLE GLOBALI  —  attiva / disattiva ogni strumento indipendentemente
+// ════════════════════════════════════════════════════════════════════════════
+var TG = "► Attiva / Disattiva Strumenti"
+use_lg = input.bool(true, "⚡  Liquidity Grabs",         group=TG)
+use_bv = input.bool(true, "●  Volume Bubble",            group=TG)
+use_vl = input.bool(true, "〜  Volatilità Oscillazione", group=TG)
+
+// ════════════════════════════════════════════════════════════════════════════
+//  ⚡  LIQUIDITY GRABS  —  impostazioni
+// ════════════════════════════════════════════════════════════════════════════
+var GL = "⚡  Liquidity Grabs"
+lg_len      = input.int(20,    "Periodo Swing High / Low",    minval=3,   maxval=200, group=GL)
+lg_wick_min = input.float(0.3, "Wick minimo (× ATR)",         minval=0.0, maxval=5.0, step=0.1, group=GL,
+     tooltip="Il wick dello sweep deve essere almeno X volte l'ATR.\nValori bassi = più segnali, valori alti = solo sweep forti.")
+lg_show_box = input.bool(true, "Mostra zona (rettangolo)",    group=GL)
+lg_box_bars = input.int(10,    "Estensione zona (barre →)",   minval=1,   maxval=100, group=GL,
+     tooltip="Quante barre a destra si estende il rettangolo della zona di liquidità")
+
+// ════════════════════════════════════════════════════════════════════════════
+//  ●  VOLUME BUBBLE  —  impostazioni
+// ════════════════════════════════════════════════════════════════════════════
+var GV = "●  Volume Bubble"
+bv_len      = input.int(100, "Finestra percentile (barre)",  minval=10, maxval=500, group=GV,
+     tooltip="Numero di barre usate per calcolare il volume massimo di riferimento")
+bv_col_bull = input.color(color.new(#00e676, 20), "Colore rialzo",  group=GV)
+bv_col_bear = input.color(color.new(#ff1744, 20), "Colore ribasso", group=GV)
+bv_col_doji = input.color(color.new(#ff9800, 30), "Colore doji",    group=GV,
+     tooltip="Doji = corpo < 15% del range totale della candela")
+
+// ════════════════════════════════════════════════════════════════════════════
+//  〜  VOLATILITÀ OSCILLAZIONE  —  impostazioni
+// ════════════════════════════════════════════════════════════════════════════
+var GW = "〜  Volatilità Oscillazione"
+vl_atr_len  = input.int(14,    "Periodo ATR",                 minval=1,   group=GW)
+vl_avg_len  = input.int(50,    "Media ATR — regime (barre)",  minval=5,   group=GW)
+vl_band_len = input.int(20,    "Periodo Bande centrali",      minval=3,   group=GW)
+vl_mult     = input.float(1.5, "Moltiplicatore bande",        minval=0.1, step=0.1, group=GW)
+vl_hi_thr   = input.float(1.4, "Soglia Alta Volatilità",      minval=1.0, step=0.1, group=GW,
+     tooltip="ATR corrente > media × soglia → regime di alta volatilità")
+vl_lo_thr   = input.float(0.7, "Soglia Bassa Volatilità",     minval=0.1, step=0.1, group=GW,
+     tooltip="ATR corrente < media × soglia → regime di bassa volatilità")
+vl_show_bands = input.bool(true, "Mostra bande ATR",           group=GW)
+vl_show_bg    = input.bool(true, "Sfondo regime volatilità",   group=GW)
+vl_show_exp   = input.bool(true, "Evidenzia candele esplosive", group=GW,
+     tooltip="Marca le candele con range > 2× la media recente")
+
+// ════════════════════════════════════════════════════════════════════════════
+//  CALCOLI CONDIVISI
+// ════════════════════════════════════════════════════════════════════════════
+atr14 = ta.atr(14)   // usato per offset label e filtro wick
+
+// ════════════════════════════════════════════════════════════════════════════
+//  ⚡  LOGICA — LIQUIDITY GRABS
+//
+//  Bearish LG: il wick supera lo swing high degli ultimi N periodi
+//              ma la chiusura rientra sotto di esso  → stop hunt al rialzo
+//
+//  Bullish LG: il wick buca lo swing low degli ultimi N periodi
+//              ma la chiusura rientra sopra di esso  → stop hunt al ribasso
+// ════════════════════════════════════════════════════════════════════════════
+swing_hi = ta.highest(high, lg_len)[1]   // massimo delle ultime N barre (esclusa corrente)
+swing_lo = ta.lowest(low,   lg_len)[1]   // minimo delle ultime N barre
+
+bear_wick = high - math.max(open, close)
+bull_wick = math.min(open, close) - low
+
+bear_lg = use_lg
+     and high  > swing_hi
+     and close < swing_hi
+     and bear_wick >= atr14 * lg_wick_min
+
+bull_lg = use_lg
+     and low   < swing_lo
+     and close > swing_lo
+     and bull_wick >= atr14 * lg_wick_min
+
+// — Label e rettangolo zona —
+if bear_lg
+    label.new(bar_index, high + atr14 * 0.7,
+         "⚡ LG ↓", style=label.style_label_down,
+         color=color.new(#ff1744, 5), textcolor=color.white, size=size.small,
+         tooltip="Liquidity Grab Ribassista\n" +
+                 "Sweep: "       + str.tostring(high,     "#.##") +
+                 "\nSwing High: " + str.tostring(swing_hi, "#.##") +
+                 "\nWick ATR: "   + str.tostring(bear_wick / atr14, "#.##") + "×")
+    if lg_show_box
+        // FIX: top=high (valore maggiore), bottom=swing_hi (valore minore)
+        // La zona copre l'area del wick che ha bucato lo swing high
+        box.new(bar_index, high, bar_index + lg_box_bars, swing_hi,
+             border_color=color.new(#ff1744, 30),
+             bgcolor=color.new(#ff1744, 88), border_width=1)
+
+if bull_lg
+    label.new(bar_index, low - atr14 * 0.7,
+         "⚡ LG ↑", style=label.style_label_up,
+         color=color.new(#00e676, 5), textcolor=color.white, size=size.small,
+         tooltip="Liquidity Grab Rialzista\n" +
+                 "Sweep: "      + str.tostring(low,     "#.##") +
+                 "\nSwing Low: " + str.tostring(swing_lo, "#.##") +
+                 "\nWick ATR: "  + str.tostring(bull_wick / atr14, "#.##") + "×")
+    if lg_show_box
+        // FIX: top=swing_lo (valore maggiore), bottom=low (valore minore)
+        // La zona copre l'area del wick che ha bucato lo swing low
+        box.new(bar_index, swing_lo, bar_index + lg_box_bars, low,
+             border_color=color.new(#00e676, 30),
+             bgcolor=color.new(#00e676, 88), border_width=1)
+
+// ════════════════════════════════════════════════════════════════════════════
+//  ●  LOGICA — VOLUME BUBBLE
+//
+//  Il volume di ogni candela viene confrontato con il massimo delle ultime
+//  N barre e classificato in 5 fasce → cerchio di dimensione crescente.
+//  Verde = candela rialzista · Rosso = ribassista · Arancio = doji
+// ════════════════════════════════════════════════════════════════════════════
+vol_max = ta.highest(volume, bv_len)
+vol_pct = vol_max > 0 ? volume / vol_max : 0.0
+
+body_ratio = math.abs(close - open) / math.max(high - low, syminfo.mintick)
+is_doji    = body_ratio < 0.15
+
+bub_col = is_doji ? bv_col_doji : close >= open ? bv_col_bull : bv_col_bear
+
+// Una sola condizione vera per barra → un solo cerchio
+plotshape(use_bv and vol_pct <= 0.20,                     "Bolla 1 (Mini)",    shape.circle, location.belowbar, bub_col, size=size.tiny)
+plotshape(use_bv and vol_pct > 0.20 and vol_pct <= 0.40,  "Bolla 2 (Piccola)", shape.circle, location.belowbar, bub_col, size=size.small)
+plotshape(use_bv and vol_pct > 0.40 and vol_pct <= 0.60,  "Bolla 3 (Media)",   shape.circle, location.belowbar, bub_col, size=size.normal)
+plotshape(use_bv and vol_pct > 0.60 and vol_pct <= 0.80,  "Bolla 4 (Grande)",  shape.circle, location.belowbar, bub_col, size=size.large)
+plotshape(use_bv and vol_pct > 0.80,                      "Bolla 5 (Enorme)",  shape.circle, location.belowbar, bub_col, size=size.huge)
+
+// ════════════════════════════════════════════════════════════════════════════
+//  〜  LOGICA — VOLATILITÀ OSCILLAZIONE PREZZI
+//
+//  1. Bande ATR (Keltner-style):  EMA(N) ± ATR × moltiplicatore
+//     → mostrano il "corridoio normale" di oscillazione del prezzo
+//
+//  2. Regime volatilità:
+//     Alta  → ATR corrente > media ATR × soglia alta  (sfondo rosso tenue)
+//     Bassa → ATR corrente < media ATR × soglia bassa (sfondo blu tenue)
+//
+//  3. Candele esplosive:
+//     range candela > 2× la media recente → diamond arancio sopra la barra
+// ════════════════════════════════════════════════════════════════════════════
+atr_v   = ta.atr(vl_atr_len)
+atr_avg = ta.sma(atr_v, vl_avg_len)
+
+is_hi_vol = atr_v > atr_avg * vl_hi_thr
+is_lo_vol = atr_v < atr_avg * vl_lo_thr
+
+// Bande
+band_mid   = ta.ema(close, vl_band_len)
+band_upper = band_mid + atr_v * vl_mult
+band_lower = band_mid - atr_v * vl_mult
+
+p_bm = plot(use_vl and vl_show_bands ? band_mid   : na, "Banda Mid",   color=color.new(#90a4ae, 55), linewidth=1)
+p_bu = plot(use_vl and vl_show_bands ? band_upper : na, "Banda Upper", color=color.new(#ff9800, 55), linewidth=1)
+p_bl = plot(use_vl and vl_show_bands ? band_lower : na, "Banda Lower", color=color.new(#ff9800, 55), linewidth=1)
+fill(p_bu, p_bl, color=color.new(#ff9800, 92))
+
+// Sfondo regime
+bgcolor(use_vl and vl_show_bg and is_hi_vol ? color.new(#ff1744, 94) : na, title="BG Alta Volatilità")
+bgcolor(use_vl and vl_show_bg and is_lo_vol ? color.new(#1565c0, 94) : na, title="BG Bassa Volatilità")
+
+// Candele esplosive
+bar_rng  = high - low
+avg_rng  = ta.sma(bar_rng, 20)
+is_exp   = bar_rng > avg_rng * 2.0
+plotchar(use_vl and vl_show_exp and is_exp, "Candela Esplosiva", "◆",
+     location.abovebar, color.new(#ff9800, 0), size=size.tiny)
+
+// ════════════════════════════════════════════════════════════════════════════
+//  ALERTS
+// ════════════════════════════════════════════════════════════════════════════
+alertcondition(bull_lg,
+     "LG Rialzista ⚡",
+     "LG↑ — sweep sotto swing low con chiusura sopra: possibile inversione rialzista")
+alertcondition(bear_lg,
+     "LG Ribassista ⚡",
+     "LG↓ — sweep sopra swing high con chiusura sotto: possibile inversione ribassista")
+alertcondition(vol_pct > 0.85,
+     "Volume Anomalo ●",
+     "Volume nel top 15% della finestra: attenzione a movimenti direzionali")
+alertcondition(is_hi_vol,
+     "Alta Volatilità 〜",
+     "ATR in regime di alta volatilità — allargare gli stop, ridurre il rischio per trade")
+alertcondition(is_lo_vol,
+     "Bassa Volatilità 〜",
+     "ATR in regime di bassa volatilità — possibile compressione prima di un breakout")
+alertcondition(is_exp,
+     "Candela Esplosiva 〜",
+     "Range candela > 2× la media: forte pressione direzionale in corso")
+alertcondition(bull_lg and vol_pct > 0.60,
+     "LG + Volume Alto [COMBO]",
+     "LG Rialzista con volume elevato: segnale di alta confluenza")
+alertcondition(bear_lg and vol_pct > 0.60,
+     "LG + Volume Alto [COMBO]",
+     "LG Ribassista con volume elevato: segnale di alta confluenza")
