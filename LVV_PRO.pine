@@ -1,6 +1,7 @@
 //@version=6
 indicator("Liquidity · Volume Bubble · Volatility [XAUUSD]",
-     shorttitle="LVV PRO", overlay=true, max_bars_back=500)
+     shorttitle="LVV PRO", overlay=true, max_bars_back=500,
+     max_labels_count=500, max_boxes_count=500)
 
 // ════════════════════════════════════════════════════════════════════════════
 //  ► TOGGLE GLOBALI  —  attiva / disattiva ogni strumento indipendentemente
@@ -54,6 +55,12 @@ vl_show_exp   = input.bool(true, "Evidenzia candele esplosive", group=GW,
 // ════════════════════════════════════════════════════════════════════════════
 atr14 = ta.atr(14)   // usato per offset label e filtro wick
 
+// Durata di una barra in ms → ancora temporale stabile per box e label
+// Usare xloc.bar_time + timestamp evita lo slittamento degli oggetti quando
+// TradingView carica ulteriore storia (i bar_index vengono ricalcolati, i
+// timestamp no).
+tf_ms = timeframe.in_seconds() * 1000
+
 // ════════════════════════════════════════════════════════════════════════════
 //  ⚡  LOGICA — LIQUIDITY GRABS
 //
@@ -80,35 +87,40 @@ bull_lg = use_lg
      and bull_wick >= atr14 * lg_wick_min
 
 // — Label e rettangolo zona —
-if bear_lg
-    label.new(bar_index, high + atr14 * 0.7,
+// barstate.isconfirmed → oggetti creati solo a candela chiusa:
+//   • evita creazioni multiple sulla stessa barra durante il realtime
+//   • previene il flickering quando disattivi/riattivi uno strumento
+// xloc.bar_time        → ancora al timestamp (immutabile) invece che al
+//   bar_index (che viene riscalato ogni volta che si carica più storia)
+if bear_lg and barstate.isconfirmed
+    label.new(time, high + atr14 * 0.7,
          "⚡ LG ↓", style=label.style_label_down,
          color=color.new(#ff1744, 5), textcolor=color.white, size=size.small,
+         xloc=xloc.bar_time,
          tooltip="Liquidity Grab Ribassista\n" +
                  "Sweep: "       + str.tostring(high,     "#.##") +
                  "\nSwing High: " + str.tostring(swing_hi, "#.##") +
                  "\nWick ATR: "   + str.tostring(bear_wick / atr14, "#.##") + "×")
     if lg_show_box
-        // FIX: top=high (valore maggiore), bottom=swing_hi (valore minore)
-        // La zona copre l'area del wick che ha bucato lo swing high
-        box.new(bar_index, high, bar_index + lg_box_bars, swing_hi,
+        box.new(time, high, time + lg_box_bars * tf_ms, swing_hi,
              border_color=color.new(#ff1744, 30),
-             bgcolor=color.new(#ff1744, 88), border_width=1)
+             bgcolor=color.new(#ff1744, 88), border_width=1,
+             xloc=xloc.bar_time)
 
-if bull_lg
-    label.new(bar_index, low - atr14 * 0.7,
+if bull_lg and barstate.isconfirmed
+    label.new(time, low - atr14 * 0.7,
          "⚡ LG ↑", style=label.style_label_up,
          color=color.new(#00e676, 5), textcolor=color.white, size=size.small,
+         xloc=xloc.bar_time,
          tooltip="Liquidity Grab Rialzista\n" +
                  "Sweep: "      + str.tostring(low,     "#.##") +
                  "\nSwing Low: " + str.tostring(swing_lo, "#.##") +
                  "\nWick ATR: "  + str.tostring(bull_wick / atr14, "#.##") + "×")
     if lg_show_box
-        // FIX: top=swing_lo (valore maggiore), bottom=low (valore minore)
-        // La zona copre l'area del wick che ha bucato lo swing low
-        box.new(bar_index, swing_lo, bar_index + lg_box_bars, low,
+        box.new(time, swing_lo, time + lg_box_bars * tf_ms, low,
              border_color=color.new(#00e676, 30),
-             bgcolor=color.new(#00e676, 88), border_width=1)
+             bgcolor=color.new(#00e676, 88), border_width=1,
+             xloc=xloc.bar_time)
 
 // ════════════════════════════════════════════════════════════════════════════
 //  ●  LOGICA — VOLUME BUBBLE
