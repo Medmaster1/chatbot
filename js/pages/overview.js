@@ -2,12 +2,18 @@
    OVERVIEW PAGE
    ============================================================ */
 async function render_overview(el) {
+  const settings = typeof getSettings === 'function' ? getSettings() : {};
+
   el.innerHTML = `
-    <div class="page-header flex-between mb-20">
+    <div class="page-header flex-between mb-16">
       <div>
         <div class="page-title-large">Dashboard Overview</div>
-        <div class="page-subtitle">Real-time market snapshot</div>
+        <div class="page-subtitle" id="ov-last-update">Real-time market snapshot</div>
       </div>
+      <button class="btn btn-ghost btn-sm" onclick="render_overview(document.getElementById('app-content'))">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="13" height="13"><path d="M4 4v5h5M20 20v-5h-5M4 9a9 9 0 0115-3.36M20 15a9 9 0 01-15 3.36" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg>
+        Refresh
+      </button>
     </div>
     <div id="ticker-zone" class="mb-16"></div>
     <div class="grid-4 mb-16" id="top-stats"></div>
@@ -46,8 +52,16 @@ async function render_overview(el) {
     API.getCryptoNews(),
   ]);
 
-  // Ticker
-  if (markets.status === 'fulfilled') renderTicker(markets.value);
+  // Update last-refresh timestamp
+  const upEl = document.getElementById('ov-last-update');
+  if (upEl) upEl.textContent = 'Aggiornato: ' + new Date().toLocaleTimeString('it-IT');
+
+  // Ticker: TradingView or CoinGecko
+  if (settings.showTVTicker) {
+    renderTVTicker();
+  } else if (markets.status === 'fulfilled') {
+    renderTicker(markets.value);
+  }
 
   // Top stats
   if (markets.status === 'fulfilled') renderTopStats(markets.value, global.value);
@@ -69,7 +83,7 @@ async function render_overview(el) {
 }
 
 function renderTicker(coins) {
-  const items = coins.slice(0, 16).map(c => {
+  const items = coins.slice(0, 18).map(c => {
     const chg = c.price_change_percentage_24h;
     const cls = chg >= 0 ? 'positive' : 'negative';
     return `<div class="ticker-item">
@@ -78,11 +92,47 @@ function renderTicker(coins) {
       <span class="ticker-chg ${cls}">${API.formatPct(chg)}</span>
     </div>`;
   }).join('');
-  const doubled = items + items; // Duplicate for seamless loop
+  const doubled = items + items;
   document.getElementById('ticker-zone').innerHTML = `
     <div class="ticker-outer">
       <div class="ticker-inner">${doubled}</div>
     </div>`;
+}
+
+function renderTVTicker() {
+  const zone = document.getElementById('ticker-zone');
+  if (!zone) return;
+  zone.innerHTML = `
+    <div style="height:46px;border-radius:var(--radius);overflow:hidden;border:1px solid var(--border)">
+      <div class="tradingview-widget-container" style="height:100%;width:100%">
+        <div class="tradingview-widget-container__widget" style="height:100%;width:100%"></div>
+      </div>
+    </div>`;
+  const container = zone.querySelector('.tradingview-widget-container');
+  const script = document.createElement('script');
+  script.type = 'text/javascript';
+  script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js';
+  script.async = true;
+  script.textContent = JSON.stringify({
+    symbols: [
+      { proName: 'BINANCE:BTCUSDT', title: 'BTC' },
+      { proName: 'BINANCE:ETHUSDT', title: 'ETH' },
+      { proName: 'BINANCE:SOLUSDT', title: 'SOL' },
+      { proName: 'SP:SPX',          title: 'S&P 500' },
+      { proName: 'NASDAQ:NDX',      title: 'NASDAQ' },
+      { proName: 'COMEX:GC1!',      title: 'Gold' },
+      { proName: 'NYMEX:CL1!',      title: 'WTI Oil' },
+      { proName: 'FX:EURUSD',       title: 'EUR/USD' },
+      { proName: 'NASDAQ:AAPL',     title: 'AAPL' },
+      { proName: 'NASDAQ:NVDA',     title: 'NVDA' },
+    ],
+    showSymbolLogo: false,
+    isTransparent: true,
+    displayMode: 'adaptive',
+    colorTheme: 'dark',
+    locale: 'it',
+  });
+  container.appendChild(script);
 }
 
 function renderTopStats(coins, globalData) {

@@ -16,6 +16,7 @@ const App = (() => {
     news:        { title: 'News',                 group: 'info',     icon: 'M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 12h6m-6-4h.01M6 20h.01' },
     political:   { title: 'Political',            group: 'info',     icon: 'M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9' },
     portfolio:   { title: 'Portfolio',            group: 'personal', icon: 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z' },
+    settings:    { title: 'Impostazioni',         group: 'personal', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z' },
   };
 
   const GROUPS = {
@@ -28,6 +29,7 @@ const App = (() => {
 
   let currentPage = null;
   let clockInterval = null;
+  let refreshTimer = null;
 
   /* ---- Build Sidebar ---- */
   function buildSidebar() {
@@ -40,24 +42,26 @@ const App = (() => {
     let html = '';
     for (const [group, label] of Object.entries(GROUPS)) {
       if (!grouped[group]) continue;
-      html += `<div class="nav-group">
-        <div class="nav-group-label">${label}</div>`;
+      html += `<div class="nav-group"><div class="nav-group-label">${label}</div>`;
       for (const page of grouped[group]) {
+        const paths = page.icon.split(' M ').map((p, i) => i === 0 ? `<path d="${p}"/>` : `<path d="M ${p}"/>`).join('');
         html += `<div class="nav-item" data-page="${page.id}" id="nav-${page.id}">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-            <path d="${page.icon}"/>
-          </svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8">${paths}</svg>
           <span>${page.title}</span>
         </div>`;
       }
       html += '</div>';
     }
     nav.innerHTML = html;
-
     nav.addEventListener('click', e => {
       const item = e.target.closest('.nav-item');
       if (item) navigate(item.dataset.page);
     });
+
+    // Apply user name from settings
+    const settings = typeof getSettings === 'function' ? getSettings() : {};
+    const nameEl = document.getElementById('sidebar-username');
+    if (nameEl && settings.userName) nameEl.textContent = settings.userName;
   }
 
   /* ---- Navigation ---- */
@@ -66,78 +70,81 @@ const App = (() => {
     if (currentPage === pageId) return;
     currentPage = pageId;
 
-    // Update active nav
+    // Stop any running auto-refresh
+    if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+
     document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
     const navEl = document.getElementById(`nav-${pageId}`);
     if (navEl) navEl.classList.add('active');
 
-    // Update page title
     document.getElementById('page-title').textContent = PAGES[pageId].title;
-
-    // Update URL hash
     history.replaceState(null, '', '#' + pageId);
 
-    // Render page
     const content = document.getElementById('app-content');
     content.innerHTML = `<div class="loading"><div class="spinner"></div> Loading…</div>`;
 
     const renderer = window[`render_${pageId}`];
     if (typeof renderer === 'function') {
-      Promise.resolve().then(() => renderer(content)).catch(err => {
+      Promise.resolve().then(async () => {
+        await renderer(content);
+        // Start auto-refresh only for overview
+        if (pageId === 'overview') startAutoRefresh(content);
+      }).catch(err => {
         console.error('Page render error:', err);
-        content.innerHTML = `<div class="empty"><p style="color:var(--red)">Error loading page</p><p style="color:var(--text-muted);font-size:11px">${err.message}</p></div>`;
+        content.innerHTML = `<div class="empty">
+          <p style="color:var(--red)">Errore nel caricamento</p>
+          <p style="color:var(--text-muted);font-size:11px">${err.message}</p>
+        </div>`;
       });
     } else {
-      content.innerHTML = `<div class="empty"><p>Page not found: ${pageId}</p></div>`;
+      content.innerHTML = `<div class="empty"><p>Pagina non trovata: ${pageId}</p></div>`;
     }
+  }
+
+  function startAutoRefresh(content) {
+    const settings = typeof getSettings === 'function' ? getSettings() : {};
+    const interval = (settings.refreshInterval || 60) * 1000;
+    if (!interval) return;
+    refreshTimer = setInterval(() => {
+      if (currentPage !== 'overview') { clearInterval(refreshTimer); return; }
+      render_overview(content);
+    }, interval);
   }
 
   /* ---- Clock & Market Status ---- */
   function updateClock() {
     const now = new Date();
-    document.getElementById('topbar-time').textContent =
-      now.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    document.getElementById('sidebar-clock').textContent =
-      now.toLocaleDateString('it-IT', { weekday: 'short', day: '2-digit', month: 'short' }) + ' — ' +
+    const timeEl = document.getElementById('topbar-time');
+    const clockEl = document.getElementById('sidebar-clock');
+    if (timeEl) timeEl.textContent = now.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    if (clockEl) clockEl.textContent =
+      now.toLocaleDateString('it-IT', { weekday: 'short', day: '2-digit', month: 'short' }) + ' ' +
       now.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
-
     updateMarketStatus(now);
   }
 
   function updateMarketStatus(now) {
-    const day = now.getUTCDay(); // 0=Sun, 6=Sat
-    const h = now.getUTCHours();
-    const m = now.getUTCMinutes();
-    const timeUTC = h * 60 + m;
-
     const pill = document.getElementById('market-status-pill');
     if (!pill) return;
-
-    // NYSE: 13:30–20:00 UTC (Mon–Fri), Pre: 09:00–13:30 UTC, After: 20:00–00:00
+    const day = now.getUTCDay();
+    const t = now.getUTCHours() * 60 + now.getUTCMinutes();
     if (day === 0 || day === 6) {
-      pill.innerHTML = `<div class="dot dot-neutral"></div><span>Markets Closed</span>`;
-      return;
+      pill.innerHTML = `<div class="dot dot-neutral"></div><span>Weekend</span>`; return;
     }
-    if (timeUTC >= 9*60 && timeUTC < 13*60+30) {
-      pill.innerHTML = `<div class="dot dot-pre"></div><span>Pre-Market</span>`;
-    } else if (timeUTC >= 13*60+30 && timeUTC < 20*60) {
-      pill.innerHTML = `<div class="dot dot-open"></div><span>NYSE Open</span>`;
-    } else if (timeUTC >= 20*60) {
-      pill.innerHTML = `<div class="dot dot-closed"></div><span>After Hours</span>`;
-    } else {
-      pill.innerHTML = `<div class="dot dot-neutral"></div><span>Markets Closed</span>`;
-    }
+    if (t >= 540 && t < 810)       pill.innerHTML = `<div class="dot dot-pre"></div><span>Pre-Market</span>`;
+    else if (t >= 810 && t < 1200) pill.innerHTML = `<div class="dot dot-open"></div><span>NYSE Open</span>`;
+    else if (t >= 1200)            pill.innerHTML = `<div class="dot dot-closed"></div><span>After Hours</span>`;
+    else                           pill.innerHTML = `<div class="dot dot-neutral"></div><span>Markets Closed</span>`;
   }
 
   /* ---- Init ---- */
   function init() {
     buildSidebar();
-
     clockInterval = setInterval(updateClock, 1000);
     updateClock();
 
-    // Route from hash
-    const hash = location.hash.replace('#', '') || 'overview';
+    const settings = typeof getSettings === 'function' ? getSettings() : {};
+    const hash = location.hash.replace('#', '') || settings.defaultPage || 'overview';
     navigate(PAGES[hash] ? hash : 'overview');
 
     window.addEventListener('hashchange', () => {
@@ -146,9 +153,7 @@ const App = (() => {
     });
   }
 
-  /* ---- Helpers exposed globally ---- */
   window.App = { navigate, PAGES };
-
   return { init };
 })();
 

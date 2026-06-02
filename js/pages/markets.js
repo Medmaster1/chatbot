@@ -111,7 +111,7 @@ function loadTVChartFor(symbol) {
   script.type = 'text/javascript';
   script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
   script.async = true;
-  script.innerHTML = JSON.stringify(config);
+  script.textContent = JSON.stringify(config);
   wrap.querySelector('.tradingview-widget-container').appendChild(script);
 }
 
