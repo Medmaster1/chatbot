@@ -76,7 +76,9 @@ async function render_overview(el) {
   if (markets.status === 'fulfilled') renderMovers(markets.value);
 
   // News
-  if (news.status === 'fulfilled') renderNewsSnippets(news.value.slice(0, 4));
+  const newsArr = news.status === 'fulfilled' && Array.isArray(news.value) ? news.value : [];
+  if (newsArr.length) renderNewsSnippets(newsArr.slice(0, 4));
+  else document.getElementById('ov-news').innerHTML = '<div class="empty">News temporaneamente non disponibili</div>';
 
   // Global stats
   if (global.status === 'fulfilled') renderGlobal(global.value.data);

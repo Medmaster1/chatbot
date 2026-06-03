@@ -65,9 +65,11 @@ async function loadNews(category) {
 
   try {
     const items = await API.getCryptoNews(category);
-    renderNewsList(items.slice(0, 20), el);
-  } catch {
-    el.innerHTML = `<div class="empty">Failed to load news</div>`;
+    const list = Array.isArray(items) ? items : [];
+    if (list.length) renderNewsList(list.slice(0, 20), el);
+    else el.innerHTML = `<div class="empty">Nessun articolo disponibile — riprova tra qualche secondo</div>`;
+  } catch (e) {
+    el.innerHTML = `<div class="empty">Errore caricamento news: ${e.message}</div>`;
   }
 }
 

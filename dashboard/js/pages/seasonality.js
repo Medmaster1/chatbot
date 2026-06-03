@@ -17,6 +17,7 @@ async function render_seasonality(el) {
           <option value="ETH">Ethereum (ETH)</option>
           <option value="SP500">S&amp;P 500</option>
           <option value="GOLD">Gold</option>
+          <option value="SILVER">Silver</option>
         </select>
       </div>
     </div>

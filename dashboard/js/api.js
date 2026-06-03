@@ -20,7 +20,23 @@ const API = (() => {
 
   const CG_BASE = 'https://api.coingecko.com/api/v3';
   const ALLORIGINS = url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-  const PROXY = url => `https://corsproxy.io/?${encodeURIComponent(url)}`;
+
+  /* Try multiple CORS proxies for Yahoo Finance — returns parsed JSON */
+  async function yahooCORSFetch(url) {
+    const proxies = [
+      `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+      `https://corsproxy.io/?${encodeURIComponent(url)}`,
+    ];
+    let lastErr;
+    for (const p of proxies) {
+      try {
+        const r = await fetch(p, { headers: { Accept: 'application/json' } });
+        if (r.ok) return await r.json();
+        lastErr = new Error(`HTTP ${r.status}`);
+      } catch (e) { lastErr = e; }
+    }
+    throw lastErr || new Error('Yahoo Finance proxy error');
+  }
 
   /* ---- CoinGecko ---- */
   async function cgFetch(path) {
@@ -81,15 +97,52 @@ const API = (() => {
     });
   }
 
-  /* ---- CryptoCompare News (no key needed for public) ---- */
+  /* ---- CryptoCompare News with RSS fallback ---- */
   function getCryptoNews(categories = '') {
     const catParam = categories ? `&categories=${categories}` : '';
     return fetchCached(`news_${categories}`, CACHE_TTL.medium, async () => {
-      const r = await fetch(`https://min-api.cryptocompare.com/data/v2/news/?lang=EN&sortOrder=latest${catParam}`);
-      if (!r.ok) throw new Error('News error');
-      const j = await r.json();
-      return j.Data || [];
+      try {
+        const r = await fetch(`https://min-api.cryptocompare.com/data/v2/news/?lang=EN&sortOrder=latest${catParam}`, { headers: { Accept: 'application/json' } });
+        if (!r.ok) throw new Error('CryptoCompare HTTP ' + r.status);
+        const j = await r.json();
+        const articles = Array.isArray(j.Data) ? j.Data : Array.isArray(j.data) ? j.data : null;
+        if (articles?.length) return articles;
+        throw new Error('Empty response');
+      } catch {
+        return _newsFromRSS(categories);
+      }
     });
+  }
+
+  async function _newsFromRSS(category) {
+    const cryptoFeeds = [
+      'https://www.coindesk.com/arc/outboundfeeds/rss/',
+      'https://cointelegraph.com/rss',
+      'https://decrypt.co/feed',
+    ];
+    const macroFeeds = [
+      'https://feeds.reuters.com/reuters/businessNews',
+      'https://feeds.reuters.com/news/economy',
+    ];
+    const feeds = (category === 'Macro' || category === 'Trading') ? [...macroFeeds, ...cryptoFeeds] : cryptoFeeds;
+    for (const feed of feeds) {
+      try {
+        const items = await getRSS(feed);
+        if (items?.length) {
+          return items.map(item => ({
+            title: item.title,
+            url: item.link,
+            source_info: { name: item.source },
+            source: item.source,
+            imageurl: '',
+            published_on: Math.floor((new Date(item.pubDate).getTime() || Date.now()) / 1000),
+            body: item.description,
+            categories: category || '',
+          }));
+        }
+      } catch { continue; }
+    }
+    return [];
   }
 
   /* ---- RSS via allorigins proxy ---- */
@@ -112,33 +165,57 @@ const API = (() => {
     });
   }
 
-  /* ---- Yahoo Finance via proxy ---- */
+  /* ---- Yahoo Finance via multi-proxy ---- */
   async function getYahooQuote(symbol) {
-    return fetchCached(`yq_${symbol}`, CACHE_TTL.short, async () => {
-      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=5d`;
-      const r = await fetch(PROXY(url));
-      if (!r.ok) throw new Error('Yahoo quote error');
-      return r.json();
-    });
+    return fetchCached(`yq_${symbol}`, CACHE_TTL.short, () =>
+      yahooCORSFetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=5d`)
+    );
   }
 
   async function getYahooSummary(symbol) {
     return fetchCached(`ys_${symbol}`, CACHE_TTL.long, async () => {
       const modules = 'financialData,defaultKeyStatistics,incomeStatementHistory,balanceSheetHistory,cashflowStatementHistory,summaryDetail';
-      const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${symbol}?modules=${modules}`;
-      const r = await fetch(PROXY(url));
-      if (!r.ok) throw new Error('Yahoo summary error');
-      const j = await r.json();
-      return j.quoteSummary?.result?.[0] || null;
+      const j = await yahooCORSFetch(`https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=${modules}`);
+      const result = j.quoteSummary?.result?.[0] || null;
+      if (!result) throw new Error('No data returned');
+      return result;
     });
   }
 
   async function getYahooSearch(query) {
-    const url = `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=8&newsCount=0`;
-    const r = await fetch(PROXY(url));
-    if (!r.ok) throw new Error('Yahoo search error');
-    const j = await r.json();
+    const j = await yahooCORSFetch(`https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=8&newsCount=0`);
     return j.quotes || [];
+  }
+
+  /* Batch quote for indices/commodities */
+  function getYahooBatchQuote(symbols) {
+    const key = `ybatch_${symbols.join(',')}`;
+    return fetchCached(key, CACHE_TTL.short, async () => {
+      const syms = symbols.map(encodeURIComponent).join(',');
+      const j = await yahooCORSFetch(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${syms}&fields=regularMarketPrice,regularMarketChange,regularMarketChangePercent,regularMarketPreviousClose,shortName,longName,regularMarketDayHigh,regularMarketDayLow,regularMarketVolume,marketCap,fiftyTwoWeekHigh,fiftyTwoWeekLow,trailingPE`);
+      return j?.quoteResponse?.result || [];
+    });
+  }
+
+  /* OHLC chart data for RSI on any Yahoo symbol */
+  function getYahooChartData(symbol, range = '90d', interval = '1d') {
+    const key = `ychart_${symbol}_${range}`;
+    return fetchCached(key, CACHE_TTL.medium, async () => {
+      const j = await yahooCORSFetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=${interval}&range=${range}`);
+      const res = j?.chart?.result?.[0];
+      if (!res) throw new Error('No chart data for ' + symbol);
+      const q = res.indicators.quote[0];
+      const ts = res.timestamp;
+      return ts.map((t, i) => [t, q.open[i], q.high[i], q.low[i], q.close[i], q.volume[i]]);
+    });
+  }
+
+  /* CNN Stock Market Fear & Greed */
+  function getCNNFearGreed() {
+    return fetchCached('cnn_fg', CACHE_TTL.short, async () => {
+      const j = await yahooCORSFetch('https://production.dataviz.cnn.io/index/fearandgreed/graphdata/');
+      return j?.fear_and_greed || null;
+    });
   }
 
   /* ---- RSI Calculation ---- */
@@ -225,6 +302,16 @@ const API = (() => {
         2022: [1.7, 6.2, 1.8, 2.0, 0.2, -0.2, -2.3, -3.1, -3.2, 2.9, -5.5, 3.4],
         2023: [6.1, -5.2, 7.8, -1.0, -1.5, 2.4, 2.6, -1.4, -4.7, 6.9, 2.5, 2.3],
         2024: [-1.0, -0.5, 9.2, 2.4, -0.3, 4.0, 5.2, 2.2, 3.6, -3.4, 3.5, 1.2],
+      }
+    },
+    SILVER: {
+      avg: [2.3, 5.8, 0.2, 1.8, 0.4, 1.2, 2.1, -1.3, -2.8, 2.4, -1.0, 1.6],
+      years: {
+        2020: [0.2, -7.5, -12.5, 8.5, 1.5, 4.5, 34.0, 16.0, -14.5, 6.5, -3.5, 6.0],
+        2021: [-4.5, 5.0, 7.5, -4.5, 7.0, -7.5, 4.5, -12.5, 7.5, 9.0, -6.5, 4.0],
+        2022: [-3.0, 9.5, 2.5, -7.5, -7.0, -5.5, -3.0, -9.5, -4.0, 18.0, -7.5, 4.5],
+        2023: [7.5, -5.5, -7.5, 5.5, -9.0, 10.5, -5.5, -4.0, -3.5, 1.5, 9.5, 7.0],
+        2024: [-1.5, 5.5, 7.5, 9.0, 15.5, 2.0, 4.5, 3.0, 4.5, -5.0, -3.0, 1.0],
       }
     }
   };
@@ -331,6 +418,7 @@ const API = (() => {
     getCoinOHLC, getCoinHistory, getCoinDetail,
     getFearGreed, getCryptoNews, getRSS,
     getYahooQuote, getYahooSummary, getYahooSearch,
+    getYahooBatchQuote, getYahooChartData, getCNNFearGreed,
     calculateRSI, calculateStochastic,
     SEASONALITY_DATA,
     formatPrice, formatNum, formatPct, pctClass,
