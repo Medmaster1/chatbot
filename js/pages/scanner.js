@@ -1,5 +1,5 @@
 /* ============================================================
-   OVERBOUGHT / OVERSOLD SCANNER
+   OVERBOUGHT / OVERSOLD SCANNER — Crypto + Indices + Commodities
    ============================================================ */
 const SCANNER_COINS = [
   { id: 'bitcoin',       sym: 'BTC',  name: 'Bitcoin' },
@@ -16,12 +16,41 @@ const SCANNER_COINS = [
   { id: 'uniswap',       sym: 'UNI',  name: 'Uniswap' },
 ];
 
+const SCANNER_INDICES = [
+  { sym:'^GSPC',   name:'S&P 500' },
+  { sym:'^NDX',    name:'Nasdaq 100' },
+  { sym:'^DJI',    name:'Dow Jones' },
+  { sym:'^RUT',    name:'Russell 2000' },
+  { sym:'^FTSE',   name:'FTSE 100' },
+  { sym:'^GDAXI',  name:'DAX' },
+  { sym:'^FCHI',   name:'CAC 40' },
+  { sym:'^STOXX50E',name:'Euro Stoxx 50' },
+  { sym:'^N225',   name:'Nikkei 225' },
+  { sym:'^HSI',    name:'Hang Seng' },
+  { sym:'^AXJO',   name:'ASX 200' },
+];
+
+const SCANNER_COMMODITIES = [
+  { sym:'GC=F',  name:'Gold' },
+  { sym:'SI=F',  name:'Silver' },
+  { sym:'CL=F',  name:'Crude Oil WTI' },
+  { sym:'BZ=F',  name:'Brent Oil' },
+  { sym:'NG=F',  name:'Natural Gas' },
+  { sym:'HG=F',  name:'Copper' },
+  { sym:'ZW=F',  name:'Wheat' },
+  { sym:'ZC=F',  name:'Corn' },
+  { sym:'ZS=F',  name:'Soybeans' },
+  { sym:'PL=F',  name:'Platinum' },
+];
+
+let _scannerMarket = 'crypto';
+
 async function render_scanner(el) {
   el.innerHTML = `
     <div class="page-header flex-between">
       <div>
         <div class="page-title-large">Overbought &amp; Oversold Scanner</div>
-        <div class="page-subtitle">RSI(14) and Stochastic(14,3,3) across major crypto assets</div>
+        <div class="page-subtitle">RSI(14) e Stochastic(14,3,3) su Crypto, Indici e Materie Prime</div>
       </div>
       <button class="btn btn-green" onclick="refreshScanner()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="14" height="14"><path d="M4 4v5h5M20 20v-5h-5M4 9a9 9 0 0115-3.36M20 15a9 9 0 01-15 3.36" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg>
@@ -34,7 +63,12 @@ async function render_scanner(el) {
     <div class="card mb-16">
       <div class="card-header">
         <div class="card-title">RSI / Stochastic Scanner</div>
-        <div class="flex gap-8">
+        <div class="flex gap-8" style="flex-wrap:wrap">
+          <div class="tabs" id="scan-market-tabs">
+            <div class="tab active" data-market="crypto">Crypto</div>
+            <div class="tab" data-market="indices">Indici</div>
+            <div class="tab" data-market="commodities">Materie Prime</div>
+          </div>
           <div class="tabs" id="scan-period-tabs">
             <div class="tab active" data-period="30">30D</div>
             <div class="tab" data-period="14">14D</div>
@@ -42,7 +76,7 @@ async function render_scanner(el) {
           </div>
         </div>
       </div>
-      <div id="scanner-table-wrap"><div class="loading"><div class="spinner"></div> Calculating RSI for ${SCANNER_COINS.length} assets…</div></div>
+      <div id="scanner-table-wrap"><div class="loading"><div class="spinner"></div> Calcolo RSI…</div></div>
     </div>
 
     <div class="card">
@@ -76,6 +110,16 @@ async function render_scanner(el) {
     </div>
   `;
 
+  document.getElementById('scan-market-tabs').addEventListener('click', e => {
+    const tab = e.target.closest('.tab');
+    if (!tab) return;
+    document.querySelectorAll('#scan-market-tabs .tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    _scannerMarket = tab.dataset.market;
+    const period = parseInt(document.querySelector('#scan-period-tabs .tab.active')?.dataset.period || 30);
+    loadScannerData(period);
+  });
+
   document.getElementById('scan-period-tabs').addEventListener('click', e => {
     const tab = e.target.closest('.tab');
     if (!tab) return;
@@ -95,8 +139,17 @@ window.refreshScanner = async () => {
 async function loadScannerData(days) {
   const wrap = document.getElementById('scanner-table-wrap');
   if (!wrap) return;
-  wrap.innerHTML = `<div class="loading"><div class="spinner"></div> Fetching OHLC data…</div>`;
+  wrap.innerHTML = `<div class="loading"><div class="spinner"></div> Recupero dati OHLC…</div>`;
 
+  if (_scannerMarket === 'crypto') {
+    await loadScannerCrypto(days);
+  } else {
+    const assets = _scannerMarket === 'indices' ? SCANNER_INDICES : SCANNER_COMMODITIES;
+    await loadScannerYahoo(assets, days);
+  }
+}
+
+async function loadScannerCrypto(days) {
   const results = [];
   for (const coin of SCANNER_COINS) {
     try {
@@ -105,14 +158,34 @@ async function loadScannerData(days) {
       const closes = ohlc.map(c => c[4]);
       const rsi = API.calculateRSI(closes, 14);
       const stoch = API.calculateStochastic(ohlc, 14);
-      const stochK = stoch.k[stoch.k.length - 1] ?? null;
-      const stochD = stoch.d[stoch.d.length - 1] ?? null;
-      results.push({ ...coin, rsi, stochK, stochD, ohlc });
+      results.push({ ...coin, rsi, stochK: stoch.k.at(-1) ?? null, stochD: stoch.d.at(-1) ?? null });
     } catch {
       results.push({ ...coin, rsi: null, stochK: null, stochD: null });
     }
   }
+  renderScannerSummary(results);
+  renderScannerTable(results);
+}
 
+async function loadScannerYahoo(assets, days) {
+  const rangeMap = { 14: '30d', 30: '60d', 90: '90d' };
+  const range = rangeMap[days] || '60d';
+  const results = [];
+
+  for (const asset of assets) {
+    try {
+      const raw = await API.getYahooChartData(asset.sym, range);
+      if (!raw || raw.length < 15) { results.push({ ...asset, rsi: null, stochK: null, stochD: null }); continue; }
+      const validRows = raw.filter(r => r[4] != null);
+      if (validRows.length < 15) { results.push({ ...asset, rsi: null, stochK: null, stochD: null }); continue; }
+      const closes = validRows.map(r => r[4]);
+      const rsi = API.calculateRSI(closes, 14);
+      const stoch = API.calculateStochastic(validRows, 14);
+      results.push({ ...asset, rsi, stochK: stoch.k.at(-1) ?? null, stochD: stoch.d.at(-1) ?? null });
+    } catch {
+      results.push({ ...asset, rsi: null, stochK: null, stochD: null });
+    }
+  }
   renderScannerSummary(results);
   renderScannerTable(results);
 }

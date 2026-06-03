@@ -2,94 +2,23 @@
    POLITICAL NEWS PAGE
    ============================================================ */
 const POLITICAL_FEEDS = [
-  {
-    name: 'Reuters Business',
-    url: 'https://feeds.reuters.com/reuters/businessNews',
-    icon: '📰',
-  },
-  {
-    name: 'Reuters Economy',
-    url: 'https://feeds.reuters.com/news/economy',
-    icon: '📊',
-  },
-  {
-    name: 'FT Markets',
-    url: 'https://www.ft.com/markets?format=rss',
-    icon: '🗞️',
-  },
-  {
-    name: 'Politico Economy',
-    url: 'https://rss.politico.com/economy.xml',
-    icon: '🏛️',
-  },
+  { name: 'Reuters Business', url: 'https://feeds.reuters.com/reuters/businessNews',      icon: '📰', tag: 'Business' },
+  { name: 'Reuters Economy',  url: 'https://feeds.reuters.com/news/economy',               icon: '📊', tag: 'Economy' },
+  { name: 'Reuters Politics', url: 'https://feeds.reuters.com/Reuters/PoliticsNews',       icon: '🏛️', tag: 'Politics' },
+  { name: 'Reuters World',    url: 'https://feeds.reuters.com/reuters/worldNews',           icon: '🌍', tag: 'World' },
+  { name: 'Politico Economy', url: 'https://rss.politico.com/economy.xml',                 icon: '🏛️', tag: 'Politics' },
+  { name: 'CNBC Economy',     url: 'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=20910258', icon: '📺', tag: 'Economy' },
+  { name: 'CNBC Finance',     url: 'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=15839135', icon: '💰', tag: 'Finance' },
+  { name: 'The Guardian Econ',url: 'https://www.theguardian.com/business/economics/rss',   icon: '🗞️', tag: 'Economy' },
 ];
 
-// Static news items as fallback (major political/macro events affecting markets)
-const STATIC_POLITICAL = [
-  {
-    title: 'Fed mantiene tassi invariati, mercati reagiscono positivamente',
-    source: 'Reuters', date: '2025-05-28',
-    tags: ['Fed', 'Interest Rates', 'Markets'],
-    impact: 'neutral',
-    summary: 'La Federal Reserve ha deciso di mantenere i tassi di interesse nell\'intervallo 5.25-5.50%, come ampiamente atteso. Powell ha sottolineato la dipendenza dai dati futuri.',
-  },
-  {
-    title: 'Nuove tariffe USA-Cina: impatto sulle catene di fornitura tech',
-    source: 'Financial Times', date: '2025-05-27',
-    tags: ['Trade War', 'China', 'Tech', 'Tariffs'],
-    impact: 'bearish',
-    summary: 'L\'amministrazione USA ha annunciato nuovi dazi sui prodotti tecnologici cinesi, con possibili ripercussioni su semiconduttori e supply chain globale.',
-  },
-  {
-    title: 'BCE segnala possibile taglio tassi entro l\'estate',
-    source: 'Bloomberg', date: '2025-05-26',
-    tags: ['ECB', 'EUR', 'Rate Cut'],
-    impact: 'bullish',
-    summary: 'Christine Lagarde ha lasciato intendere che un primo taglio dei tassi potrebbe arrivare già a giugno 2025, se i dati sull\'inflazione continueranno a migliorare.',
-  },
-  {
-    title: 'Elezioni europee: implicazioni per i mercati finanziari',
-    source: 'Politico', date: '2025-05-25',
-    tags: ['EU', 'Elections', 'Policy'],
-    impact: 'neutral',
-    summary: 'I risultati delle elezioni europee potrebbero influenzare le politiche fiscali dell\'UE, con implicazioni per i mercati obbligazionari europei.',
-  },
-  {
-    title: 'Debito USA supera nuovi massimi: preoccupazioni per il deficit',
-    source: 'Wall Street Journal', date: '2025-05-24',
-    tags: ['US Debt', 'Fiscal Policy', 'Dollar'],
-    impact: 'bearish',
-    summary: 'Il debito pubblico americano ha raggiunto nuovi massimi storici, alimentando le preoccupazioni degli investitori sulla sostenibilità fiscale a lungo termine.',
-  },
-  {
-    title: 'Accordo commerciale UE-Mercosur: opportunità per le esportazioni',
-    source: 'Reuters', date: '2025-05-23',
-    tags: ['Trade', 'EU', 'Agriculture'],
-    impact: 'bullish',
-    summary: 'L\'accordo commerciale tra UE e Mercosur, dopo anni di negoziati, potrebbe aprire nuovi mercati per le esportazioni europee e ridurre le tariffe sui beni.',
-  },
-  {
-    title: 'Geopolitica Medio Oriente: petrolio in rialzo',
-    source: 'Bloomberg', date: '2025-05-22',
-    tags: ['Oil', 'Geopolitics', 'Energy'],
-    impact: 'bearish',
-    summary: 'Le tensioni in Medio Oriente hanno spinto il prezzo del petrolio Brent sopra gli 85 dollari al barile, alimentando timori inflazionistici.',
-  },
-  {
-    title: 'Giappone interviene sul forex per sostenere lo yen',
-    source: 'Nikkei', date: '2025-05-21',
-    tags: ['Japan', 'JPY', 'Forex Intervention'],
-    impact: 'bullish',
-    summary: 'Il Ministero delle Finanze giapponese sarebbe intervenuto sul mercato valutario per sostenere lo yen, dopo che USD/JPY aveva superato quota 158.',
-  },
-];
 
 async function render_political(el) {
   el.innerHTML = `
     <div class="page-header flex-between">
       <div>
         <div class="page-title-large">Political &amp; Macro</div>
-        <div class="page-subtitle">News geopolitiche e macroeconomiche che impattano i mercati</div>
+        <div class="page-subtitle" id="pol-subtitle">News geopolitiche e macroeconomiche da fonti live</div>
       </div>
       <button class="btn btn-green btn-sm" onclick="refreshPolitical()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="14" height="14"><path d="M4 4v5h5M20 20v-5h-5M4 9a9 9 0 0115-3.36M20 15a9 9 0 01-15 3.36" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg>
@@ -97,93 +26,59 @@ async function render_political(el) {
       </button>
     </div>
 
-    <div class="grid-4 mb-16" id="pol-impact-stats"></div>
+    <!-- Source filter tabs -->
+    <div class="card mb-16">
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <span class="form-label" style="margin:0">Fonte:</span>
+        <div class="tabs" id="pol-source-tabs" style="margin:0;flex-wrap:wrap">
+          <div class="tab active" data-tag="all">Tutte</div>
+          <div class="tab" data-tag="Economy">Economy</div>
+          <div class="tab" data-tag="Politics">Politics</div>
+          <div class="tab" data-tag="Business">Business</div>
+          <div class="tab" data-tag="Finance">Finance</div>
+          <div class="tab" data-tag="World">World</div>
+        </div>
+        <span id="pol-count" style="font-size:11px;color:var(--text-muted);margin-left:auto"></span>
+      </div>
+    </div>
 
     <div class="grid-2" style="gap:20px">
       <div>
-        <div class="section-divider">Headlines &amp; Analisi</div>
-        <div id="pol-news-list"></div>
+        <div class="section-divider">Live News Feed</div>
+        <div id="pol-live-list"><div class="loading"><div class="spinner"></div> Caricamento notizie live…</div></div>
       </div>
       <div>
-        <div class="section-divider">Economic Calendar</div>
+        <div class="section-divider">Calendario Economico</div>
         <div id="pol-calendar"></div>
-        <div class="section-divider mt-16">RSS Live Feed</div>
-        <div id="pol-rss-list"></div>
       </div>
     </div>
   `;
 
-  renderPoliticalStats();
-  renderPoliticalNews();
+  document.getElementById('pol-source-tabs')?.addEventListener('click', e => {
+    const tab = e.target.closest('.tab');
+    if (!tab) return;
+    document.querySelectorAll('#pol-source-tabs .tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    filterPoliticalNews(tab.dataset.tag);
+  });
+
   renderEconomicCalendar();
-  loadPoliticalRSS();
+  await loadPoliticalRSS();
 }
 
-window.refreshPolitical = () => {
-  loadPoliticalRSS();
+window.refreshPolitical = async () => {
+  const el = document.getElementById('pol-live-list');
+  if (el) el.innerHTML = `<div class="loading"><div class="spinner"></div> Aggiornamento…</div>`;
+  await loadPoliticalRSS();
 };
 
-function renderPoliticalStats() {
-  const bullish = STATIC_POLITICAL.filter(n => n.impact === 'bullish').length;
-  const bearish = STATIC_POLITICAL.filter(n => n.impact === 'bearish').length;
-  const neutral = STATIC_POLITICAL.filter(n => n.impact === 'neutral').length;
-  const total = STATIC_POLITICAL.length;
+let _polAllItems = [];
 
-  document.getElementById('pol-impact-stats').innerHTML = `
-    <div class="card card-sm">
-      <div class="card-title">Rialziste</div>
-      <div class="card-value positive">${bullish}</div>
-      <div class="card-change neutral">di ${total} notizie</div>
-    </div>
-    <div class="card card-sm">
-      <div class="card-title">Ribassiste</div>
-      <div class="card-value negative">${bearish}</div>
-      <div class="card-change neutral">di ${total} notizie</div>
-    </div>
-    <div class="card card-sm">
-      <div class="card-title">Neutrali</div>
-      <div class="card-value">${neutral}</div>
-      <div class="card-change neutral">di ${total} notizie</div>
-    </div>
-    <div class="card card-sm">
-      <div class="card-title">Bias di Mercato</div>
-      <div class="card-value ${bullish > bearish ? 'positive' : bullish < bearish ? 'negative' : ''}">
-        ${bullish > bearish ? '↑ Rialzista' : bullish < bearish ? '↓ Ribassista' : '→ Neutro'}
-      </div>
-      <div class="card-change neutral">basato sui titoli</div>
-    </div>`;
-}
-
-function renderPoliticalNews() {
-  const el = document.getElementById('pol-news-list');
-  if (!el) return;
-
-  const impactColors = {
-    bullish: { color: 'var(--green)', bg: 'var(--green-dim)', label: '▲ Bullish' },
-    bearish: { color: 'var(--red)',   bg: 'var(--red-dim)',   label: '▼ Bearish' },
-    neutral: { color: 'var(--text-secondary)', bg: 'rgba(255,255,255,0.05)', label: '→ Neutral' },
-  };
-
-  el.innerHTML = `<div class="news-list">
-    ${STATIC_POLITICAL.map(n => {
-      const ic = impactColors[n.impact];
-      return `
-        <div class="news-card" style="flex-direction:column">
-          <div class="flex-between mb-6">
-            <span class="news-source">${n.source}</span>
-            <div class="flex gap-6">
-              <span class="badge" style="background:${ic.bg};color:${ic.color}">${ic.label}</span>
-              <span style="font-size:10px;color:var(--text-muted)">${n.date}</span>
-            </div>
-          </div>
-          <div class="news-title" style="-webkit-line-clamp:unset">${n.title}</div>
-          <p style="font-size:11.5px;color:var(--text-secondary);margin:8px 0;line-height:1.6">${n.summary}</p>
-          <div style="display:flex;gap:4px;flex-wrap:wrap">
-            ${n.tags.map(t => `<span class="badge badge-muted">${t}</span>`).join('')}
-          </div>
-        </div>`;
-    }).join('')}
-  </div>`;
+function filterPoliticalNews(tag) {
+  const items = tag === 'all' ? _polAllItems : _polAllItems.filter(i => i.feedTag === tag);
+  renderPolNewsList(items.slice(0, 25));
+  const cnt = document.getElementById('pol-count');
+  if (cnt) cnt.textContent = `${items.length} articoli`;
 }
 
 function renderEconomicCalendar() {
@@ -206,15 +101,15 @@ function renderEconomicCalendar() {
 }
 
 async function loadPoliticalRSS() {
-  const el = document.getElementById('pol-rss-list');
+  const el = document.getElementById('pol-live-list');
   if (!el) return;
-  el.innerHTML = `<div class="loading"><div class="spinner"></div> Loading RSS feeds…</div>`;
+  el.innerHTML = `<div class="loading"><div class="spinner"></div> Caricamento news live…</div>`;
 
   let allItems = [];
   for (const feed of POLITICAL_FEEDS) {
     try {
       const items = await API.getRSS(feed.url);
-      allItems.push(...items.map(i => ({ ...i, feedName: feed.name, feedIcon: feed.icon })));
+      allItems.push(...items.map(i => ({ ...i, feedName: feed.name, feedIcon: feed.icon, feedTag: feed.tag })));
     } catch {
       // Skip failed feeds silently
     }
@@ -223,30 +118,59 @@ async function loadPoliticalRSS() {
   if (!allItems.length) {
     el.innerHTML = `
       <div class="card">
-        <div style="font-size:12px;color:var(--text-muted)">RSS feeds non disponibili (possibile blocco CORS). Usa i link diretti:</div>
-        <div style="display:flex;flex-direction:column;gap:6px;margin-top:10px">
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">RSS feeds non disponibili. Accedi direttamente alle fonti:</div>
+        <div style="display:flex;flex-direction:column;gap:6px">
           ${POLITICAL_FEEDS.map(f => `
             <a href="${f.url}" target="_blank" style="font-size:12px;color:var(--blue);text-decoration:underline">
               ${f.icon} ${f.name}
             </a>`).join('')}
         </div>
       </div>`;
+    _polAllItems = [];
+    const cnt = document.getElementById('pol-count');
+    if (cnt) cnt.textContent = '0 articoli';
     return;
   }
 
-  // Sort by date
-  allItems.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+  // Sort by date descending
+  allItems.sort((a, b) => new Date(b.pubDate || 0) - new Date(a.pubDate || 0));
+  _polAllItems = allItems;
+
+  const cnt = document.getElementById('pol-count');
+  if (cnt) cnt.textContent = `${allItems.length} articoli`;
+
+  const subtitle = document.getElementById('pol-subtitle');
+  if (subtitle) subtitle.textContent = `${allItems.length} articoli da ${POLITICAL_FEEDS.length} fonti — aggiornato ${new Date().toLocaleTimeString('it-IT')}`;
+
+  filterPoliticalNews('all');
+}
+
+function renderPolNewsList(items) {
+  const el = document.getElementById('pol-live-list');
+  if (!el) return;
+
+  if (!items.length) {
+    el.innerHTML = `<div class="empty">Nessun articolo per questa categoria</div>`;
+    return;
+  }
 
   el.innerHTML = `<div class="news-list">
-    ${allItems.slice(0, 10).map(n => `
-      <div class="news-card" onclick="window.open('${n.link}','_blank')">
-        <div style="flex:1;min-width:0">
-          <div class="news-title">${n.title}</div>
-          <div class="news-meta">
-            <span class="news-source">${n.feedIcon} ${n.feedName}</span>
-            <span class="news-time">${n.pubDate ? new Date(n.pubDate).toLocaleDateString('it-IT') : ''}</span>
+    ${items.map(n => {
+      const dateStr = n.pubDate ? new Date(n.pubDate).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+      const safeLink = n.link ? n.link.replace(/'/g, '%27') : '#';
+      return `
+        <div class="news-card" onclick="window.open('${safeLink}','_blank')" style="cursor:pointer">
+          <div style="flex:1;min-width:0">
+            <div class="news-title">${n.title || 'No title'}</div>
+            ${n.description ? `<div style="font-size:11px;color:var(--text-muted);margin-top:3px;line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${n.description.replace(/<[^>]+>/g,'').slice(0,160)}</div>` : ''}
+            <div class="news-meta" style="margin-top:4px">
+              <span class="news-source">${n.feedIcon} ${n.feedName}</span>
+              <span class="badge badge-muted" style="font-size:9px;padding:1px 5px">${n.feedTag}</span>
+              <span class="news-time">${dateStr}</span>
+            </div>
           </div>
-        </div>
-      </div>`).join('')}
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="12" height="12" style="flex-shrink:0;margin-left:8px;color:var(--text-muted)"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg>
+        </div>`;
+    }).join('')}
   </div>`;
 }
