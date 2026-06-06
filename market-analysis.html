@@ -3,18 +3,17 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>AURUM Research — Market Analysis (LIVE + COT) | KID Digital Wealth</title>
+<title>AURUM Research — Market Analysis (Yahoo LIVE + COT) | KID Digital Wealth</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
 <style>
 /* ============================================================================
-   AURUM RESEARCH — Market Analysis · DATI REALI + COT (CFTC)
-   Dark navy + oro. Single-file. CONFIG in cima.
-   Fonti live (CORS-friendly, no key):
-     - CoinGecko   → metalli (PAX Gold / Kinesis Silver) e crypto (BTC/ETH)
-     - Frankfurter → forex (BCE) e DXY calcolato dal basket
-     - CFTC Socrata→ Commitments of Traders (COT) legacy futures-only
+   AURUM RESEARCH — Market Analysis · DATI REALI (Yahoo Finance) + COT (CFTC)
+   + Trading Advisor (quando operare / quando no). Single-file. CONFIG in cima.
+   Fonti:
+     - Yahoo Finance (via proxy CORS allorigins) → tutti gli asset (prezzi+storico)
+     - CFTC Socrata → Commitments of Traders (COT)
    ========================================================================== */
 :root{
   --bg:#06090f;--bg2:#080d18;--panel:#0a111f;--panel2:#0d1526;--panel3:#101a30;
@@ -32,8 +31,7 @@ body{font-family:var(--mono);background:
   radial-gradient(1100px 500px at 85% -10%,rgba(72,160,255,.05),transparent 60%),
   radial-gradient(900px 460px at 0% 0%,rgba(231,181,74,.05),transparent 55%),var(--bg);
   color:var(--txt);font-size:12.5px;line-height:1.4;-webkit-font-smoothing:antialiased;padding-bottom:30px}
-button{font-family:var(--mono);cursor:pointer;color:inherit}
-select{font-family:var(--mono)}
+button{font-family:var(--mono);cursor:pointer;color:inherit}select{font-family:var(--mono)}
 ::selection{background:var(--gold);color:#000}
 .up{color:var(--green)}.dn{color:var(--red)}.gd{color:var(--gold)}.mut{color:var(--txt3)}
 .num{font-variant-numeric:tabular-nums}
@@ -120,10 +118,10 @@ select{font-family:var(--mono)}
 .lg{display:flex;align-items:center;gap:6px;font-size:10.5px;background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:4px 9px;cursor:pointer;user-select:none}
 .lg.off{opacity:.4}.lg .dot{width:9px;height:9px;border-radius:3px}
 
-.corr{border-collapse:collapse;width:100%;font-size:10px}
-.corr th{color:var(--txt3);font-weight:600;padding:4px;text-align:center}
-.corr th.row{text-align:right;padding-right:7px}
-.corr td{text-align:center;padding:0;width:34px;height:30px;color:#06121a;font-weight:700;font-variant-numeric:tabular-nums;border:1px solid var(--bg)}
+.corr{border-collapse:collapse;width:100%;font-size:9.5px}
+.corr th{color:var(--txt3);font-weight:600;padding:3px;text-align:center}
+.corr th.row{text-align:right;padding-right:6px}
+.corr td{text-align:center;padding:0;width:30px;height:26px;color:#06121a;font-weight:700;font-variant-numeric:tabular-nums;border:1px solid var(--bg)}
 
 .mv{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--line);font-size:11.5px}
 .mv:last-child{border:none}
@@ -136,7 +134,26 @@ select{font-family:var(--mono)}
 .fg-bar{width:100%;height:9px;border-radius:6px;background:linear-gradient(90deg,#ff4d5e,#ffb547,#23d18b);position:relative;margin-top:6px}
 .fg-bar .pin{position:absolute;top:-4px;width:3px;height:17px;background:#fff;border-radius:2px;box-shadow:0 0 6px rgba(0,0,0,.6)}
 
-/* COT panel */
+/* Trading Advisor */
+.adv-verdict{display:flex;align-items:center;gap:12px;padding:13px;border-radius:11px;margin-bottom:11px;border:1px solid var(--line2)}
+.adv-verdict .ic{font-size:30px;line-height:1}
+.adv-verdict .tx .v{font-size:16px;font-weight:800;letter-spacing:.5px}
+.adv-verdict .tx .s{font-size:10px;color:var(--txt2);margin-top:2px}
+.adv-verdict.go{background:var(--green-d);border-color:var(--green)} .adv-verdict.go .v{color:var(--green)}
+.adv-verdict.caution{background:rgba(255,181,71,.12);border-color:var(--amber)} .adv-verdict.caution .v{color:var(--amber)}
+.adv-verdict.avoid{background:var(--red-d);border-color:var(--red)} .adv-verdict.avoid .v{color:var(--red)}
+.adv-meter{height:8px;border-radius:5px;background:var(--panel3);overflow:hidden;margin-bottom:11px;position:relative}
+.adv-meter>span{display:block;height:100%;border-radius:5px;transition:width .4s}
+.adv-cols{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.adv-cols .h{font-size:9px;text-transform:uppercase;letter-spacing:.7px;font-weight:700;margin-bottom:6px}
+.adv-cols .pro .h{color:var(--green)} .adv-cols .con .h{color:var(--red)}
+.adv-li{display:flex;gap:6px;font-size:10.5px;color:var(--txt2);margin-bottom:5px;line-height:1.4}
+.adv-li .b{flex:0 0 auto}
+.adv-sub{display:flex;justify-content:space-between;font-size:10px;padding:5px 0;border-bottom:1px dashed var(--line)}
+.adv-sub .k{color:var(--txt3)} .adv-sub .v{font-weight:700}
+.adv-tip{font-size:9.5px;color:var(--txt3);line-height:1.5;margin-top:9px;border-top:1px solid var(--line);padding-top:8px}
+
+/* COT */
 .cot-head{display:flex;gap:8px;align-items:center;margin-bottom:10px}
 .cot-head select{flex:1;background:var(--bg);border:1px solid var(--line2);color:#fff;padding:8px 9px;border-radius:7px;font-size:12px}
 .cot-date{font-size:9px;color:var(--txt3)}
@@ -172,7 +189,7 @@ select{font-family:var(--mono)}
   <div class="hdr">
     <div class="brand"><div class="mk">A</div>
       <div><div class="nm">AURUM<span style="color:var(--gold)">·</span>RESEARCH</div>
-        <div class="sub">Market Analysis · LIVE + COT — KID Digital Wealth</div></div></div>
+        <div class="sub">Market Analysis · Yahoo LIVE + COT — KID Digital Wealth</div></div></div>
     <div class="sp"></div>
     <div class="badge" id="dataBadge"><span class="led"></span><span id="dataStatus">connessione…</span></div>
     <div class="regime"><span class="lbl">Regime</span><span class="val" id="regime">--</span></div>
@@ -186,7 +203,7 @@ select{font-family:var(--mono)}
     <div class="col">
       <div class="panel">
         <div class="ph">▦ Market Heatmap<span class="sp"></span><span class="tag">variazione · clicca per analizzare</span></div>
-        <div class="pb"><div class="heat" id="heat"><div class="loading">caricamento dati live…</div></div></div>
+        <div class="pb"><div class="heat" id="heat"><div class="loading">caricamento dati Yahoo…</div></div></div>
       </div>
 
       <div class="panel">
@@ -216,14 +233,17 @@ select{font-family:var(--mono)}
     </div>
 
     <div class="col">
-      <!-- COT REPORT (CFTC) -->
+      <!-- TRADING ADVISOR -->
+      <div class="panel">
+        <div class="ph">🧭 Trading Advisor<span class="sp"></span><span class="tag" id="advSym">quando operare / quando no</span></div>
+        <div class="pb" id="advBody"><div class="loading">analisi condizioni…</div></div>
+      </div>
+
+      <!-- COT REPORT -->
       <div class="panel">
         <div class="ph">🏛 COT Report · CFTC<span class="sp"></span><span class="tag">legacy futures-only</span></div>
         <div class="pb">
-          <div class="cot-head">
-            <select id="cotSel"></select>
-            <span class="cot-date" id="cotDate">—</span>
-          </div>
+          <div class="cot-head"><select id="cotSel"></select><span class="cot-date" id="cotDate">—</span></div>
           <div id="cotBody"><div class="loading">caricamento COT…</div></div>
         </div>
       </div>
@@ -261,59 +281,60 @@ select{font-family:var(--mono)}
   </div>
 
   <div class="foot">
-    AURUM Research v2 · <b class="gd">dati reali</b>: CoinGecko (metalli/crypto) · Frankfurter/BCE (forex+DXY) · CFTC (COT).
-    I metalli usano proxy tokenizzati (PAX Gold / Kinesis Silver) che replicano lo spot.<br/>
-    Strumento educativo · nessun consiglio d'investimento · KID Digital Wealth
+    AURUM Research v3 · <b class="gd">dati reali Yahoo Finance</b> (via proxy CORS) · COT da CFTC.
+    Prezzi indici/futures con possibile ritardo ~15 min. Il Trading Advisor è un supporto, non un consiglio d'investimento.<br/>
+    Strumento educativo · KID Digital Wealth
   </div>
 </div>
 <div class="toast" id="toast"></div>
 
 <script>
 /* ============================================================================
- * AURUM RESEARCH v2 — Market Analysis con DATI REALI + COT
+ * AURUM RESEARCH v3 — Yahoo Finance LIVE + COT + Trading Advisor
  * ========================================================================== */
 const CONFIG = {
-  refreshQuotesMs: 60000,     // aggiorna prezzi ogni 60s
-  refreshHistMs: 900000,      // ricarica storico ogni 15 min
-  histDays: 90,               // giorni di storico
-  corrWindow: 45,
-  // Universo (tutti con fonte reale)
+  refreshMs: 120000,          // aggiorna tutti gli asset ogni 2 min (Yahoo via proxy)
+  histDays: 70,               // giorni di storico mostrati/usati
+  corrWindow: 40,
+  concurrency: 4,             // fetch paralleli max
+  // Universo (Yahoo symbols)
   assets:{
-    XAUUSD:{name:'Gold',cls:'Metalli',src:'cg',id:'pax-gold',digits:2,color:'#e7b54a'},
-    XAGUSD:{name:'Silver',cls:'Metalli',src:'cg',id:'kinesis-silver',digits:3,color:'#cfd8e3'},
-    BTCUSD:{name:'Bitcoin',cls:'Crypto',src:'cg',id:'bitcoin',digits:0,color:'#f7931a'},
-    ETHUSD:{name:'Ethereum',cls:'Crypto',src:'cg',id:'ethereum',digits:1,color:'#9b7bff'},
-    EURUSD:{name:'Euro',cls:'Forex',src:'fx',pair:'EURUSD',digits:4,color:'#48a0ff'},
-    GBPUSD:{name:'Pound',cls:'Forex',src:'fx',pair:'GBPUSD',digits:4,color:'#23d18b'},
-    USDJPY:{name:'USD/JPY',cls:'Forex',src:'fx',pair:'USDJPY',digits:2,color:'#ff8a5c'},
-    DXY:{name:'Dollar Index',cls:'Forex',src:'fx',pair:'DXY',digits:2,color:'#ffb547'},
+    XAUUSD:{name:'Gold',cls:'Metalli',y:'GC=F',digits:2,color:'#e7b54a'},
+    XAGUSD:{name:'Silver',cls:'Metalli',y:'SI=F',digits:3,color:'#cfd8e3'},
+    US500:{name:'S&P 500',cls:'Indici',y:'^GSPC',digits:2,color:'#48a0ff'},
+    US100:{name:'Nasdaq 100',cls:'Indici',y:'^NDX',digits:2,color:'#7fb2ff'},
+    GER40:{name:'DAX',cls:'Indici',y:'^GDAXI',digits:2,color:'#9bc4ff'},
+    WTIUSD:{name:'Crude Oil',cls:'Materie',y:'CL=F',digits:2,color:'#ff8a5c'},
+    COPPER:{name:'Copper',cls:'Materie',y:'HG=F',digits:3,color:'#e0894e'},
+    DXY:{name:'Dollar Index',cls:'Forex',y:'DX-Y.NYB',digits:2,color:'#ffb547'},
+    EURUSD:{name:'Euro',cls:'Forex',y:'EURUSD=X',digits:4,color:'#23d18b'},
+    USDJPY:{name:'USD/JPY',cls:'Forex',y:'JPY=X',digits:2,color:'#36c98f'},
+    BTCUSD:{name:'Bitcoin',cls:'Crypto',y:'BTC-USD',digits:0,color:'#f7931a'},
+    US10Y:{name:'US 10Y Yield',cls:'Bond',y:'^TNX',digits:3,color:'#c08bff'},
   },
-  classColors:{Metalli:'#e7b54a',Crypto:'#9b7bff',Forex:'#48a0ff'},
-  // Mercati COT (CFTC legacy futures-only) — codici contratto verificati
+  classColors:{Metalli:'#e7b54a',Indici:'#48a0ff',Materie:'#ff8a5c',Forex:'#23d18b',Crypto:'#9b7bff',Bond:'#c08bff'},
   cot:[
-    {code:'088691',label:'Gold (COMEX)'},
-    {code:'084691',label:'Silver (COMEX)'},
-    {code:'085692',label:'Copper (COMEX)'},
-    {code:'067651',label:'WTI Crude (NYMEX)'},
-    {code:'099741',label:'Euro FX (CME)'},
-    {code:'098662',label:'US Dollar Index (ICE)'},
+    {code:'088691',label:'Gold (COMEX)'},{code:'084691',label:'Silver (COMEX)'},
+    {code:'085692',label:'Copper (COMEX)'},{code:'067651',label:'WTI Crude (NYMEX)'},
+    {code:'099741',label:'Euro FX (CME)'},{code:'098662',label:'US Dollar Index (ICE)'},
   ],
-  /* HOOK: per aggiungere fonti, estendere fetchQuotes()/loadHistory(). */
 };
-const API={
-  cgMarkets:(ids)=>`https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${ids}&sparkline=false&price_change_percentage=24h`,
-  cgChart:(id,days)=>`https://api.coingecko.com/api/v3/coins/${id}/market_chart?vs_currency=usd&days=${days}&interval=daily`,
-  fxLatest:()=>`https://api.frankfurter.dev/v1/latest?base=USD&symbols=EUR,JPY,GBP,CAD,SEK,CHF`,
-  fxSeries:(s,e)=>`https://api.frankfurter.dev/v1/${s}..${e}?base=USD&symbols=EUR,JPY,GBP,CAD,SEK,CHF`,
-  cot:(code)=>`https://publicreporting.cftc.gov/resource/6dca-aqww.json?cftc_contract_market_code=${code}&$order=report_date_as_yyyy_mm_dd%20DESC&$limit=16`,
-};
+// Proxy CORS per Yahoo (Yahoo non invia header CORS). Fallback multipli.
+const PROXIES=[
+  u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+  u=>`https://corsproxy.org/?url=${encodeURIComponent(u)}`,
+  u=>`https://api.allorigins.win/get?url=${encodeURIComponent(u)}`, // {contents}
+];
+// NB: simbolo lasciato grezzo (GC=F, ^GSPC, DX-Y.NYB): è il proxy a codificare l'intero URL.
+const yahooURL=(sym)=>`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=3mo`;
+const cotURL=(code)=>`https://publicreporting.cftc.gov/resource/6dca-aqww.json?cftc_contract_market_code=${code}&$order=report_date_as_yyyy_mm_dd%20DESC&$limit=16`;
 
-/* ---- storage ---- */
+/* storage */
 const Storage=(()=>{let m={};const ws=(typeof window!=='undefined'&&window.storage&&typeof window.storage.getItem==='function');
   return{async get(k){try{if(ws){const v=await window.storage.getItem(k);return v?JSON.parse(v):null}}catch(e){}return m[k]??null},
   async set(k,v){try{if(ws){await window.storage.setItem(k,JSON.stringify(v))}}catch(e){}m[k]=v}}})();
 
-/* ---- utils ---- */
+/* utils */
 const $=(s,e=document)=>e.querySelector(s);const $$=(s,e=document)=>[...e.querySelectorAll(s)];
 const SY=Object.keys(CONFIG.assets);
 const dg=s=>CONFIG.assets[s].digits;
@@ -322,84 +343,57 @@ const fInt=n=>(n==null||isNaN(n))?'--':Number(Math.round(n)).toLocaleString('en-
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 const gauss=()=>{let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)};
 const lerpColor=t=>{const c1=[255,77,94],c2=[231,181,74],c3=[35,209,139];let a,b,tt;if(t<.5){a=c1;b=c2;tt=t/.5}else{a=c2;b=c3;tt=(t-.5)/.5}return`rgb(${a.map((v,i)=>Math.round(v+(b[i]-v)*tt)).join(',')})`;};
-async function getJSON(url,ms=15000){const ctrl=new AbortController();const to=setTimeout(()=>ctrl.abort(),ms);
+async function getJSON(url,ms=22000){const ctrl=new AbortController();const to=setTimeout(()=>ctrl.abort(),ms);
   try{const r=await fetch(url,{signal:ctrl.signal});if(!r.ok)throw new Error('HTTP '+r.status);return await r.json();}finally{clearTimeout(to);}}
-const ymd=d=>d.toISOString().slice(0,10);
 
-/* ---- STATE ---- */
-const DATA={}; // DATA[sym]={daily:[],price,change,src}
+/* STATE */
+const DATA={};
 const STATE={symbol:'XAUUSD',legendOff:{},cot:'088691',status:'init',lastUpdate:null};
 
-/* ---- DXY dal basket (formula ICE) ---- */
-function dxyFrom(r){ // r = {EUR,JPY,GBP,CAD,SEK,CHF} con base USD (USD→valuta)
-  const EURUSD=1/r.EUR, GBPUSD=1/r.GBP, USDJPY=r.JPY, USDCAD=r.CAD, USDSEK=r.SEK, USDCHF=r.CHF;
-  return 50.14348112*Math.pow(EURUSD,-0.576)*Math.pow(USDJPY,0.136)*Math.pow(GBPUSD,-0.119)*Math.pow(USDCAD,0.091)*Math.pow(USDSEK,0.042)*Math.pow(USDCHF,0.036);
-}
-function fxPair(pair,r){ if(pair==='EURUSD')return 1/r.EUR; if(pair==='GBPUSD')return 1/r.GBP; if(pair==='USDJPY')return r.JPY; if(pair==='DXY')return dxyFrom(r); }
-
-/* ---- CARICAMENTO STORICO (reale) ---- */
-async function loadHistory(){
-  const results=await Promise.allSettled([loadCryptoHist(), loadFxHist()]);
-  return results;
-}
-async function loadCryptoHist(){
-  for(const s of SY){ const a=CONFIG.assets[s]; if(a.src!=='cg')continue;
-    try{ const j=await getJSON(API.cgChart(a.id,CONFIG.histDays));
-      const closes=(j.prices||[]).map(p=>p[1]); if(closes.length<10)throw new Error('pochi punti');
-      DATA[s]={...(DATA[s]||{}), daily:closes, price:closes.at(-1), src:'LIVE'};
-    }catch(e){ ensureSim(s); }
+/* ---- FETCH Yahoo (via proxy con fallback) ---- */
+async function fetchViaProxies(targetUrl){
+  // prova ogni proxy, con 2 tentativi ciascuno (i proxy gratuiti danno 522/500 sporadici)
+  for(const p of PROXIES){
+    for(let attempt=0;attempt<2;attempt++){
+      try{ const j=await getJSON(p(targetUrl));
+        if(j&&typeof j.contents==='string'){ return JSON.parse(j.contents); } // allorigins /get
+        if(j&&j.chart){ return j; }
+        throw new Error('payload inatteso');
+      }catch(e){ if(attempt===0) await new Promise(r=>setTimeout(r,400)); }
+    }
   }
+  throw new Error('tutti i proxy falliti');
 }
-async function loadFxHist(){
-  try{ const end=new Date(); const start=new Date(Date.now()-160*864e5);
-    const j=await getJSON(API.fxSeries(ymd(start),ymd(end)));
-    const dates=Object.keys(j.rates).sort();
-    SY.filter(s=>CONFIG.assets[s].src==='fx').forEach(s=>{
-      const pair=CONFIG.assets[s].pair; const arr=dates.map(d=>fxPair(pair,j.rates[d])).filter(v=>isFinite(v));
-      DATA[s]={...(DATA[s]||{}), daily:arr.slice(-CONFIG.histDays), price:arr.at(-1), src:'LIVE'};
-    });
-  }catch(e){ SY.filter(s=>CONFIG.assets[s].src==='fx').forEach(ensureSim); }
+function parseYahoo(j,sym){
+  const r=j.chart.result[0]; const meta=r.meta||{};
+  const closesRaw=(r.indicators&&r.indicators.quote&&r.indicators.quote[0].close)||[];
+  const closes=closesRaw.filter(x=>x!=null);
+  const price=meta.regularMarketPrice ?? closes.at(-1);
+  if(closes.length)closes[closes.length-1]=price;
+  const prev=meta.chartPreviousClose ?? meta.previousClose ?? closes[closes.length-2] ?? price;
+  const change=prev?(price/prev-1)*100:0;
+  return {daily:closes.slice(-CONFIG.histDays), price, change, src:'LIVE', y:meta.symbol};
 }
-function ensureSim(s){ // fallback: serie simulata se la fonte fallisce
-  if(DATA[s]&&DATA[s].daily&&DATA[s].src==='LIVE')return;
-  const base={XAUUSD:2350,XAGUSD:30,BTCUSD:68000,ETHUSD:3500,EURUSD:1.08,GBPUSD:1.27,USDJPY:157,DXY:104.5}[s]||100;
-  const arr=[]; let p=base; for(let i=0;i<CONFIG.histDays;i++){p=Math.max(base*0.5,p+gauss()*base*0.01);arr.push(p);}
+async function fetchAsset(sym){
+  const j=await fetchViaProxies(yahooURL(CONFIG.assets[sym].y));
+  if(!j||!j.chart||!j.chart.result) throw new Error('no data');
+  return parseYahoo(j,sym);
+}
+function ensureSim(s){ if(DATA[s]&&DATA[s].src==='LIVE')return;
+  const base={XAUUSD:2350,XAGUSD:30,US500:5300,US100:18600,GER40:18400,WTIUSD:78,COPPER:4.5,DXY:104.5,EURUSD:1.08,USDJPY:157,BTCUSD:68000,US10Y:4.3}[s]||100;
+  const arr=[];let p=base;for(let i=0;i<CONFIG.histDays;i++){p=Math.max(base*0.5,p+gauss()*base*0.01);arr.push(p);}
   DATA[s]={daily:arr,price:arr.at(-1),change:0,src:'SIM'};
 }
-
-/* ---- QUOTAZIONI LIVE (prezzo + variazione) ---- */
-async function loadQuotes(){
-  let okCg=false, okFx=false;
-  // crypto+metalli
-  try{ const ids=SY.filter(s=>CONFIG.assets[s].src==='cg').map(s=>CONFIG.assets[s].id).join(',');
-    const j=await getJSON(API.cgMarkets(ids));
-    const byId={}; j.forEach(x=>byId[x.id]=x);
-    SY.filter(s=>CONFIG.assets[s].src==='cg').forEach(s=>{ const x=byId[CONFIG.assets[s].id]; if(!x)return;
-      const cur=DATA[s]||{daily:[]}; cur.price=x.current_price; cur.change=x.price_change_percentage_24h??0; cur.src='LIVE';
-      if(cur.daily&&cur.daily.length)cur.daily[cur.daily.length-1]=x.current_price; DATA[s]=cur; });
-    okCg=true;
-  }catch(e){}
-  // forex
-  try{ const j=await getJSON(API.fxLatest()); const r=j.rates;
-    SY.filter(s=>CONFIG.assets[s].src==='fx').forEach(s=>{ const pair=CONFIG.assets[s].pair; const price=fxPair(pair,r);
-      const cur=DATA[s]||{daily:[]}; const prev=cur.daily&&cur.daily.length>1?cur.daily[cur.daily.length-2]:price;
-      cur.price=price; cur.change=prev?(price/prev-1)*100:0; cur.src='LIVE';
-      if(cur.daily&&cur.daily.length)cur.daily[cur.daily.length-1]=price; DATA[s]=cur; });
-    okFx=true;
-  }catch(e){}
-  // crypto change già dal markets; assicurati change per cg via daily se mancante
-  SY.forEach(s=>{ if(!DATA[s])ensureSim(s); if(DATA[s].change==null){ const d=DATA[s].daily; DATA[s].change=(d&&d.length>1)?(d.at(-1)/d.at(-2)-1)*100:0; } });
-  // stato
+async function fetchAll(){
+  const syms=SY.slice();let i=0;
+  async function worker(){ while(i<syms.length){ const s=syms[i++]; try{ DATA[s]=await fetchAsset(s); }catch(e){ ensureSim(s); } } }
+  await Promise.all(Array.from({length:CONFIG.concurrency},worker));
   const liveN=SY.filter(s=>DATA[s].src==='LIVE').length;
-  STATE.status = liveN===SY.length?'live': liveN>0?'part':'off';
-  STATE.lastUpdate=new Date();
-  updateBadge();
+  STATE.status=liveN===SY.length?'live':liveN>0?'part':'off';STATE.lastUpdate=new Date();updateBadge();
 }
-function updateBadge(){ const b=$('#dataBadge'); b.className='badge '+(STATE.status==='live'?'live':STATE.status==='part'?'part':'off');
-  const liveN=SY.filter(s=>DATA[s]&&DATA[s].src==='LIVE').length;
-  const t=STATE.lastUpdate?STATE.lastUpdate.toLocaleTimeString('it-IT'):'';
-  $('#dataStatus').textContent = STATE.status==='live'?`LIVE · ${liveN}/${SY.length} · ${t}` : STATE.status==='part'?`PARZIALE · ${liveN}/${SY.length} live · ${t}` : 'OFFLINE · dati simulati';
-}
+function updateBadge(){const b=$('#dataBadge');b.className='badge '+(STATE.status==='live'?'live':STATE.status==='part'?'part':'off');
+  const liveN=SY.filter(s=>DATA[s]&&DATA[s].src==='LIVE').length;const t=STATE.lastUpdate?STATE.lastUpdate.toLocaleTimeString('it-IT'):'';
+  $('#dataStatus').textContent=STATE.status==='live'?`LIVE · ${liveN}/${SY.length} · ${t}`:STATE.status==='part'?`PARZIALE · ${liveN}/${SY.length} live · ${t}`:'OFFLINE · simulati';}
 
 /* ---- indicatori ---- */
 const ema=(a,p)=>{const k=2/(p+1);let e=a[0];const o=[];a.forEach((v,i)=>{e=i?v*k+e*(1-k):v;o.push(e)});return o};
@@ -409,30 +403,108 @@ function rsi(a,p=14){let g=0,l=0;const o=new Array(a.length).fill(null);
     if(i<=p){g+=up;l+=dn;if(i===p)o[i]=100-100/(1+(l===0?100:g/l));}else{g=(g*(p-1)+up)/p;l=(l*(p-1)+dn)/p;o[i]=100-100/(1+(l===0?100:g/l));}}return o;}
 function macd(a){const e12=ema(a,12),e26=ema(a,26),line=a.map((_,i)=>e12[i]-e26[i]),sig=ema(line,9);return{line,sig,hist:line.map((v,i)=>v-sig[i])};}
 function stoch(a,p=14){const o=new Array(a.length).fill(null);for(let i=p-1;i<a.length;i++){const w=a.slice(i-p+1,i+1),lo=Math.min(...w),hi=Math.max(...w);o[i]=hi===lo?50:(a[i]-lo)/(hi-lo)*100;}return o;}
-function rating(sym){const a=DATA[sym].daily; if(!a||a.length<30)return null; const last=a.at(-1);
-  const e20=ema(a,20).at(-1),e50=ema(a,50).at(-1),s200=sma(a,Math.min(120,a.length-1)).at(-1);
+function volPct(sym){const a=DATA[sym].daily;if(!a||a.length<8)return 0;const s=a.slice(-15);let sum=0,c=0;for(let i=1;i<s.length;i++){sum+=Math.abs(s[i]/s[i-1]-1);c++;}return c?sum/c*100:0;}
+function rating(sym){const a=DATA[sym].daily;if(!a||a.length<30)return null;const last=a.at(-1);
+  const e20=ema(a,20).at(-1),e50=ema(a,50).at(-1),s200=sma(a,Math.min(60,a.length-1)).at(-1);
   const r=rsi(a).at(-1),m=macd(a),mh=m.hist.at(-1),st=stoch(a).at(-1),mom=last-a[a.length-11];
   const inds=[
     {n:'RSI(14)',v:f(r,1),sig:r>70?'sell':r<30?'buy':(r>50?'buy':'sell')},
     {n:'MACD',v:f(m.line.at(-1),Math.min(4,dg(sym)+1)),sig:mh>0?'buy':mh<0?'sell':'neutral'},
     {n:'EMA 20',v:f(e20,dg(sym)),sig:last>e20?'buy':'sell'},
     {n:'EMA 50',v:f(e50,dg(sym)),sig:last>e50?'buy':'sell'},
-    {n:'SMA 120',v:f(s200,dg(sym)),sig:last>s200?'buy':'sell'},
+    {n:'SMA 60',v:f(s200,dg(sym)),sig:last>s200?'buy':'sell'},
     {n:'Stoch %K',v:f(st,1),sig:st>80?'sell':st<20?'buy':(st>50?'buy':'sell')},
     {n:'Momentum',v:f(mom,dg(sym)),sig:mom>0?'buy':'sell'},
-    {n:'Trend',v:last>e20&&last>e50?'Bull':'Bear',sig:last>e20&&last>e50?'buy':last<e20&&last<e50?'sell':'neutral'},
+    {n:'Trend',v:last>e20&&last>e50?'Bull':last<e20&&last<e50?'Bear':'Range',sig:last>e20&&last>e50?'buy':last<e20&&last<e50?'sell':'neutral'},
   ];
   let buy=0,sell=0,neu=0;inds.forEach(i=>i.sig==='buy'?buy++:i.sig==='sell'?sell++:neu++);
   const score=(buy-sell)/inds.length,t=(score+1)/2;
   let label='NEUTRAL';if(score>0.5)label='STRONG BUY';else if(score>0.15)label='BUY';else if(score<-0.5)label='STRONG SELL';else if(score<-0.15)label='SELL';
-  return{inds,buy,sell,neu,score,t,label};
+  const e20v=e20,e50v=e50,trend=last>e20&&last>e50?'up':last<e20&&last<e50?'down':'range';
+  return{inds,buy,sell,neu,score,t,label,rsi:r,trend};
 }
-function chgN(sym,back){const a=DATA[sym].daily;if(!a||a.length<=back)return 0;return (a.at(-1)-a[a.length-1-back])/a[a.length-1-back]*100;}
+function chgN(sym,back){const a=DATA[sym].daily;if(!a||a.length<=back)return 0;return(a.at(-1)-a[a.length-1-back])/a[a.length-1-back]*100;}
 function returns(sym,n){const a=(DATA[sym].daily||[]).slice(-n-1),o=[];for(let i=1;i<a.length;i++)o.push((a[i]-a[i-1])/a[i-1]);return o;}
 function corr(x,y){const n=Math.min(x.length,y.length);if(n<3)return 0;let mx=0,my=0;for(let i=0;i<n;i++){mx+=x[i];my+=y[i]}mx/=n;my/=n;let c=0,sx=0,sy=0;for(let i=0;i<n;i++){const dx=x[i]-mx,dy=y[i]-my;c+=dx*dy;sx+=dx*dx;sy+=dy*dy}return(sx&&sy)?c/Math.sqrt(sx*sy):0;}
 
-/* ---- RENDER ---- */
-const KPI=['XAUUSD','XAGUSD','DXY','BTCUSD','EURUSD'];
+/* ---- TRADING ADVISOR (quando operare / quando no) ---- */
+function cetNow(){return new Date(new Date().toLocaleString('en-US',{timeZone:'Europe/Rome'}));}
+function advise(sym){
+  const D=DATA[sym]; const cls=CONFIG.assets[sym].cls; const R=rating(sym);
+  const now=cetNow(); const h=now.getHours(); const day=now.getDay(); // 0=dom,6=sab
+  const pros=[],cons=[]; let score=0;
+  const isCrypto=cls==='Crypto';
+
+  // 1) Mercato aperto / weekend
+  if((day===6||day===0)&&!isCrypto){ cons.push('Weekend: il mercato cash/futures è chiuso o illiquido (le crypto restano aperte).'); score-=3; }
+
+  // 2) Sessione (liquidità)
+  let sessTxt;
+  if(isCrypto){ sessTxt='24/7'; pros.push('Crypto: mercato 24/7, liquidità continua.'); score+=1; }
+  else if(h>=14&&h<17){ sessTxt='Overlap London–New York'; pros.push('Sessione: overlap London–NY → liquidità massima e spread stretti.'); score+=2; }
+  else if((h>=9&&h<14)||(h>=17&&h<22)){ sessTxt='Sessione attiva (London o NY)'; pros.push('Sessione attiva: liquidità buona.'); score+=1; }
+  else if(h>=1&&h<9){ sessTxt='Sessione asiatica'; cons.push('Sessione asiatica: volumi sottili su metalli/indici, movimenti meno affidabili.'); score-=1; }
+  else { sessTxt='Fuori sessione principale'; cons.push('Fuori dalle sessioni principali: spread ampi, evita ingressi.'); score-=2; }
+
+  // 3) Volatilità (vol% giornaliera media)
+  const v=volPct(sym); const hiTh=isCrypto?6:2.5, exTh=isCrypto?10:4.5, loTh=isCrypto?1:0.3;
+  let volTxt;
+  if(v<loTh){ volTxt='molto bassa'; cons.push('Volatilità molto bassa: mercato compresso/laterale, falsi segnali probabili.'); score-=1; }
+  else if(v<=hiTh){ volTxt='sana'; pros.push('Volatilità in range sano per impostare un rischio/rendimento.'); score+=1; }
+  else if(v<=exTh){ volTxt='elevata'; cons.push('Volatilità elevata: riduci la size, allarga gli stop.'); score-=0; }
+  else { volTxt='estrema'; cons.push('Volatilità estrema: rischio whipsaw alto, meglio attendere.'); score-=2; }
+
+  // 4) Chiarezza trend
+  if(R){ if(R.trend==='up'){ pros.push('Trend rialzista pulito (prezzo > EMA20 > EMA50).'); score+=1; }
+    else if(R.trend==='down'){ pros.push('Trend ribassista pulito (prezzo < EMA20 < EMA50): edge sugli short.'); score+=1; }
+    else { cons.push('Struttura intrecciata (range): niente trend chiaro, evita i breakout.'); score-=1; } }
+
+  // 5) Rating tecnico (edge direzionale)
+  if(R){ if(Math.abs(R.score)>0.5){ pros.push(`Rating tecnico forte (${R.label}): segnali allineati.`); score+=2; }
+    else if(Math.abs(R.score)>0.15){ pros.push(`Rating ${R.label}: leggero edge direzionale.`); score+=1; }
+    else { cons.push('Rating NEUTRAL: indicatori discordi, nessun vantaggio statistico.'); score-=1; }
+    // RSI estremi
+    if(R.rsi>75) cons.push('RSI ipercomprato (>75): rischio di pull-back, non inseguire i long.');
+    if(R.rsi<25) cons.push('RSI ipervenduto (<25): rischio rimbalzo, non inseguire gli short.');
+  }
+
+  // 6) Sentiment estremo
+  const fg=fearGreed();
+  if(fg>=80){ cons.push('Sentiment in EXTREME GREED: euforia → cautela, possibili correzioni.'); score-=1; }
+  else if(fg<=20){ cons.push('Sentiment in EXTREME FEAR: panico → alta volatilità, opportunità solo per esperti.'); score-=1; }
+
+  // 7) Promemoria news (calendario indicativo)
+  cons.push('Controlla il calendario: evita ingressi 30–60 min prima/dopo news ad alto impatto (NFP/CPI/FOMC).');
+
+  // verdetto
+  let level,ic,vtitle,vsub;
+  if(score>=3){ level='go'; ic='✅'; vtitle='CONDIZIONI FAVOREVOLI'; vsub='Contesto adatto a operare con gestione del rischio.'; }
+  else if(score<=-1){ level='avoid'; ic='⛔'; vtitle='MEGLIO NON OPERARE'; vsub='Troppi fattori sfavorevoli: attendi un setup migliore.'; }
+  else { level='caution'; ic='⚠️'; vtitle='CAUTELA'; vsub='Si può operare solo con setup selettivi e size ridotta.'; }
+  const meterPct=clamp((score+4)/9*100,4,100);
+  const meterCol=level==='go'?'var(--green)':level==='avoid'?'var(--red)':'var(--amber)';
+  return {level,ic,vtitle,vsub,pros,cons,score,meterPct,meterCol,sessTxt,volTxt,v,fg,R};
+}
+function renderAdvisor(){
+  const sym=STATE.symbol; const A=advise(sym);
+  $('#advSym').textContent=`${sym} · ${CONFIG.assets[sym].name}`;
+  $('#advBody').innerHTML=`
+    <div class="adv-verdict ${A.level}"><div class="ic">${A.ic}</div>
+      <div class="tx"><div class="v">${A.vtitle}</div><div class="s">${A.vsub}</div></div></div>
+    <div class="adv-meter"><span style="width:${A.meterPct}%;background:${A.meterCol}"></span></div>
+    <div class="adv-sub"><span class="k">Sessione</span><span class="v">${A.sessTxt}</span></div>
+    <div class="adv-sub"><span class="k">Volatilità (media gg)</span><span class="v">${f(A.v,2)}% · ${A.volTxt}</span></div>
+    <div class="adv-sub"><span class="k">Rating tecnico</span><span class="v">${A.R?A.R.label:'—'}</span></div>
+    <div class="adv-sub"><span class="k">Sentiment</span><span class="v">${A.fg}/100</span></div>
+    <div class="adv-cols" style="margin-top:11px">
+      <div class="pro"><div class="h">✅ Quando operare</div>${A.pros.length?A.pros.map(p=>`<div class="adv-li"><span class="b up">▸</span><span>${p}</span></div>`).join(''):'<div class="adv-li mut">—</div>'}</div>
+      <div class="con"><div class="h">⛔ Quando evitare</div>${A.cons.map(c=>`<div class="adv-li"><span class="b dn">▸</span><span>${c}</span></div>`).join('')}</div>
+    </div>
+    <div class="adv-tip"><b>Regola d'oro:</b> opera solo quando sessione liquida + trend chiaro + rating allineato coincidono. In dubbio, <b>stai fuori</b>: non operare è una posizione. Rischia per trade max 1–2% del capitale.</div>`;
+}
+
+/* ---- RENDER vari ---- */
+const KPI=['XAUUSD','US500','DXY','BTCUSD','US10Y'];
 function sparkSVG(arr,up,w=88,h=34){const s=(arr||[]).slice(-30);if(s.length<2)return'';const min=Math.min(...s),max=Math.max(...s),r=(max-min)||1;
   const pts=s.map((v,i)=>`${(i/(s.length-1)*w).toFixed(1)},${(h-((v-min)/r)*h).toFixed(1)}`).join(' ');
   return`<svg class="spk" viewBox="0 0 ${w} ${h}"><polyline fill="none" stroke="${up?'#23d18b':'#ff4d5e'}" stroke-width="1.5" points="${pts}"/></svg>`;}
@@ -444,7 +516,7 @@ function renderHeat(){$('#heat').innerHTML=SY.map(s=>{const D=DATA[s];if(!D)retu
   return`<div class="tile ${s===STATE.symbol?'sel':''}" data-sym="${s}" style="background:${bg}">
     <div><div class="s">${s}</div><div class="nm">${CONFIG.assets[s].name}</div></div>
     <div><div class="p num">${f(D.price,dg(s))}</div><div class="ch ${c>=0?'up':'dn'}">${c>=0?'+':''}${f(c,2)}%</div></div></div>`;}).join('');
-  $$('#heat .tile').forEach(t=>t.onclick=()=>{STATE.symbol=t.dataset.sym;renderDetail();renderHeat();});}
+  $$('#heat .tile').forEach(t=>t.onclick=()=>{STATE.symbol=t.dataset.sym;renderDetail();renderAdvisor();renderHeat();});}
 function renderAcPerf(){const cls={};SY.forEach(s=>{const k=CONFIG.assets[s].cls;(cls[k]=cls[k]||[]).push(DATA[s]?.change||0);});
   const rows=Object.entries(cls).map(([k,v])=>({k,avg:v.reduce((a,b)=>a+b,0)/v.length})).sort((a,b)=>b.avg-a.avg);
   const max=Math.max(1,...rows.map(r=>Math.abs(r.avg)));
@@ -457,31 +529,27 @@ function renderMovers(){const sorted=SY.map(s=>({s,c:DATA[s]?.change||0})).sort(
   const row=o=>`<div class="mv"><span class="s">${o.s}<small>${CONFIG.assets[o.s].name}</small></span><span class="ch ${o.c>=0?'up':'dn'}">${o.c>=0?'+':''}${f(o.c,2)}%</span></div>`;
   $('#movers').innerHTML=`<div style="font-size:9px;letter-spacing:1px;color:var(--green);margin-bottom:4px">▲ GAINERS</div>${top.map(row).join('')}
     <div style="font-size:9px;letter-spacing:1px;color:var(--red);margin:9px 0 4px">▼ LOSERS</div>${bot.map(row).join('')}`;}
-function renderCorr(){const set=SY;const rets={};set.forEach(s=>rets[s]=returns(s,CONFIG.corrWindow));
+function renderCorr(){const set=['XAUUSD','XAGUSD','US500','US100','DXY','BTCUSD','US10Y','WTIUSD'];const rets={};set.forEach(s=>rets[s]=returns(s,CONFIG.corrWindow));
   let h='<tr><th></th>'+set.map(s=>`<th>${s.slice(0,3)}</th>`).join('')+'</tr>';
   set.forEach(a=>{h+=`<tr><th class="row">${a.slice(0,3)}</th>`;set.forEach(b=>{const v=corr(rets[a],rets[b]);h+=`<td style="background:${lerpColor((v+1)/2)}" title="${a}/${b}: ${v.toFixed(2)}">${v.toFixed(2)}</td>`;});h+='</tr>';});
   $('#corr').innerHTML=h;}
 function fearGreed(){const breadth=SY.filter(s=>(DATA[s]?.change||0)>0).length/SY.length;
-  const btcMom=clamp((chgN('BTCUSD',7)+15)/30,0,1);
-  const goldHaven=clamp((chgN('XAUUSD',5)+6)/12,0,1); // oro su = un po' di paura → pesa inverso sotto
+  const spx=clamp((chgN('US500',5)+5)/10,0,1);
+  const btc=clamp((chgN('BTCUSD',7)+15)/30,0,1);
   const dxyStr=clamp(1-(chgN('DXY',5)+3)/6,0,1);
-  const composite=breadth*0.35+btcMom*0.3+(1-goldHaven)*0.2+dxyStr*0.15;
-  return Math.round(clamp(composite,0,1)*100);}
+  const vix=clamp(1-Math.abs(chgN('US500',1))/3,0,1);
+  return Math.round(clamp(breadth*0.3+spx*0.25+btc*0.2+dxyStr*0.15+vix*0.1,0,1)*100);}
 function renderFG(){const v=fearGreed();$('#fgNum').textContent=v;let lbl,col;
   if(v<25){lbl='EXTREME FEAR';col='var(--red)'}else if(v<45){lbl='FEAR';col='#ff8a5c'}else if(v<55){lbl='NEUTRAL';col='var(--amber)'}else if(v<75){lbl='GREED';col='#8fd14f'}else{lbl='EXTREME GREED';col='var(--green)'}
   $('#fgLbl').textContent=lbl;$('#fgLbl').style.color=col;$('#fgNum').style.color=col;$('#fgPin').style.left=v+'%';
-  $('#fgNote').textContent=`Composito da ampiezza di mercato, momentum BTC (7g), domanda di oro e forza del dollaro. ${v}/100.`;}
-function renderRegime(){const fg=fearGreed();const e=$('#regime');const riskOn=chgN('BTCUSD',3)>0&&chgN('DXY',3)<0;
-  if(fg>=55&&riskOn){e.textContent='RISK-ON';e.style.color='var(--green)'}
-  else if(fg<=40){e.textContent='RISK-OFF';e.style.color='var(--red)'}
-  else{e.textContent='MISTO';e.style.color='var(--amber)'}}
+  $('#fgNote').textContent=`Composito da ampiezza di mercato, S&P, BTC, dollaro e volatilità. ${v}/100.`;}
+function renderRegime(){const fg=fearGreed();const e=$('#regime');const riskOn=chgN('US500',3)>0&&chgN('DXY',3)<0;
+  if(fg>=55&&riskOn){e.textContent='RISK-ON';e.style.color='var(--green)'}else if(fg<=40){e.textContent='RISK-OFF';e.style.color='var(--red)'}else{e.textContent='MISTO';e.style.color='var(--amber)'}}
 
-/* detail */
 function renderDetail(){const s=STATE.symbol,c=CONFIG.assets[s],D=DATA[s];if(!D)return;
-  const cc=D.change||0,up=cc>=0;$('#dSym').textContent=s;$('#dName').textContent=c.name+(D.src==='SIM'?' · (sim)':' · live');
+  const cc=D.change||0,up=cc>=0;$('#dSym').textContent=s;$('#dName').textContent=c.name+(D.src==='SIM'?' · (sim)':' · '+(c.y));
   $('#dPrice').textContent=f(D.price,dg(s))+'  '+(up?'+':'')+f(cc,2)+'%';$('#dPrice').className='p '+(up?'up':'dn');
-  drawDetailChart();
-  const R=rating(s);
+  drawDetailChart();const R=rating(s);
   if(!R){$('#ratingLabel').textContent='—';$('#indGrid').innerHTML='<div class="loading">storico insufficiente…</div>';$('#summ').innerHTML='';return;}
   const len=Math.PI*92;$('#rgArc').setAttribute('stroke-dasharray',`${R.t*len} 999`);
   const ang=Math.PI-R.t*Math.PI;$('#rgNeedle').setAttribute('x2',100+Math.cos(ang)*70);$('#rgNeedle').setAttribute('y2',106-Math.sin(ang)*70);
@@ -499,8 +567,7 @@ function drawLine(canvas,series,color,fill){const ctx=canvas.getContext('2d'),dp
 function drawDetailChart(){const D=DATA[STATE.symbol];if(!D)return;const series=(D.daily||[]).slice(-CONFIG.histDays);const up=series.at(-1)>=series[0];
   drawLine($('#detailChart'),series,up?'rgb(35,209,139)':'rgb(255,77,94)',true);}
 
-/* comparison */
-const COMP=['XAUUSD','XAGUSD','BTCUSD','DXY','EURUSD'];
+const COMP=['XAUUSD','XAGUSD','US500','BTCUSD','DXY'];
 function drawComp(){const cv=$('#compChart'),ctx=cv.getContext('2d'),dpr=window.devicePixelRatio||1,r=cv.getBoundingClientRect();
   cv.width=r.width*dpr;cv.height=r.height*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);const W=r.width,H=r.height,pad=6,padR=44;ctx.clearRect(0,0,W,H);
   const active=COMP.filter(s=>!STATE.legendOff[s]&&DATA[s]&&DATA[s].daily);
@@ -515,85 +582,46 @@ function drawComp(){const cv=$('#compChart'),ctx=cv.getContext('2d'),dpr=window.
     return`<div class="lg ${STATE.legendOff[s]?'off':''}" data-s="${s}"><span class="dot" style="background:${CONFIG.assets[s].color}"></span>${s} <span class="mut">${STATE.legendOff[s]?'':((pc>=0?'+':'')+pc.toFixed(1)+'%')}</span></div>`;}).join('');
   $$('#legend .lg').forEach(l=>l.onclick=()=>{STATE.legendOff[l.dataset.s]=!STATE.legendOff[l.dataset.s];drawComp();});}
 
-/* ---- COT (CFTC) ---- */
+/* COT */
 let COT_CACHE={};
-async function loadCOT(code){
-  $('#cotBody').innerHTML='<div class="loading">caricamento COT…</div>';
-  try{ let rows=COT_CACHE[code]; if(!rows){ rows=await getJSON(API.cot(code)); COT_CACHE[code]=rows; }
-    if(!rows||!rows.length)throw new Error('vuoto');
-    renderCOT(rows);
-  }catch(e){ $('#cotBody').innerHTML='<div class="loading">COT non disponibile (rete/CFTC). Riprova.</div>'; }
-}
-function renderCOT(rows){
-  const recs=rows.map(r=>({
-    date:r.report_date_as_yyyy_mm_dd?.slice(0,10),
-    cl:+r.comm_positions_long_all, cs:+r.comm_positions_short_all,
-    nl:+r.noncomm_positions_long_all, ns:+r.noncomm_positions_short_all,
-    oi:+r.open_interest_all,
-  })).reverse(); // dal più vecchio al più recente
-  const cur=recs.at(-1), prev=recs.length>1?recs.at(-2):cur;
-  const commNet=cur.cl-cur.cs, commPrev=prev.cl-prev.cs, commD=commNet-commPrev;
-  const specNet=cur.nl-cur.ns, specPrev=prev.nl-prev.ns, specD=specNet-specPrev;
+async function loadCOT(code){$('#cotBody').innerHTML='<div class="loading">caricamento COT…</div>';
+  try{let rows=COT_CACHE[code];if(!rows){rows=await getJSON(cotURL(code));COT_CACHE[code]=rows;}if(!rows||!rows.length)throw 0;renderCOT(rows);}
+  catch(e){$('#cotBody').innerHTML='<div class="loading">COT non disponibile ora. Riprova.</div>';}}
+function renderCOT(rows){const recs=rows.map(r=>({date:r.report_date_as_yyyy_mm_dd?.slice(0,10),cl:+r.comm_positions_long_all,cs:+r.comm_positions_short_all,nl:+r.noncomm_positions_long_all,ns:+r.noncomm_positions_short_all,oi:+r.open_interest_all})).reverse();
+  const cur=recs.at(-1),prev=recs.length>1?recs.at(-2):cur;
+  const cN=cur.cl-cur.cs,cD=cN-(prev.cl-prev.cs),sN=cur.nl-cur.ns,sD=sN-(prev.nl-prev.ns);
   $('#cotDate').textContent='report '+cur.date;
-  $('#cotBody').innerHTML=`
-    <div class="cot-cards">
-      <div class="cot-c comm"><div class="t">Commercials (hedgers)</div>
-        <div class="net ${commNet>=0?'up':'dn'}">${commNet>=0?'+':''}${fInt(commNet)}</div>
-        <div class="d ${commD>=0?'up':'dn'}">${commD>=0?'▲ +':'▼ '}${fInt(Math.abs(commD))} sett.</div>
-        <div class="ls">L ${fInt(cur.cl)} · S ${fInt(cur.cs)}</div></div>
-      <div class="cot-c spec"><div class="t">Large Specs (non-comm)</div>
-        <div class="net ${specNet>=0?'up':'dn'}">${specNet>=0?'+':''}${fInt(specNet)}</div>
-        <div class="d ${specD>=0?'up':'dn'}">${specD>=0?'▲ +':'▼ '}${fInt(Math.abs(specD))} sett.</div>
-        <div class="ls">L ${fInt(cur.nl)} · S ${fInt(cur.ns)}</div></div>
-    </div>
-    <canvas id="cotChart"></canvas>
-    <div class="cot-oi"><span>Open Interest</span><span class="num">${fInt(cur.oi)}</span></div>
-    <div class="cot-note">Posizione <b>netta</b> = long − short. I <b style="color:var(--gold)">large speculators</b> seguono il trend; i <b style="color:var(--blue)">commercials</b> (produttori/hedgers) sono spesso contrarian. Estremi nel netto possono anticipare inversioni.</div>`;
-  drawCOTChart(recs);
-}
+  $('#cotBody').innerHTML=`<div class="cot-cards">
+    <div class="cot-c comm"><div class="t">Commercials (hedgers)</div><div class="net ${cN>=0?'up':'dn'}">${cN>=0?'+':''}${fInt(cN)}</div><div class="d ${cD>=0?'up':'dn'}">${cD>=0?'▲ +':'▼ '}${fInt(Math.abs(cD))} sett.</div><div class="ls">L ${fInt(cur.cl)} · S ${fInt(cur.cs)}</div></div>
+    <div class="cot-c spec"><div class="t">Large Specs (non-comm)</div><div class="net ${sN>=0?'up':'dn'}">${sN>=0?'+':''}${fInt(sN)}</div><div class="d ${sD>=0?'up':'dn'}">${sD>=0?'▲ +':'▼ '}${fInt(Math.abs(sD))} sett.</div><div class="ls">L ${fInt(cur.nl)} · S ${fInt(cur.ns)}</div></div></div>
+    <canvas id="cotChart"></canvas><div class="cot-oi"><span>Open Interest</span><span class="num">${fInt(cur.oi)}</span></div>
+    <div class="cot-note">Netto = long − short. I <b style="color:var(--gold)">large speculators</b> seguono il trend; i <b style="color:var(--blue)">commercials</b> sono spesso contrarian. Estremi possono anticipare inversioni.</div>`;
+  drawCOTChart(recs);}
 function drawCOTChart(recs){const cv=$('#cotChart');if(!cv)return;const ctx=cv.getContext('2d'),dpr=window.devicePixelRatio||1,r=cv.getBoundingClientRect();
   cv.width=r.width*dpr;cv.height=r.height*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);const W=r.width,H=r.height,pad=4;ctx.clearRect(0,0,W,H);
-  const spec=recs.map(d=>d.nl-d.ns),comm=recs.map(d=>d.cl-d.cs);const all=spec.concat(comm);const min=Math.min(...all,0),max=Math.max(...all,0),rng=(max-min)||1;
+  const spec=recs.map(d=>d.nl-d.ns),comm=recs.map(d=>d.cl-d.cs),all=spec.concat(comm),min=Math.min(...all,0),max=Math.max(...all,0),rng=(max-min)||1;
   const x=i=>pad+i/(recs.length-1)*(W-pad*2),y=v=>pad+(1-(v-min)/rng)*(H-pad*2);
   const y0=y(0);ctx.strokeStyle='rgba(150,170,205,.18)';ctx.beginPath();ctx.moveTo(pad,y0);ctx.lineTo(W-pad,y0);ctx.stroke();
-  const plot=(arr,col)=>{ctx.strokeStyle=col;ctx.lineWidth=1.6;ctx.beginPath();arr.forEach((v,i)=>i?ctx.lineTo(x(i),y(v)):ctx.moveTo(x(i),y(v)));ctx.stroke();
-    ctx.fillStyle=col;const lv=arr.at(-1);ctx.beginPath();ctx.arc(x(arr.length-1),y(lv),2.6,0,7);ctx.fill();};
-  plot(comm,'#48a0ff');plot(spec,'#e7b54a');
-  ctx.font='8px JetBrains Mono';ctx.fillStyle='#5f7193';ctx.textAlign='left';ctx.fillText('● spec',pad,9);ctx.fillStyle='#48a0ff';ctx.fillText('● comm',pad+44,9);}
+  const plot=(arr,col)=>{ctx.strokeStyle=col;ctx.lineWidth=1.6;ctx.beginPath();arr.forEach((v,i)=>i?ctx.lineTo(x(i),y(v)):ctx.moveTo(x(i),y(v)));ctx.stroke();ctx.fillStyle=col;ctx.beginPath();ctx.arc(x(arr.length-1),y(arr.at(-1)),2.6,0,7);ctx.fill();};
+  plot(comm,'#48a0ff');plot(spec,'#e7b54a');ctx.font='8px JetBrains Mono';ctx.fillStyle='#e7b54a';ctx.textAlign='left';ctx.fillText('● spec',pad,9);ctx.fillStyle='#48a0ff';ctx.fillText('● comm',pad+44,9);}
 
-/* calendar */
-const CAL=[
-  {t:'Gio 14:30',fl:'🇺🇸',ti:'Initial Jobless Claims',d:'settimanale',imp:'med'},
-  {t:'Ven 14:30',fl:'🇺🇸',ti:'Non-Farm Payrolls (NFP)',d:'occupazione',imp:'high'},
-  {t:'Mar 11:00',fl:'🇪🇺',ti:'ECB Rate Decision',d:'tassi BCE',imp:'high'},
-  {t:'Mer 14:30',fl:'🇺🇸',ti:'CPI Inflation',d:'inflazione',imp:'high'},
-  {t:'Mer 20:00',fl:'🇺🇸',ti:'FOMC Statement',d:'Fed',imp:'high'},
-  {t:'Ven 21:30',fl:'🇺🇸',ti:'COT Report',d:'CFTC settimanale',imp:'med'},
-];
+/* calendar / clock / toast */
+const CAL=[{t:'Gio 14:30',fl:'🇺🇸',ti:'Initial Jobless Claims',d:'settimanale',imp:'med'},{t:'Ven 14:30',fl:'🇺🇸',ti:'Non-Farm Payrolls',d:'occupazione',imp:'high'},{t:'Mar 11:00',fl:'🇪🇺',ti:'ECB Rate Decision',d:'tassi BCE',imp:'high'},{t:'Mer 14:30',fl:'🇺🇸',ti:'CPI Inflation',d:'inflazione',imp:'high'},{t:'Mer 20:00',fl:'🇺🇸',ti:'FOMC Statement',d:'Fed',imp:'high'},{t:'Ven 21:30',fl:'🇺🇸',ti:'COT Report',d:'CFTC',imp:'med'}];
 function renderCal(){$('#calendar').innerHTML=CAL.map(e=>`<div class="ev"><span class="tm">${e.t}</span><span class="flag">${e.fl}</span><span class="ti"><b>${e.ti}</b><small>${e.d}</small></span><span class="imp ${e.imp}">${e.imp.toUpperCase()}</span></div>`).join('');}
-
-/* clock + toast */
-function renderClock(){const cet=new Date(new Date().toLocaleString('en-US',{timeZone:'Europe/Rome'}));const p=x=>String(x).padStart(2,'0');$('#clock').innerHTML=`${p(cet.getHours())}:${p(cet.getMinutes())}:${p(cet.getSeconds())} <b>CET</b>`;}
+function renderClock(){const cet=cetNow();const p=x=>String(x).padStart(2,'0');$('#clock').innerHTML=`${p(cet.getHours())}:${p(cet.getMinutes())}:${p(cet.getSeconds())} <b>CET</b>`;}
 let tT;function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(tT);tT=setTimeout(()=>t.classList.remove('show'),2200);}
 
-/* render all (non-COT) */
-function renderAll(){renderKPI();renderHeat();renderAcPerf();renderMovers();renderCorr();renderFG();renderRegime();renderDetail();drawComp();updateBadge();}
+function renderAll(){renderKPI();renderHeat();renderAcPerf();renderMovers();renderCorr();renderFG();renderRegime();renderDetail();renderAdvisor();drawComp();updateBadge();}
 
-/* ---- boot ---- */
-function initCotSel(){$('#cotSel').innerHTML=CONFIG.cot.map(c=>`<option value="${c.code}">${c.label}</option>`).join('');
-  $('#cotSel').value=STATE.cot;$('#cotSel').onchange=e=>{STATE.cot=e.target.value;loadCOT(STATE.cot);};}
-async function refreshData(){await loadQuotes();renderAll();}
-async function fullReload(){await loadHistory();await loadQuotes();renderAll();}
-function bind(){$('#btnRefresh').onclick=async()=>{COT_CACHE={};await fullReload();loadCOT(STATE.cot);toast('Dati aggiornati');};
-  window.addEventListener('resize',()=>{drawDetailChart();drawComp();const recs=COT_CACHE[STATE.cot];});}
+/* boot */
+function initCotSel(){$('#cotSel').innerHTML=CONFIG.cot.map(c=>`<option value="${c.code}">${c.label}</option>`).join('');$('#cotSel').value=STATE.cot;$('#cotSel').onchange=e=>{STATE.cot=e.target.value;loadCOT(STATE.cot);};}
+function bind(){$('#btnRefresh').onclick=async()=>{COT_CACHE={};await fetchAll();renderAll();loadCOT(STATE.cot);toast('Dati aggiornati');};
+  window.addEventListener('resize',()=>{drawDetailChart();drawComp();});}
 (async function boot(){
-  SY.forEach(ensureSim);        // placeholder finché non arrivano i dati live
-  bind();initCotSel();renderCal();renderClock();renderAll();
+  SY.forEach(ensureSim);bind();initCotSel();renderCal();renderClock();renderAll();
   setInterval(renderClock,1000);
-  await fullReload();           // carica storico + quotazioni reali
-  loadCOT(STATE.cot);           // carica COT reale
-  setInterval(refreshData,CONFIG.refreshQuotesMs);
-  setInterval(async()=>{await loadHistory();renderAll();},CONFIG.refreshHistMs);
+  await fetchAll();renderAll();loadCOT(STATE.cot);
+  setInterval(async()=>{await fetchAll();renderAll();},CONFIG.refreshMs);
 })();
 </script>
 </body>
