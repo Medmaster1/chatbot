@@ -173,6 +173,35 @@ button{font-family:var(--mono);cursor:pointer;color:inherit}select{font-family:v
 #cotChart{width:100%;height:120px;display:block;margin-top:4px}
 .cot-note{font-size:9.5px;color:var(--txt3);line-height:1.5;margin-top:8px}
 .cot-oi{display:flex;justify-content:space-between;font-size:10px;color:var(--txt2);margin-top:6px;padding-top:6px;border-top:1px solid var(--line)}
+/* Gas storage */
+.gas-top{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+.gas-big{font-size:30px;font-weight:800;color:#fff;line-height:1}
+.gas-sub{font-size:9px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px}
+.gas-bar{flex:1;height:12px;border-radius:7px;background:var(--panel3);overflow:hidden;position:relative}
+.gas-bar>span{display:block;height:100%;background:linear-gradient(90deg,#ff4d5e,#ffb547,#23d18b)}
+#gasChart{width:100%;height:70px;display:block;margin:6px 0}
+.gas-bias{display:flex;align-items:center;gap:9px;padding:9px;border-radius:8px;border:1px solid var(--line2);margin-top:6px}
+.gas-bias .ic{font-size:20px}.gas-bias .t{font-size:12px;font-weight:800}.gas-bias .s{font-size:9.5px;color:var(--txt2)}
+.gas-bias.bull{background:var(--green-d);border-color:var(--green)}.gas-bias.bull .t{color:var(--green)}
+.gas-bias.bear{background:var(--red-d);border-color:var(--red)}.gas-bias.bear .t{color:var(--red)}
+.gas-bias.neu{background:rgba(150,170,205,.08)}.gas-bias.neu .t{color:var(--amber)}
+.gas-row{display:flex;justify-content:space-between;font-size:10px;padding:3px 0;border-bottom:1px dashed var(--line)}.gas-row .k{color:var(--txt3)}.gas-row .v{font-weight:700}
+/* divergenze + giornale */
+.dv-tot{display:flex;align-items:center;gap:9px;padding:9px;border-radius:8px;border:1px solid var(--line2);margin-bottom:9px}
+.dv-tot .ic{font-size:20px}.dv-tot .t{font-size:13px;font-weight:800}.dv-tot .s{font-size:9.5px;color:var(--txt2)}
+.dv-tot.bull{background:var(--green-d);border-color:var(--green)}.dv-tot.bull .t{color:var(--green)}
+.dv-tot.bear{background:var(--red-d);border-color:var(--red)}.dv-tot.bear .t{color:var(--red)}
+.dv-tot.neu{background:rgba(150,170,205,.08)}.dv-tot.neu .t{color:var(--amber)}
+.dv-item{display:flex;align-items:center;gap:8px;font-size:10.5px;padding:5px 0;border-bottom:1px solid var(--line)}
+.dv-item .tf{font-weight:800;width:60px}.dv-item .ind{color:var(--txt2);flex:1}
+.dv-tag{font-size:8.5px;font-weight:800;padding:2px 7px;border-radius:5px}
+.dv-tag.bull{background:var(--green-d);color:var(--green)}.dv-tag.bull2{background:var(--green-d);color:var(--green)}
+.dv-tag.bear{background:var(--red-d);color:var(--red)}.dv-tag.none{background:rgba(150,170,205,.12);color:var(--txt3)}
+.jrnl{margin-top:9px}
+.jrnl textarea{width:100%;min-height:120px;background:var(--bg);border:1px solid var(--line2);color:var(--txt);border-radius:8px;padding:9px;font-family:var(--mono);font-size:10.5px;line-height:1.5;resize:vertical}
+.jrnl .btns{display:flex;gap:6px;margin-top:6px}
+.jrnl button{flex:1;background:var(--panel2);border:1px solid var(--line2);color:var(--txt);padding:7px;border-radius:7px;font-size:10px;font-weight:700}
+.jrnl button.gold{background:var(--gold-d);border-color:var(--gold2);color:var(--gold)}
 
 .ev{display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);font-size:11px}
 .ev:last-child{border:none}
@@ -200,6 +229,11 @@ button{font-family:var(--mono);cursor:pointer;color:inherit}select{font-family:v
       <span class="ok" id="keyOk"></span>
       <input id="tdKey" type="password" placeholder="Twelve Data API key (opz.)" autocomplete="off" />
       <button id="tdSave">Salva</button>
+    </div>
+    <div class="apikey" title="AGSI/GIE API key gratuita per le riserve di gas europee (agsi.gie.eu/account).">
+      <span class="ok" id="agsiOk"></span>
+      <input id="agsiKey" type="password" placeholder="AGSI gas key (opz.)" autocomplete="off" />
+      <button id="agsiSave">Gas</button>
     </div>
     <div class="badge" id="dataBadge"><span class="led"></span><span id="dataStatus">connessione…</span></div>
     <div class="regime"><span class="lbl">Regime</span><span class="val" id="regime">--</span></div>
@@ -236,6 +270,12 @@ button{font-family:var(--mono);cursor:pointer;color:inherit}select{font-family:v
         </div>
       </div>
 
+      <!-- DIVERGENZE MACD/RSI + GIORNALE -->
+      <div class="panel">
+        <div class="ph">🪤 Divergenze MACD/RSI · H4·H1<span class="sp"></span><span class="tag" id="divSym">peso max: MACD H4</span></div>
+        <div class="pb" id="divBody"><div class="loading">analisi divergenze (serve intraday)…</div></div>
+      </div>
+
       <div class="panel">
         <div class="ph">⇄ Performance comparata<span class="sp"></span><span class="tag">rebased a 100 · storico reale</span></div>
         <div class="pb"><canvas id="compChart"></canvas><div class="legend" id="legend"></div></div>
@@ -243,6 +283,12 @@ button{font-family:var(--mono);cursor:pointer;color:inherit}select{font-family:v
     </div>
 
     <div class="col">
+      <!-- GAS STORAGE (AGSI) -->
+      <div class="panel">
+        <div class="ph">⛽ Riserve Gas UE · AGSI<span class="sp"></span><span class="tag" id="gasDate">—</span></div>
+        <div class="pb" id="gasBody"><div class="loading">inserisci la AGSI key per i dati gas…</div></div>
+      </div>
+
       <!-- TRADING ADVISOR -->
       <div class="panel">
         <div class="ph">🧭 Trading Advisor<span class="sp"></span><span class="tag" id="advSym">quando operare / quando no</span></div>
@@ -291,8 +337,8 @@ button{font-family:var(--mono);cursor:pointer;color:inherit}select{font-family:v
   </div>
 
   <div class="foot">
-    AURUM Research v3 · <b class="gd">dati reali Yahoo Finance</b> (via proxy CORS) · COT da CFTC.
-    Prezzi indici/futures con possibile ritardo ~15 min. Il Trading Advisor è un supporto, non un consiglio d'investimento.<br/>
+    AURUM Research v4 · <b class="gd">dati reali</b> Twelve Data / Yahoo · COT da CFTC · riserve gas da <b class="gd">AGSI/GIE</b> · divergenze MACD·RSI su H4/H1.
+    Prezzi con possibile ritardo. Advisor, divergenze e bias gas sono supporti analitici, non consigli d'investimento.<br/>
     Strumento educativo · KID Digital Wealth
   </div>
 </div>
@@ -316,6 +362,7 @@ const CONFIG = {
     US100:{name:'Nasdaq 100',cls:'Indici',y:'^NDX',td:'NDX',digits:2,color:'#7fb2ff'},
     GER40:{name:'DAX',cls:'Indici',y:'^GDAXI',td:'DAX',digits:2,color:'#9bc4ff'},
     WTIUSD:{name:'Crude Oil',cls:'Materie',y:'CL=F',td:'WTI/USD',digits:2,color:'#ff8a5c'},
+    NATGAS:{name:'Natural Gas',cls:'Materie',y:'NG=F',td:'NG/USD',digits:3,color:'#5fc9e8'},
     COPPER:{name:'Copper',cls:'Materie',y:'HG=F',digits:3,color:'#e0894e'},
     DXY:{name:'Dollar Index',cls:'Forex',y:'DX-Y.NYB',td:'DXY',digits:2,color:'#ffb547'},
     EURUSD:{name:'Euro',cls:'Forex',y:'EURUSD=X',td:'EUR/USD',digits:4,color:'#23d18b'},
@@ -361,7 +408,9 @@ async function getJSON(url,ms=22000){const ctrl=new AbortController();const to=s
 const DATA={};
 const STATE={symbol:'XAUUSD',legendOff:{},cot:'088691',status:'init',lastUpdate:null};
 let APIKEY='';            // Twelve Data API key (fonte primaria, opzionale)
+let AGSIKEY='';           // AGSI/GIE API key per riserve gas UE
 const tdURL=(sym)=>`https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(sym)}&interval=1day&outputsize=${CONFIG.histDays}&apikey=${APIKEY}`;
+const tdIntraURL=(sym,intv,n)=>`https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(sym)}&interval=${intv}&outputsize=${n}&apikey=${APIKEY}`;
 
 /* ---- FETCH Twelve Data (primario, se presente la key) ---- */
 async function fetchTD(sym){
@@ -411,7 +460,7 @@ async function fetchAsset(sym){
   return await fetchYahoo(sym);
 }
 function ensureSim(s){ if(DATA[s]&&DATA[s].src!=='SIM')return;
-  const base={XAUUSD:2350,XAGUSD:30,US500:5300,US100:18600,GER40:18400,WTIUSD:78,COPPER:4.5,DXY:104.5,EURUSD:1.08,USDJPY:157,BTCUSD:68000,US10Y:4.3}[s]||100;
+  const base={XAUUSD:2350,XAGUSD:30,US500:5300,US100:18600,GER40:18400,WTIUSD:78,NATGAS:3.0,COPPER:4.5,DXY:104.5,EURUSD:1.08,USDJPY:157,BTCUSD:68000,US10Y:4.3}[s]||100;
   const arr=[];let p=base;for(let i=0;i<CONFIG.histDays;i++){p=Math.max(base*0.5,p+gauss()*base*0.01);arr.push(p);}
   DATA[s]={daily:arr,price:arr.at(-1),change:0,src:'SIM'};
 }
@@ -547,7 +596,7 @@ function renderHeat(){$('#heat').innerHTML=SY.map(s=>{const D=DATA[s];if(!D)retu
   return`<div class="tile ${s===STATE.symbol?'sel':''}" data-sym="${s}" style="background:${bg}">
     <div><div class="s">${s}</div><div class="nm">${CONFIG.assets[s].name}</div></div>
     <div><div class="p num">${f(D.price,dg(s))}</div><div class="ch ${c>=0?'up':'dn'}">${c>=0?'+':''}${f(c,2)}%</div></div></div>`;}).join('');
-  $$('#heat .tile').forEach(t=>t.onclick=()=>{STATE.symbol=t.dataset.sym;renderDetail();renderAdvisor();renderHeat();});}
+  $$('#heat .tile').forEach(t=>t.onclick=()=>selectSymbol(t.dataset.sym));}
 function renderAcPerf(){const cls={};SY.forEach(s=>{const k=CONFIG.assets[s].cls;(cls[k]=cls[k]||[]).push(DATA[s]?.change||0);});
   const rows=Object.entries(cls).map(([k,v])=>({k,avg:v.reduce((a,b)=>a+b,0)/v.length})).sort((a,b)=>b.avg-a.avg);
   const max=Math.max(1,...rows.map(r=>Math.abs(r.avg)));
@@ -642,6 +691,129 @@ function renderCal(){$('#calendar').innerHTML=CAL.map(e=>`<div class="ev"><span 
 function renderClock(){const cet=cetNow();const p=x=>String(x).padStart(2,'0');$('#clock').innerHTML=`${p(cet.getHours())}:${p(cet.getMinutes())}:${p(cet.getSeconds())} <b>CET</b>`;}
 let tT;function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(tT);tT=setTimeout(()=>t.classList.remove('show'),2200);}
 
+/* ====================== RISERVE GAS UE (AGSI / GIE) ====================== */
+async function loadGas(){
+  const body=$('#gasBody');
+  if(!AGSIKEY){ body.innerHTML='<div class="loading">Inserisci la tua AGSI key (gratis su agsi.gie.eu) per le riserve di gas UE → bias Natural Gas.</div>'; $('#agsiOk')?.classList.remove('on'); return; }
+  $('#agsiOk')?.classList.add('on');
+  body.innerHTML='<div class="loading">caricamento dati gas…</div>';
+  try{
+    const r=await fetch('https://agsi.gie.eu/api?country=eu&size=120',{headers:{'x-key':AGSIKEY}});
+    const j=await r.json();
+    if(!j||!Array.isArray(j.data)||!j.data.length) throw new Error(j&&j.error||'no data');
+    const recs=j.data.map(d=>({date:d.gasDayStart,full:+d.full,trend:+d.trend,inj:+d.injection,wit:+d.withdrawal})).reverse(); // vecchio→nuovo
+    renderGas(recs);
+  }catch(e){ body.innerHTML='<div class="loading">Gas non disponibile (key non valida o rete). La key AGSI è gratuita su agsi.gie.eu/account.</div>'; }
+}
+function renderGas(recs){
+  const cur=recs.at(-1), wk=recs.length>7?recs[recs.length-8]:recs[0];
+  const full=cur.full, dWeek=full-wk.full;
+  const m=new Date(cur.date).getMonth(); const injSeason=(m>=3&&m<=9); // apr–ott iniezione
+  const withdrawing=cur.wit>cur.inj;
+  // Bias Natural Gas: riserve basse & in svuotamento → rialzista; alte & in riempimento → ribassista
+  let bias='neu',ic='⚖️',t='GAS: NEUTRO',s='Riserve in linea con la stagione.';
+  if(full<45 && withdrawing){ bias='bull';ic='🔥';t='NATGAS: BIAS RIALZISTA';s='Riserve basse + svuotamento → pressione su offerta.'; }
+  else if(full>80 && !withdrawing){ bias='bear';ic='🧊';t='NATGAS: BIAS RIBASSISTA';s='Riserve alte + riempimento → offerta abbondante.'; }
+  else if(full<55 && withdrawing){ bias='bull';ic='🔥';t='NATGAS: LEGG. RIALZISTA';s='Riserve sotto media e in calo.'; }
+  else if(full>70 && !withdrawing){ bias='bear';ic='🧊';t='NATGAS: LEGG. RIBASSISTA';s='Riserve sopra media e in salita.'; }
+  $('#gasDate').textContent='al '+cur.date;
+  $('#gasBody').innerHTML=`
+    <div class="gas-top"><div><div class="gas-big">${f(full,1)}%</div><div class="gas-sub">riempimento UE</div></div>
+      <div style="flex:1"><div class="gas-bar"><span style="width:${clamp(full,0,100)}%"></span></div>
+      <div class="gas-row" style="border:none;margin-top:6px"><span class="k">Δ settimana</span><span class="v ${dWeek>=0?'up':'dn'}">${dWeek>=0?'+':''}${f(dWeek,2)} pp</span></div></div></div>
+    <canvas id="gasChart"></canvas>
+    <div class="gas-row"><span class="k">Stagione</span><span class="v">${injSeason?'Iniezione (apr–ott)':'Prelievo (nov–mar)'}</span></div>
+    <div class="gas-row"><span class="k">Flusso giornaliero</span><span class="v ${withdrawing?'dn':'up'}">${withdrawing?'Svuotamento':'Riempimento'}</span></div>
+    <div class="gas-bias ${bias}"><div class="ic">${ic}</div><div><div class="t">${t}</div><div class="s">${s}</div></div></div>
+    <div class="cot-note">Le riserve di gas UE (AGSI/GIE) anticipano la pressione su <b>Natural Gas</b> ed energia: scorte basse + prelievo = supporto ai prezzi; scorte alte + iniezione = freno. Confronta con il bias tecnico di NATGAS nell'heatmap.</div>`;
+  drawGasChart(recs);
+}
+function drawGasChart(recs){const cv=$('#gasChart');if(!cv)return;const ctx=cv.getContext('2d'),dpr=window.devicePixelRatio||1,r=cv.getBoundingClientRect();
+  cv.width=r.width*dpr;cv.height=r.height*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);const W=r.width,H=r.height,pad=4;ctx.clearRect(0,0,W,H);
+  const a=recs.map(d=>d.full);const min=Math.min(...a),max=Math.max(...a),rng=(max-min)||1;
+  const x=i=>pad+i/(a.length-1)*(W-pad*2),y=v=>pad+(1-(v-min)/rng)*(H-pad*2);
+  const g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,'rgba(95,201,232,.3)');g.addColorStop(1,'rgba(95,201,232,0)');
+  ctx.beginPath();a.forEach((v,i)=>i?ctx.lineTo(x(i),y(v)):ctx.moveTo(x(i),y(v)));ctx.lineTo(x(a.length-1),H-pad);ctx.lineTo(x(0),H-pad);ctx.closePath();ctx.fillStyle=g;ctx.fill();
+  ctx.strokeStyle='#5fc9e8';ctx.lineWidth=1.6;ctx.beginPath();a.forEach((v,i)=>i?ctx.lineTo(x(i),y(v)):ctx.moveTo(x(i),y(v)));ctx.stroke();}
+
+/* ====================== DIVERGENZE MACD/RSI (H4·H1) ===================== */
+function aggregate(closes,factor){const o=[];for(let i=0;i<closes.length;i+=factor){const c=closes.slice(i,i+factor);if(c.length)o.push(c.at(-1));}return o;}
+async function fetchIntraday(sym,tf){ // tf: 'H1'|'H4' → ritorna array di chiusure
+  const a=CONFIG.assets[sym];
+  if(APIKEY && a.td){ try{ const intv=tf==='H4'?'4h':'1h';
+    const j=await getJSON(tdIntraURL(a.td,intv,150),14000);
+    if(j&&j.status!=='error'&&Array.isArray(j.values)){ const c=j.values.slice().reverse().map(v=>+v.close).filter(isFinite); if(c.length>40)return c; } }catch(e){} }
+  // Yahoo: 60m → H1; aggrego ×4 → H4
+  try{ const j=await fetchViaProxies(yahooURL(a.y,'60m','1mo')); const r=j.chart.result[0];
+    const c=((r.indicators&&r.indicators.quote&&r.indicators.quote[0].close)||[]).filter(x=>x!=null);
+    return tf==='H4'?aggregate(c,4):c; }catch(e){ return null; }
+}
+function swings(a){const lows=[],highs=[];for(let i=2;i<a.length-2;i++){
+  if(a[i]<=a[i-1]&&a[i]<=a[i-2]&&a[i]<=a[i+1]&&a[i]<=a[i+2])lows.push(i);
+  if(a[i]>=a[i-1]&&a[i]>=a[i-2]&&a[i]>=a[i+1]&&a[i]>=a[i+2])highs.push(i);}return{lows,highs};}
+function detectDiv(price,ind){ // regular divergence sugli ultimi 2 swing
+  const ps=swings(price);let bull=false,bear=false,note='';
+  if(ps.lows.length>=2){const a=ps.lows.at(-2),b=ps.lows.at(-1);if(b>price.length-40&&price[b]<price[a]&&ind[b]>ind[a]){bull=true;note='prezzo LL · indicatore HL';}}
+  if(ps.highs.length>=2){const a=ps.highs.at(-2),b=ps.highs.at(-1);if(b>price.length-40&&price[b]>price[a]&&ind[b]<ind[a]){bear=true;note='prezzo HH · indicatore LH';}}
+  return bull?{dir:'bull',note}:bear?{dir:'bear',note}:{dir:'none',note:''};
+}
+const DIVW={'MACD·H4':3,'MACD·H1':2,'RSI·H4':1.5,'RSI·H1':1}; // peso: MACD H4 dominante
+async function loadDivergence(sym){
+  const body=$('#divBody'); $('#divSym').textContent=sym+' · peso max MACD H4';
+  body.innerHTML='<div class="loading">analisi divergenze H4·H1…</div>';
+  const [h4,h1]=await Promise.all([fetchIntraday(sym,'H4'),fetchIntraday(sym,'H1')]);
+  if(!h4&&!h1){ body.innerHTML='<div class="loading">Intraday non disponibile ora (proxy occupato). Con la key Twelve Data è più affidabile.</div>'; return; }
+  const items=[]; let score=0;
+  const run=(series,tf)=>{ if(!series||series.length<40)return;
+    const m=macd(series); const rsiArr=rsi(series);
+    const dM=detectDiv(series,m.hist), dR=detectDiv(series,rsiArr);
+    items.push({key:'MACD·'+tf,...dM}); items.push({key:'RSI·'+tf,...dR});
+    if(dM.dir!=='none')score+=(dM.dir==='bull'?1:-1)*DIVW['MACD·'+tf];
+    if(dR.dir!=='none')score+=(dR.dir==='bull'?1:-1)*DIVW['RSI·'+tf];
+  };
+  run(h4,'H4'); run(h1,'H1');
+  const dir=score>0.5?'bull':score<-0.5?'bear':'neu';
+  const ic=dir==='bull'?'🟢':dir==='bear'?'🔴':'⚪';
+  const tt=dir==='bull'?'DIVERGENZA RIALZISTA':dir==='bear'?'DIVERGENZA RIBASSISTA':'NESSUNA DIVERGENZA NETTA';
+  const sub=`punteggio pesato ${score>=0?'+':''}${score.toFixed(1)} · MACD H4 conta di più`;
+  const order=['MACD·H4','RSI·H4','MACD·H1','RSI·H1'];
+  const rowsHtml=order.map(k=>{const it=items.find(x=>x.key===k);if(!it)return `<div class="dv-item"><span class="tf">${k}</span><span class="ind">dati insuff.</span><span class="dv-tag none">—</span></div>`;
+    const tag=it.dir==='bull'?'<span class="dv-tag bull">BULL</span>':it.dir==='bear'?'<span class="dv-tag bear">BEAR</span>':'<span class="dv-tag none">nessuna</span>';
+    return `<div class="dv-item"><span class="tf">${k}</span><span class="ind">${it.note||'—'}</span>${tag}</div>`;}).join('');
+  body.innerHTML=`<div class="dv-tot ${dir}"><div class="ic">${ic}</div><div><div class="t">${tt}</div><div class="s">${sub}</div></div></div>
+    ${rowsHtml}
+    <div class="jrnl"><textarea id="jrnlText" readonly>${buildJournal(sym,items,score,dir)}</textarea>
+      <div class="btns"><button class="gold" id="jrnlCopy">📋 Copia</button><button id="jrnlSave">💾 Salva nel diario</button></div></div>`;
+  $('#jrnlCopy').onclick=async()=>{try{await navigator.clipboard.writeText($('#jrnlText').value);toast('Nota copiata');}catch(e){$('#jrnlText').select();document.execCommand('copy');toast('Nota copiata');}};
+  $('#jrnlSave').onclick=async()=>{const log=(await Storage.get('trade_journal'))||[];log.unshift({ts:Date.now(),sym,score,dir,text:$('#jrnlText').value});await Storage.set('trade_journal',log.slice(0,100));toast('Salvato nel diario ('+Math.min(log.length,100)+')');};
+}
+function buildJournal(sym,items,score,dir){
+  const D=DATA[sym]; const price=D?f(D.price,dg(sym)):'--';
+  const dt=new Date().toLocaleString('it-IT');
+  const found=items.filter(i=>i.dir!=='none');
+  const macdH4=items.find(i=>i.key==='MACD·H4');
+  const L=[];
+  L.push('— GIORNALE DI TRADING · AURUM —');
+  L.push('Data    : '+dt);
+  L.push('Asset   : '+sym+' ('+(CONFIG.assets[sym]?.name||'')+')  @ '+price);
+  L.push('Bias divergenze: '+(dir==='bull'?'RIALZISTA':dir==='bear'?'RIBASSISTA':'NEUTRO')+'  (score pesato '+(score>=0?'+':'')+score.toFixed(1)+')');
+  L.push('');
+  L.push('Divergenze rilevate (peso: MACD H4 > MACD H1 > RSI H4 > RSI H1):');
+  if(found.length) found.forEach(i=>L.push('  • '+i.key+': '+(i.dir==='bull'?'rialzista':'ribassista')+' ('+i.note+')'));
+  else L.push('  • nessuna divergenza netta al momento');
+  L.push('');
+  L.push('Regola operativa:');
+  L.push('  - Priorità alla divergenza MACD su H4'+(macdH4&&macdH4.dir!=='none'?(' → PRESENTE ('+ (macdH4.dir==='bull'?'long bias':'short bias') +')'):' → assente: attendere conferma.'));
+  L.push('  - Entrare solo con conferma di price action (BOS/chiusura) sul TF di trigger (H1).');
+  L.push('  - Invalidazione oltre l\'ultimo swing che ha generato la divergenza; TP a 1R/2R.');
+  L.push('  - Evitare ingressi a ridosso di news ad alto impatto.');
+  L.push('');
+  L.push('Note personali: ____________________________________________');
+  return L.join('\n');
+}
+
+function selectSymbol(sym){ STATE.symbol=sym; renderDetail(); renderAdvisor(); renderHeat(); loadDivergence(sym); }
+
 function renderAll(){renderKPI();renderHeat();renderAcPerf();renderMovers();renderCorr();renderFG();renderRegime();renderDetail();renderAdvisor();drawComp();updateBadge();}
 
 /* boot */
@@ -649,17 +821,22 @@ function initCotSel(){$('#cotSel').innerHTML=CONFIG.cot.map(c=>`<option value="$
 function setKeyDot(){const ok=$('#keyOk');if(ok)ok.classList.toggle('on',!!APIKEY);
   $('#dataBadge').title=APIKEY?'Fonte primaria: Twelve Data · fallback Yahoo':'Fonte: Yahoo Finance (proxy). Aggiungi una key Twelve Data per dati più affidabili.';}
 function bind(){
-  $('#btnRefresh').onclick=async()=>{COT_CACHE={};await fetchAll();renderAll();loadCOT(STATE.cot);toast('Dati aggiornati');};
+  $('#btnRefresh').onclick=async()=>{COT_CACHE={};await fetchAll();renderAll();loadCOT(STATE.cot);loadDivergence(STATE.symbol);loadGas();toast('Dati aggiornati');};
   $('#tdSave').onclick=async()=>{ APIKEY=$('#tdKey').value.trim(); await Storage.set('td_apikey',APIKEY); setKeyDot();
-    toast(APIKEY?'API key salvata · Twelve Data primario':'API key rimossa · uso Yahoo'); await fetchAll(); renderAll(); };
+    toast(APIKEY?'API key salvata · Twelve Data primario':'API key rimossa · uso Yahoo'); await fetchAll(); renderAll(); loadDivergence(STATE.symbol); };
   $('#tdKey').addEventListener('keydown',e=>{ if(e.key==='Enter')$('#tdSave').click(); });
+  $('#agsiSave').onclick=async()=>{ AGSIKEY=$('#agsiKey').value.trim(); await Storage.set('agsi_apikey',AGSIKEY);
+    toast(AGSIKEY?'AGSI key salvata · riserve gas attive':'AGSI key rimossa'); loadGas(); };
+  $('#agsiKey').addEventListener('keydown',e=>{ if(e.key==='Enter')$('#agsiSave').click(); });
   window.addEventListener('resize',()=>{drawDetailChart();drawComp();});}
 (async function boot(){
   APIKEY=(await Storage.get('td_apikey'))||''; if(APIKEY)$('#tdKey').value=APIKEY;
+  AGSIKEY=(await Storage.get('agsi_apikey'))||''; if(AGSIKEY)$('#agsiKey').value=AGSIKEY;
   SY.forEach(ensureSim);bind();setKeyDot();initCotSel();renderCal();renderClock();renderAll();
   setInterval(renderClock,1000);
-  await fetchAll();renderAll();loadCOT(STATE.cot);
+  await fetchAll();renderAll();loadCOT(STATE.cot);loadGas();loadDivergence(STATE.symbol);
   setInterval(async()=>{await fetchAll();renderAll();},CONFIG.refreshMs);
+  setInterval(loadGas, 1800000);  // riserve gas: refresh ogni 30 min (dato giornaliero)
 })();
 </script>
 </body>
