@@ -65,7 +65,12 @@ button{font-family:var(--mono);cursor:pointer;color:inherit}select{font-family:v
 .kpi .c{font-size:11px;font-weight:700}
 .kpi .spk{position:absolute;right:8px;bottom:6px;width:88px;height:34px;opacity:.85}
 .kpi .tagsrc{position:absolute;top:9px;right:10px;font-size:7.5px;letter-spacing:.5px;padding:2px 5px;border-radius:4px}
-.tagsrc.LIVE{background:var(--green-d);color:var(--green)}.tagsrc.SIM{background:var(--red-d);color:var(--red)}
+.tagsrc.TD{background:var(--green-d);color:var(--green)}.tagsrc.YH{background:rgba(72,160,255,.16);color:var(--blue)}.tagsrc.SIM{background:var(--red-d);color:var(--red)}
+.apikey{display:flex;align-items:center;gap:6px;background:var(--panel2);border:1px solid var(--line2);padding:5px 7px;border-radius:9px}
+.apikey input{background:var(--bg);border:1px solid var(--line);color:#fff;padding:6px 8px;border-radius:6px;font-family:var(--mono);font-size:10.5px;width:150px}
+.apikey input:focus{outline:none;border-color:var(--gold2)}
+.apikey button{background:var(--gold-d);border:1px solid var(--gold2);color:var(--gold);padding:6px 9px;border-radius:6px;font-size:10px;font-weight:700}
+.apikey .ok{width:7px;height:7px;border-radius:50%;background:#33405e}.apikey .ok.on{background:var(--green);box-shadow:0 0 6px var(--green)}
 
 .grid{display:grid;grid-template-columns:1.55fr 1fr;gap:14px}
 @media(max-width:1100px){.grid{grid-template-columns:1fr}}
@@ -191,6 +196,11 @@ button{font-family:var(--mono);cursor:pointer;color:inherit}select{font-family:v
       <div><div class="nm">AURUM<span style="color:var(--gold)">·</span>RESEARCH</div>
         <div class="sub">Market Analysis · Yahoo LIVE + COT — KID Digital Wealth</div></div></div>
     <div class="sp"></div>
+    <div class="apikey" title="Twelve Data API key gratuita (fonte primaria). Senza chiave usa Yahoo.">
+      <span class="ok" id="keyOk"></span>
+      <input id="tdKey" type="password" placeholder="Twelve Data API key (opz.)" autocomplete="off" />
+      <button id="tdSave">Salva</button>
+    </div>
     <div class="badge" id="dataBadge"><span class="led"></span><span id="dataStatus">connessione…</span></div>
     <div class="regime"><span class="lbl">Regime</span><span class="val" id="regime">--</span></div>
     <div class="clock" id="clock">--:--:-- <b>CET</b></div>
@@ -298,18 +308,19 @@ const CONFIG = {
   corrWindow: 40,
   concurrency: 4,             // fetch paralleli max
   // Universo (Yahoo symbols)
+  // y = simbolo Yahoo (fallback) · td = simbolo Twelve Data (primario se c'è la key)
   assets:{
-    XAUUSD:{name:'Gold',cls:'Metalli',y:'GC=F',digits:2,color:'#e7b54a'},
-    XAGUSD:{name:'Silver',cls:'Metalli',y:'SI=F',digits:3,color:'#cfd8e3'},
-    US500:{name:'S&P 500',cls:'Indici',y:'^GSPC',digits:2,color:'#48a0ff'},
-    US100:{name:'Nasdaq 100',cls:'Indici',y:'^NDX',digits:2,color:'#7fb2ff'},
-    GER40:{name:'DAX',cls:'Indici',y:'^GDAXI',digits:2,color:'#9bc4ff'},
-    WTIUSD:{name:'Crude Oil',cls:'Materie',y:'CL=F',digits:2,color:'#ff8a5c'},
+    XAUUSD:{name:'Gold',cls:'Metalli',y:'GC=F',td:'XAU/USD',digits:2,color:'#e7b54a'},
+    XAGUSD:{name:'Silver',cls:'Metalli',y:'SI=F',td:'XAG/USD',digits:3,color:'#cfd8e3'},
+    US500:{name:'S&P 500',cls:'Indici',y:'^GSPC',td:'GSPC',digits:2,color:'#48a0ff'},
+    US100:{name:'Nasdaq 100',cls:'Indici',y:'^NDX',td:'NDX',digits:2,color:'#7fb2ff'},
+    GER40:{name:'DAX',cls:'Indici',y:'^GDAXI',td:'DAX',digits:2,color:'#9bc4ff'},
+    WTIUSD:{name:'Crude Oil',cls:'Materie',y:'CL=F',td:'WTI/USD',digits:2,color:'#ff8a5c'},
     COPPER:{name:'Copper',cls:'Materie',y:'HG=F',digits:3,color:'#e0894e'},
-    DXY:{name:'Dollar Index',cls:'Forex',y:'DX-Y.NYB',digits:2,color:'#ffb547'},
-    EURUSD:{name:'Euro',cls:'Forex',y:'EURUSD=X',digits:4,color:'#23d18b'},
-    USDJPY:{name:'USD/JPY',cls:'Forex',y:'JPY=X',digits:2,color:'#36c98f'},
-    BTCUSD:{name:'Bitcoin',cls:'Crypto',y:'BTC-USD',digits:0,color:'#f7931a'},
+    DXY:{name:'Dollar Index',cls:'Forex',y:'DX-Y.NYB',td:'DXY',digits:2,color:'#ffb547'},
+    EURUSD:{name:'Euro',cls:'Forex',y:'EURUSD=X',td:'EUR/USD',digits:4,color:'#23d18b'},
+    USDJPY:{name:'USD/JPY',cls:'Forex',y:'JPY=X',td:'USD/JPY',digits:2,color:'#36c98f'},
+    BTCUSD:{name:'Bitcoin',cls:'Crypto',y:'BTC-USD',td:'BTC/USD',digits:0,color:'#f7931a'},
     US10Y:{name:'US 10Y Yield',cls:'Bond',y:'^TNX',digits:3,color:'#c08bff'},
   },
   classColors:{Metalli:'#e7b54a',Indici:'#48a0ff',Materie:'#ff8a5c',Forex:'#23d18b',Crypto:'#9b7bff',Bond:'#c08bff'},
@@ -349,6 +360,20 @@ async function getJSON(url,ms=22000){const ctrl=new AbortController();const to=s
 /* STATE */
 const DATA={};
 const STATE={symbol:'XAUUSD',legendOff:{},cot:'088691',status:'init',lastUpdate:null};
+let APIKEY='';            // Twelve Data API key (fonte primaria, opzionale)
+const tdURL=(sym)=>`https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(sym)}&interval=1day&outputsize=${CONFIG.histDays}&apikey=${APIKEY}`;
+
+/* ---- FETCH Twelve Data (primario, se presente la key) ---- */
+async function fetchTD(sym){
+  const td=CONFIG.assets[sym].td;
+  const j=await getJSON(tdURL(td),15000);
+  if(!j||j.status==='error'||!Array.isArray(j.values)) throw new Error(j&&j.message||'TD error');
+  const vals=j.values.slice().reverse(); // vecchio -> nuovo
+  const closes=vals.map(v=>+v.close).filter(x=>isFinite(x));
+  if(closes.length<10) throw new Error('TD pochi punti');
+  const price=closes.at(-1), prev=closes[closes.length-2]||price;
+  return {daily:closes.slice(-CONFIG.histDays), price, change:prev?(price/prev-1)*100:0, src:'TD'};
+}
 
 /* ---- FETCH Yahoo (via proxy con fallback) ---- */
 async function fetchViaProxies(targetUrl){
@@ -372,14 +397,20 @@ function parseYahoo(j,sym){
   if(closes.length)closes[closes.length-1]=price;
   const prev=meta.chartPreviousClose ?? meta.previousClose ?? closes[closes.length-2] ?? price;
   const change=prev?(price/prev-1)*100:0;
-  return {daily:closes.slice(-CONFIG.histDays), price, change, src:'LIVE', y:meta.symbol};
+  return {daily:closes.slice(-CONFIG.histDays), price, change, src:'YH', y:meta.symbol};
 }
-async function fetchAsset(sym){
+async function fetchYahoo(sym){
   const j=await fetchViaProxies(yahooURL(CONFIG.assets[sym].y));
   if(!j||!j.chart||!j.chart.result) throw new Error('no data');
   return parseYahoo(j,sym);
 }
-function ensureSim(s){ if(DATA[s]&&DATA[s].src==='LIVE')return;
+// Sorgente primaria Twelve Data (se key + simbolo), altrimenti Yahoo, altrimenti errore→sim
+async function fetchAsset(sym){
+  const a=CONFIG.assets[sym];
+  if(APIKEY && a.td){ try{ return await fetchTD(sym); }catch(e){ /* fallback Yahoo */ } }
+  return await fetchYahoo(sym);
+}
+function ensureSim(s){ if(DATA[s]&&DATA[s].src!=='SIM')return;
   const base={XAUUSD:2350,XAGUSD:30,US500:5300,US100:18600,GER40:18400,WTIUSD:78,COPPER:4.5,DXY:104.5,EURUSD:1.08,USDJPY:157,BTCUSD:68000,US10Y:4.3}[s]||100;
   const arr=[];let p=base;for(let i=0;i<CONFIG.histDays;i++){p=Math.max(base*0.5,p+gauss()*base*0.01);arr.push(p);}
   DATA[s]={daily:arr,price:arr.at(-1),change:0,src:'SIM'};
@@ -388,11 +419,11 @@ async function fetchAll(){
   const syms=SY.slice();let i=0;
   async function worker(){ while(i<syms.length){ const s=syms[i++]; try{ DATA[s]=await fetchAsset(s); }catch(e){ ensureSim(s); } } }
   await Promise.all(Array.from({length:CONFIG.concurrency},worker));
-  const liveN=SY.filter(s=>DATA[s].src==='LIVE').length;
+  const liveN=SY.filter(s=>DATA[s].src!=='SIM').length;
   STATE.status=liveN===SY.length?'live':liveN>0?'part':'off';STATE.lastUpdate=new Date();updateBadge();
 }
 function updateBadge(){const b=$('#dataBadge');b.className='badge '+(STATE.status==='live'?'live':STATE.status==='part'?'part':'off');
-  const liveN=SY.filter(s=>DATA[s]&&DATA[s].src==='LIVE').length;const t=STATE.lastUpdate?STATE.lastUpdate.toLocaleTimeString('it-IT'):'';
+  const liveN=SY.filter(s=>DATA[s]&&DATA[s].src!=='SIM').length;const t=STATE.lastUpdate?STATE.lastUpdate.toLocaleTimeString('it-IT'):'';
   $('#dataStatus').textContent=STATE.status==='live'?`LIVE · ${liveN}/${SY.length} · ${t}`:STATE.status==='part'?`PARZIALE · ${liveN}/${SY.length} live · ${t}`:'OFFLINE · simulati';}
 
 /* ---- indicatori ---- */
@@ -547,7 +578,7 @@ function renderRegime(){const fg=fearGreed();const e=$('#regime');const riskOn=c
   if(fg>=55&&riskOn){e.textContent='RISK-ON';e.style.color='var(--green)'}else if(fg<=40){e.textContent='RISK-OFF';e.style.color='var(--red)'}else{e.textContent='MISTO';e.style.color='var(--amber)'}}
 
 function renderDetail(){const s=STATE.symbol,c=CONFIG.assets[s],D=DATA[s];if(!D)return;
-  const cc=D.change||0,up=cc>=0;$('#dSym').textContent=s;$('#dName').textContent=c.name+(D.src==='SIM'?' · (sim)':' · '+(c.y));
+  const cc=D.change||0,up=cc>=0;$('#dSym').textContent=s;$('#dName').textContent=c.name+(D.src==='SIM'?' · (sim)':' · '+D.src);
   $('#dPrice').textContent=f(D.price,dg(s))+'  '+(up?'+':'')+f(cc,2)+'%';$('#dPrice').className='p '+(up?'up':'dn');
   drawDetailChart();const R=rating(s);
   if(!R){$('#ratingLabel').textContent='—';$('#indGrid').innerHTML='<div class="loading">storico insufficiente…</div>';$('#summ').innerHTML='';return;}
@@ -615,10 +646,17 @@ function renderAll(){renderKPI();renderHeat();renderAcPerf();renderMovers();rend
 
 /* boot */
 function initCotSel(){$('#cotSel').innerHTML=CONFIG.cot.map(c=>`<option value="${c.code}">${c.label}</option>`).join('');$('#cotSel').value=STATE.cot;$('#cotSel').onchange=e=>{STATE.cot=e.target.value;loadCOT(STATE.cot);};}
-function bind(){$('#btnRefresh').onclick=async()=>{COT_CACHE={};await fetchAll();renderAll();loadCOT(STATE.cot);toast('Dati aggiornati');};
+function setKeyDot(){const ok=$('#keyOk');if(ok)ok.classList.toggle('on',!!APIKEY);
+  $('#dataBadge').title=APIKEY?'Fonte primaria: Twelve Data · fallback Yahoo':'Fonte: Yahoo Finance (proxy). Aggiungi una key Twelve Data per dati più affidabili.';}
+function bind(){
+  $('#btnRefresh').onclick=async()=>{COT_CACHE={};await fetchAll();renderAll();loadCOT(STATE.cot);toast('Dati aggiornati');};
+  $('#tdSave').onclick=async()=>{ APIKEY=$('#tdKey').value.trim(); await Storage.set('td_apikey',APIKEY); setKeyDot();
+    toast(APIKEY?'API key salvata · Twelve Data primario':'API key rimossa · uso Yahoo'); await fetchAll(); renderAll(); };
+  $('#tdKey').addEventListener('keydown',e=>{ if(e.key==='Enter')$('#tdSave').click(); });
   window.addEventListener('resize',()=>{drawDetailChart();drawComp();});}
 (async function boot(){
-  SY.forEach(ensureSim);bind();initCotSel();renderCal();renderClock();renderAll();
+  APIKEY=(await Storage.get('td_apikey'))||''; if(APIKEY)$('#tdKey').value=APIKEY;
+  SY.forEach(ensureSim);bind();setKeyDot();initCotSel();renderCal();renderClock();renderAll();
   setInterval(renderClock,1000);
   await fetchAll();renderAll();loadCOT(STATE.cot);
   setInterval(async()=>{await fetchAll();renderAll();},CONFIG.refreshMs);
