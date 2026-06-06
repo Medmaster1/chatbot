@@ -182,6 +182,16 @@ button{font-family:var(--mono);cursor:pointer;color:inherit}
 .foot .sp{flex:1}
 .toast{position:fixed;bottom:40px;left:50%;transform:translateX(-50%);background:var(--panel3);border:1px solid var(--gold2);color:#fff;padding:10px 18px;border-radius:8px;font-size:12px;z-index:90;box-shadow:var(--shadow);opacity:0;transition:.25s;pointer-events:none}
 .toast.show{opacity:1}
+/* Trading Advisor */
+.adv-v{display:flex;align-items:center;gap:9px;padding:10px;border-radius:9px;margin-bottom:9px;border:1px solid var(--line-strong)}
+.adv-v .ic{font-size:24px}.adv-v .t{font-size:13px;font-weight:800;letter-spacing:.5px}.adv-v .s{font-size:9px;color:var(--ink-300);margin-top:2px}
+.adv-v.go{background:var(--green-dim);border-color:var(--green)}.adv-v.go .t{color:var(--green)}
+.adv-v.caution{background:rgba(232,184,75,.14);border-color:var(--yellow)}.adv-v.caution .t{color:var(--yellow)}
+.adv-v.avoid{background:var(--red-dim);border-color:var(--red)}.adv-v.avoid .t{color:var(--red)}
+.adv-m{height:7px;border-radius:5px;background:var(--navy-700);overflow:hidden;margin-bottom:9px}.adv-m>span{display:block;height:100%;border-radius:5px;transition:width .4s}
+.adv-sub{display:flex;justify-content:space-between;font-size:9.5px;padding:4px 0;border-bottom:1px dashed var(--line)}.adv-sub .k{color:var(--ink-300)}.adv-sub .v{font-weight:700}
+.adv-li{display:flex;gap:6px;font-size:10px;color:var(--ink-200);margin:5px 0;line-height:1.4}
+.adv-h{font-size:8.5px;text-transform:uppercase;letter-spacing:.6px;font-weight:700;margin:9px 0 4px}
 .scan::-webkit-scrollbar{width:8px;height:8px}
 *::-webkit-scrollbar{width:8px;height:8px}
 *::-webkit-scrollbar-thumb{background:var(--line2);border-radius:8px}
@@ -203,7 +213,12 @@ button{font-family:var(--mono);cursor:pointer;color:inherit}
     <div class="sp"></div>
     <div class="sessions" id="sessions"></div>
     <div class="clock" id="clock">--:--:-- <b>CET</b></div>
-    <div class="conn"><span class="ledd"></span><span id="connTxt">SIMULAZIONE</span></div>
+    <div class="conn" title="Twelve Data API key (fonte primaria). Senza chiave usa Yahoo.">
+      <input id="tdKey" type="password" placeholder="Twelve Data key (opz.)" autocomplete="off"
+        style="background:var(--navy-900);border:1px solid var(--line-strong);color:var(--ink-100);padding:5px 7px;border-radius:6px;font-family:var(--mono);font-size:10px;width:120px" />
+      <button class="btn" id="tdSave" style="padding:6px 8px">🔑</button>
+    </div>
+    <div class="conn"><span class="ledd"></span><span id="connTxt">connessione…</span></div>
     <button class="btn" id="btnPause">⏸ Pausa</button>
     <button class="btn" id="btnReset">↺ Reset</button>
   </div>
@@ -231,6 +246,10 @@ button{font-family:var(--mono);cursor:pointer;color:inherit}
             Ratio alto → argento "sottovalutato" vs oro. Storicamente 70–90 è il range mediano.
           </div>
         </div>
+      </div>
+      <div class="panel" style="flex:1.2">
+        <div class="ph">🧭 Trading Advisor<span class="sp"></span><span class="mut" id="advSym" style="font-size:9px"></span></div>
+        <div class="pb nopad scan" style="overflow:auto"><div id="advBody" style="padding:10px"><div class="empty">analisi…</div></div></div>
       </div>
     </div>
 
@@ -332,16 +351,17 @@ button{font-family:var(--mono);cursor:pointer;color:inherit}
 
 /* ----------------------------- CONFIG ------------------------------------- */
 const CONFIG = {
-  tickMs: 900,                 // intervallo di aggiornamento prezzi
+  tickMs: 900,                 // intervallo micro-tick (animazione attorno al prezzo reale)
+  refreshRealMs: 30000,        // re-sync col prezzo reale ogni 30s
   leverage: 100,               // leva per il calcolo margine
   startBalance: 100000,        // saldo iniziale conto demo (USD)
-  // Strumenti del desk. contract = once per 1 lotto. digits = decimali prezzo.
+  // Strumenti del desk. y=simbolo Yahoo (fallback) · td=simbolo Twelve Data (primario con key)
   instruments: {
-    XAUUSD: { name:'Spot Gold',    base:2345.00, vol:0.55, drift:0.04,  digits:2, contract:100,  spread:0.25, tradable:true },
-    XAGUSD: { name:'Spot Silver',  base:29.50,   vol:0.022,drift:0.05,  digits:3, contract:5000, spread:0.018,tradable:true },
-    DXY:    { name:'US Dollar Idx',base:104.50,  vol:0.06, drift:-0.02, digits:2, contract:0,    spread:0.02, tradable:false },
-    XPTUSD: { name:'Spot Platinum',base:995.0,   vol:0.45, drift:0.01,  digits:2, contract:100,  spread:0.6,  tradable:true },
-    XPDUSD: { name:'Spot Palladium',base:1010.0, vol:0.9,  drift:-0.01, digits:2, contract:100,  spread:1.2,  tradable:true },
+    XAUUSD: { name:'Spot Gold',    base:2345.00, vol:0.55, drift:0.04,  digits:2, contract:100,  spread:0.25, tradable:true,  y:'GC=F',     td:'XAU/USD' },
+    XAGUSD: { name:'Spot Silver',  base:29.50,   vol:0.022,drift:0.05,  digits:3, contract:5000, spread:0.018,tradable:true,  y:'SI=F',     td:'XAG/USD' },
+    DXY:    { name:'US Dollar Idx',base:104.50,  vol:0.06, drift:-0.02, digits:2, contract:0,    spread:0.02, tradable:false, y:'DX-Y.NYB', td:'DXY' },
+    XPTUSD: { name:'Spot Platinum',base:995.0,   vol:0.45, drift:0.01,  digits:2, contract:100,  spread:0.6,  tradable:true,  y:'PL=F',     td:'XPT/USD' },
+    XPDUSD: { name:'Spot Palladium',base:1010.0, vol:0.9,  drift:-0.01, digits:2, contract:100,  spread:1.2,  tradable:true,  y:'PA=F',     td:'XPD/USD' },
   },
   // Strumento sintetico calcolato (ratio) mostrato in watchlist/tape
   ratioPair: ['XAUUSD','XAGUSD'],
@@ -350,11 +370,13 @@ const CONFIG = {
     { id:'M15',sec:900,n:90 }, { id:'H1', sec:3600,n:90 },
     { id:'H4', sec:14400,n:90 },{ id:'D1', sec:86400,n:90 },
   ],
-  defaultTf:'M5',
-  /* HOOK v2 — feed reale:
-     async function connectFeed(onTick){ /* es. WebSocket → onTick(symbol, price) *\/ }
-  */
+  defaultTf:'D1',
 };
+// --- Sorgenti dati reali ---
+const PROXIES=[ u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`, u=>`https://api.allorigins.win/get?url=${encodeURIComponent(u)}` ];
+const yahooURL=(sym,interval,range)=>`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=${interval}&range=${range}`;
+const tdSeriesURL=(sym,key)=>`https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(sym)}&interval=1day&outputsize=180&apikey=${key}`;
+let APIKEY='';
 
 /* --------------------------- STORAGE (window.storage / RAM) --------------- */
 const Storage = (()=>{ let mem={}; const ws = (typeof window!=='undefined'&&window.storage&&typeof window.storage.getItem==='function');
@@ -410,14 +432,52 @@ function initPrices(){
   });
 }
 
+/* ------------------------- DATI REALI (Yahoo/Twelve Data) ---------------- */
+async function getJSON(url,ms=18000){const ctrl=new AbortController();const to=setTimeout(()=>ctrl.abort(),ms);
+  try{const r=await fetch(url,{signal:ctrl.signal});if(!r.ok)throw new Error('HTTP '+r.status);return await r.json();}finally{clearTimeout(to);}}
+async function fetchViaProxies(target){for(const p of PROXIES){try{const j=await getJSON(p(target),10000);
+  if(j&&typeof j.contents==='string')return JSON.parse(j.contents); if(j&&j.chart)return j; throw 0;}catch(e){}}throw new Error('proxy ko');}
+function parseYahooCandles(j){const r=j.chart.result[0];const t=r.timestamp||[];const q=(r.indicators&&r.indicators.quote&&r.indicators.quote[0])||{};
+  const out=[];for(let i=0;i<t.length;i++){const o=q.open?.[i],h=q.high?.[i],l=q.low?.[i],c=q.close?.[i];if(c==null)continue;
+    out.push({t:t[i]*1000,o:o??c,h:h??c,l:l??c,c,v:q.volume?.[i]||0});}
+  const price=(r.meta&&r.meta.regularMarketPrice)||out.at(-1)?.c;return {candles:out,price};}
+async function fetchRealOne(sym){const a=CONFIG.instruments[sym];
+  // Twelve Data (primario con key) → candele giornaliere OHLC
+  if(APIKEY&&a.td){ try{ const j=await getJSON(tdSeriesURL(a.td,APIKEY),14000);
+    if(j&&j.status!=='error'&&Array.isArray(j.values)){ const v=j.values.slice().reverse();
+      const candles=v.map(x=>({t:Date.parse(x.datetime),o:+x.open,h:+x.high,l:+x.low,c:+x.close,v:+x.volume||0})).filter(k=>isFinite(k.c));
+      if(candles.length>10) return {candles,price:candles.at(-1).c,src:'TD'}; } }catch(e){} }
+  // Yahoo (fallback) via proxy CORS
+  const j=await fetchViaProxies(yahooURL(a.y,'1d','6mo')); const r=parseYahooCandles(j);
+  if(!r.candles.length) throw new Error('no data'); return {...r,src:'YH'};
+}
+let REAL_OK=false;
+async function fetchRealAll(){
+  const syms=SYMS.slice();let i=0;let ok=0;
+  async function worker(){while(i<syms.length){const sym=syms[i++];try{const d=await fetchRealOne(sym);
+    const s=px[sym];s.real=d.price;s.realSrc=d.src;s.series['D1']=d.candles.slice(-180);
+    s.dailyReal=d.candles.slice(-60).map(k=>k.c);
+    if(!s.anchored){s.last=d.price;s.prev=d.price;s.open=d.candles.at(-1).o;
+      s.dayHigh=d.candles.at(-1).h;s.dayLow=d.candles.at(-1).l;s.anchored=true;}
+    ok++;}catch(e){}}}
+  await Promise.all(Array.from({length:3},worker));
+  REAL_OK=ok>0;
+  const liveSrc=px[STATE.symbol]?.realSrc;
+  const el=$('#connTxt'); if(el){ el.textContent = ok===0?'SIM (no rete)': (liveSrc==='TD'?'REALE · Twelve Data':'REALE · Yahoo')+` (${ok}/${SYMS.length})`; }
+  renderAll();
+}
+
 /* ------------------------------ MOTORE TICK ------------------------------- */
 function tickEngine(){
   if(STATE.paused) return;
   STATE.tick++;
   SYMS.forEach(sym=>{
     const c=CONFIG.instruments[sym]; const s=px[sym];
-    const move = gauss()*c.vol*0.18 + c.drift*0.012;
-    s.prev=s.last; s.last=Math.max(c.base*0.5, s.last+move);
+    // micro-tick che mean-reverte verso il prezzo reale (se disponibile), per un feel "live"
+    const target = s.real!=null ? s.real : s.last;
+    const noise = (s.real!=null? c.vol*0.04 : c.vol*0.18);
+    const move = (target - s.last)*0.12 + gauss()*noise + (s.real!=null?0:c.drift*0.012);
+    s.prev=s.last; s.last=Math.max(c.base*0.4, s.last+move);
     const sp=c.spread*(0.8+Math.random()*0.6);
     s.bid=s.last-sp/2; s.ask=s.last+sp/2;
     s.dayHigh=Math.max(s.dayHigh,s.last); s.dayLow=Math.min(s.dayLow,s.last);
@@ -657,9 +717,59 @@ let _wlTick=0;
 function renderAll(){
   renderTape(); renderRatio(); renderHeaderSym(); renderDOM(); renderTicket();
   renderPositions(); renderAccount(); drawChart();
-  // watchlist con flash su variazione
-  renderWatchlist();
+  renderWatchlist(); renderAdvisor();
   $('#footTick').textContent='tick '+STATE.tick;
+}
+
+/* ------------------------------ TRADING ADVISOR -------------------------- */
+const _ema=(a,p)=>{const k=2/(p+1);let e=a[0];const o=[];a.forEach((v,i)=>{e=i?v*k+e*(1-k):v;o.push(e)});return o};
+const _sma=(a,p)=>a.slice(-p).reduce((x,y)=>x+y,0)/Math.min(p,a.length);
+function _rsi(a,p=14){if(a.length<p+1)return 50;let g=0,l=0;for(let i=a.length-p;i<a.length;i++){const d=a[i]-a[i-1];if(d>=0)g+=d;else l-=d;}g/=p;l/=p;return 100-100/(1+(l===0?100:g/l));}
+function _vol(a){if(!a||a.length<8)return 0;const s=a.slice(-15);let sum=0,c=0;for(let i=1;i<s.length;i++){sum+=Math.abs(s[i]/s[i-1]-1);c++;}return c?sum/c*100:0;}
+function adviseTerm(sym){
+  const s=px[sym]; const a=(s.dailyReal&&s.dailyReal.length>30)?s.dailyReal:(s.series.D1||[]).map(k=>k.c);
+  const now=new Date(new Date().toLocaleString('en-US',{timeZone:'Europe/Rome'}));const h=now.getHours(),day=now.getDay();
+  const pros=[],cons=[];let score=0;
+  if(day===6||day===0){cons.push('Weekend: metalli/futures chiusi o illiquidi.');score-=3;}
+  let sess;
+  if(h>=14&&h<17){sess='Overlap London–NY';pros.push('Sessione overlap London–NY: liquidità massima.');score+=2;}
+  else if((h>=9&&h<14)||(h>=17&&h<22)){sess='London / NY';pros.push('Sessione attiva: liquidità buona.');score+=1;}
+  else if(h>=1&&h<9){sess='Asia';cons.push('Sessione asiatica: volumi sottili sui metalli.');score-=1;}
+  else{sess='Fuori sessione';cons.push('Fuori sessione: spread ampi, evita ingressi.');score-=2;}
+  const v=_vol(a),hi=2.0,ex=3.5,lo=0.3;let volTxt;
+  if(v<lo){volTxt='molto bassa';cons.push('Volatilità molto bassa: rischio di lateralità/falsi segnali.');score-=1;}
+  else if(v<=hi){volTxt='sana';pros.push('Volatilità in range operabile.');score+=1;}
+  else if(v<=ex){volTxt='elevata';cons.push('Volatilità elevata: riduci la size.');}
+  else{volTxt='estrema';cons.push('Volatilità estrema: rischio whipsaw, meglio attendere.');score-=2;}
+  let rating='NEUTRAL',trend='range',rsi=50;
+  if(a.length>30){const last=a.at(-1),e20=_ema(a,20).at(-1),e50=_ema(a,50).at(-1);rsi=_rsi(a);
+    trend=last>e20&&last>e50?'up':last<e20&&last<e50?'down':'range';
+    let b=0,se=0;[last>e20,last>e50,rsi>50,a.at(-1)>a[a.length-6]].forEach(x=>x?b++:se++);
+    const sc=(b-se)/4;rating=sc>0.4?'BUY':sc<-0.4?'SELL':'NEUTRAL';
+    if(trend==='up'){pros.push('Trend rialzista pulito (prezzo>EMA20>EMA50).');score+=1;}
+    else if(trend==='down'){pros.push('Trend ribassista pulito: edge sugli short.');score+=1;}
+    else{cons.push('Struttura in range: niente trend chiaro.');score-=1;}
+    if(rating!=='NEUTRAL'){pros.push(`Rating tecnico ${rating}: indicatori allineati.`);score+=1;}
+    else{cons.push('Rating NEUTRAL: nessun vantaggio direzionale.');score-=1;}
+    if(rsi>75)cons.push('RSI ipercomprato (>75): non inseguire i long.');
+    if(rsi<25)cons.push('RSI ipervenduto (<25): non inseguire gli short.');
+  }
+  cons.push('Evita ingressi 30–60 min prima/dopo news ad alto impatto (NFP/CPI/FOMC).');
+  let level,ic,t,sub;
+  if(score>=3){level='go';ic='✅';t='CONDIZIONI FAVOREVOLI';sub='Contesto adatto a operare con gestione del rischio.';}
+  else if(score<=-1){level='avoid';ic='⛔';t='MEGLIO NON OPERARE';sub='Troppi fattori contrari: attendi un setup migliore.';}
+  else{level='caution';ic='⚠️';t='CAUTELA';sub='Operare solo con setup selettivi e size ridotta.';}
+  return {level,ic,t,sub,pros,cons,score,sess,v,volTxt,rating,meter:Math.max(4,Math.min(100,(score+4)/9*100)),col:level==='go'?'var(--green)':level==='avoid'?'var(--red)':'var(--yellow)'};
+}
+function renderAdvisor(){const sym=STATE.symbol;const A=adviseTerm(sym);
+  $('#advSym').textContent=sym;
+  $('#advBody').innerHTML=`<div class="adv-v ${A.level}"><div class="ic">${A.ic}</div><div><div class="t">${A.t}</div><div class="s">${A.sub}</div></div></div>
+    <div class="adv-m"><span style="width:${A.meter}%;background:${A.col}"></span></div>
+    <div class="adv-sub"><span class="k">Sessione</span><span class="v">${A.sess}</span></div>
+    <div class="adv-sub"><span class="k">Volatilità gg</span><span class="v">${f(A.v,2)}% · ${A.volTxt}</span></div>
+    <div class="adv-sub"><span class="k">Rating</span><span class="v">${A.rating}</span></div>
+    <div class="adv-h up">✅ Quando operare</div>${A.pros.length?A.pros.map(p=>`<div class="adv-li"><span class="up">▸</span><span>${p}</span></div>`).join(''):'<div class="adv-li mut">—</div>'}
+    <div class="adv-h dn">⛔ Quando evitare</div>${A.cons.map(c=>`<div class="adv-li"><span class="dn">▸</span><span>${c}</span></div>`).join('')}`;
 }
 
 /* ------------------------------ PERSISTENZA ------------------------------- */
@@ -676,17 +786,22 @@ function bind(){
   $('#execBtn').onclick=placeOrder;
   $('#vol').oninput=renderTicket; $('#slPx').oninput=renderTicket; $('#tpPx').oninput=renderTicket;
   $$('.qadj button').forEach(b=>b.onclick=()=>{ $('#vol').value=b.dataset.q; renderTicket(); });
-  $('#btnPause').onclick=()=>{ STATE.paused=!STATE.paused; $('#btnPause').textContent=STATE.paused?'▶ Riprendi':'⏸ Pausa'; $('#connTxt').textContent=STATE.paused?'IN PAUSA':'SIMULAZIONE'; };
+  $('#btnPause').onclick=()=>{ STATE.paused=!STATE.paused; $('#btnPause').textContent=STATE.paused?'▶ Riprendi':'⏸ Pausa'; if(STATE.paused)$('#connTxt').textContent='IN PAUSA'; };
   $('#btnReset').onclick=()=>{ if(confirm('Reset conto demo e posizioni?')){ STATE.balance=CONFIG.startBalance; STATE.positions=[]; persist(); toast('Conto demo resettato'); renderAll(); } };
+  $('#tdSave').onclick=async()=>{ APIKEY=$('#tdKey').value.trim(); await Storage.set('td_apikey',APIKEY);
+    toast(APIKEY?'API key salvata · Twelve Data primario':'API key rimossa · uso Yahoo'); SYMS.forEach(s=>px[s].anchored=false); await fetchRealAll(); };
+  $('#tdKey').addEventListener('keydown',e=>{ if(e.key==='Enter')$('#tdSave').click(); });
   window.addEventListener('resize',()=>{ fitCanvas(); drawChart(); });
 }
 
 /* ------------------------------ BOOT -------------------------------------- */
 (async function boot(){
+  APIKEY=(await Storage.get('td_apikey'))||''; if(APIKEY)$('#tdKey').value=APIKEY;
   initPrices(); await restore(); bind(); renderTfs(); fitCanvas(); renderAll(); renderClock();
   setInterval(tickEngine, CONFIG.tickMs);
   setInterval(renderClock, 1000);
-  // HOOK v2: connectFeed((sym,price)=>{ px[sym].last=price; ... });
+  await fetchRealAll();                          // prezzi/candele reali (Yahoo/Twelve Data)
+  setInterval(fetchRealAll, CONFIG.refreshRealMs);
 })();
 </script>
 </body>
