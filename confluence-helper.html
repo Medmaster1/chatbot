@@ -1,0 +1,1190 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Confluence Helper — Swing Trading Multi-Timeframe | KID / Digital Wealth</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<!-- Tipografia mono brand. CDN ammesso (font), nessuna dipendenza JS di build. -->
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+<style>
+/* ============================================================================
+   DESIGN SYSTEM — KID / Digital Wealth
+   Tema dark, navy profondo + accenti oro, estetica TradingView-inspired.
+   ========================================================================== */
+:root{
+  /* Palette */
+  --navy-900:#070b16;     /* sfondo principale */
+  --navy-850:#0a1020;
+  --navy-800:#0d1426;     /* superfici / card */
+  --navy-750:#111a31;
+  --navy-700:#16223d;     /* bordi / hover */
+  --navy-600:#1f2f50;
+  --ink-300:#9fb0cf;      /* testo secondario */
+  --ink-200:#c3d0e6;
+  --ink-100:#e8eefb;      /* testo primario */
+  --gold:#e7b54a;         /* accento oro */
+  --gold-soft:#caa14a;
+  --gold-dim:rgba(231,181,74,.14);
+  --green:#27c08a;
+  --green-dim:rgba(39,192,138,.16);
+  --yellow:#e8b84b;
+  --yellow-dim:rgba(232,184,75,.16);
+  --red:#ef5e6e;
+  --red-dim:rgba(239,94,110,.16);
+  --blue:#3f8efc;
+  --line:rgba(159,176,207,.10);
+  --line-strong:rgba(159,176,207,.18);
+  --shadow:0 18px 50px -20px rgba(0,0,0,.8);
+  --radius:14px;
+  --radius-sm:9px;
+  --mono:'JetBrains Mono','Space Mono','IBM Plex Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  font-family:var(--mono);
+  background:
+    radial-gradient(1200px 600px at 80% -10%, rgba(63,142,252,.06), transparent 60%),
+    radial-gradient(900px 500px at 0% 0%, rgba(231,181,74,.05), transparent 55%),
+    var(--navy-900);
+  color:var(--ink-200);
+  line-height:1.45;
+  font-size:14px;
+  -webkit-font-smoothing:antialiased;
+  padding-bottom:80px;
+}
+/* griglia sottile di sfondo TradingView-style */
+body::before{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:
+    linear-gradient(var(--line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size:46px 46px;
+  mask-image:radial-gradient(circle at 50% 30%, black, transparent 85%);
+  opacity:.5;
+}
+.wrap{position:relative;z-index:1;max-width:1320px;margin:0 auto;padding:20px 18px}
+h1,h2,h3,h4{color:var(--ink-100);font-weight:700;letter-spacing:.2px}
+a{color:var(--gold);text-decoration:none}
+button{font-family:var(--mono);cursor:pointer}
+::selection{background:var(--gold);color:var(--navy-900)}
+
+/* ---- Topbar ---------------------------------------------------------------*/
+.topbar{
+  display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  padding:14px 18px;margin-bottom:18px;
+  background:linear-gradient(180deg, var(--navy-800), var(--navy-850));
+  border:1px solid var(--line-strong);border-radius:var(--radius);
+  box-shadow:var(--shadow);
+}
+.brand{display:flex;align-items:center;gap:12px;min-width:240px}
+.logo{
+  width:42px;height:42px;border-radius:10px;flex:0 0 auto;
+  background:conic-gradient(from 220deg, var(--gold), #8a6d22 55%, var(--gold));
+  display:grid;place-items:center;color:var(--navy-900);font-weight:800;font-size:18px;
+  box-shadow:0 0 0 1px rgba(231,181,74,.4), 0 8px 24px -8px rgba(231,181,74,.5);
+}
+.brand .t{font-size:15px;color:var(--ink-100)}
+.brand .s{font-size:10.5px;color:var(--ink-300);letter-spacing:1.5px;text-transform:uppercase}
+.topbar .spacer{flex:1}
+
+/* selettore strumento */
+.instruments{display:flex;gap:6px;flex-wrap:wrap}
+.inst-btn{
+  background:var(--navy-750);border:1px solid var(--line-strong);color:var(--ink-300);
+  padding:8px 12px;border-radius:10px;font-size:12px;font-weight:600;display:flex;
+  gap:8px;align-items:center;transition:.15s;
+}
+.inst-btn small{color:var(--ink-300);font-weight:400;opacity:.7}
+.inst-btn:hover{border-color:var(--gold-soft);color:var(--ink-100)}
+.inst-btn.active{
+  background:var(--gold-dim);border-color:var(--gold);color:var(--gold);
+  box-shadow:0 0 0 1px var(--gold) inset;
+}
+.inst-btn.active small{color:var(--gold-soft)}
+
+/* layout principale */
+.grid{display:grid;grid-template-columns:1fr 380px;gap:18px;align-items:start}
+@media(max-width:980px){.grid{grid-template-columns:1fr}}
+
+/* ---- Card / accordion -----------------------------------------------------*/
+.card{
+  background:linear-gradient(180deg, var(--navy-800), var(--navy-850));
+  border:1px solid var(--line-strong);border-radius:var(--radius);
+  margin-bottom:16px;overflow:hidden;box-shadow:var(--shadow);
+}
+.card-head{
+  display:flex;align-items:center;gap:14px;padding:14px 16px;cursor:pointer;
+  user-select:none;transition:.15s;
+}
+.card-head:hover{background:rgba(255,255,255,.012)}
+.tf-badge{
+  width:54px;height:38px;border-radius:9px;display:grid;place-items:center;flex:0 0 auto;
+  font-weight:800;font-size:13px;color:var(--navy-900);
+  background:linear-gradient(180deg,var(--ink-200),var(--ink-300));
+}
+.card[data-tf="daily"] .tf-badge{background:linear-gradient(180deg,#e7b54a,#b3892f)}
+.card[data-tf="h4"] .tf-badge{background:linear-gradient(180deg,#7fb2ff,#3f8efc)}
+.card[data-tf="h1"] .tf-badge{background:linear-gradient(180deg,#9be6c8,#27c08a)}
+.card[data-tf="m30"] .tf-badge{background:linear-gradient(180deg,#d6b3ff,#9b6cff)}
+.card-head .ttl{flex:1}
+.card-head .ttl b{display:block;color:var(--ink-100);font-size:14px}
+.card-head .ttl span{font-size:11px;color:var(--ink-300)}
+.tf-score-pill{
+  font-size:11px;font-weight:700;color:var(--ink-200);background:var(--navy-700);
+  border:1px solid var(--line-strong);border-radius:20px;padding:4px 10px;white-space:nowrap;
+}
+.chev{color:var(--ink-300);transition:.25s;font-size:12px}
+.card.open .chev{transform:rotate(180deg)}
+.card-body{display:none;padding:0 16px 16px}
+.card.open .card-body{display:block;animation:fade .2s ease}
+@keyframes fade{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+
+/* direzione TF */
+.dir-row{display:flex;gap:8px;align-items:center;margin:6px 0 14px;flex-wrap:wrap}
+.dir-row .lbl{font-size:11px;color:var(--ink-300);margin-right:4px}
+.seg{display:flex;border:1px solid var(--line-strong);border-radius:9px;overflow:hidden}
+.seg button{
+  background:transparent;border:none;color:var(--ink-300);padding:7px 14px;font-size:11.5px;
+  font-weight:600;transition:.12s;border-right:1px solid var(--line-strong)
+}
+.seg button:last-child{border-right:none}
+.seg button.on[data-d="long"]{background:var(--green-dim);color:var(--green)}
+.seg button.on[data-d="short"]{background:var(--red-dim);color:var(--red)}
+.seg button.on[data-d="neutral"]{background:var(--yellow-dim);color:var(--yellow)}
+
+/* categorie confluenze */
+.cat{margin-bottom:12px}
+.cat-h{
+  display:flex;align-items:center;gap:8px;font-size:11px;text-transform:uppercase;
+  letter-spacing:1.2px;color:var(--gold-soft);margin:10px 0 8px;font-weight:700;
+}
+.cat-h .line{flex:1;height:1px;background:var(--line)}
+.opts{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+@media(max-width:560px){.opts{grid-template-columns:1fr}}
+.opt{
+  display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--radius-sm);
+  background:var(--navy-750);border:1px solid var(--line);font-size:12px;color:var(--ink-200);
+  transition:.12s;cursor:pointer;position:relative;
+}
+.opt:hover{border-color:var(--line-strong);background:var(--navy-700)}
+.opt.checked{border-color:var(--gold-soft);background:var(--gold-dim);color:var(--ink-100)}
+.opt input{appearance:none;width:16px;height:16px;border-radius:5px;border:1.5px solid var(--ink-300);
+  flex:0 0 auto;display:grid;place-items:center;transition:.12s;background:transparent}
+.opt.checked input{background:var(--gold);border-color:var(--gold)}
+.opt input::after{content:"";width:8px;height:8px;border-radius:2px;transform:scale(0);transition:.12s;background:var(--navy-900)}
+.opt.checked input::after{transform:scale(1)}
+.opt .w{margin-left:auto;font-size:10px;color:var(--ink-300);opacity:.7;font-weight:600}
+.opt.checked .w{color:var(--gold-soft);opacity:1}
+
+/* ---- Sidebar / panel ------------------------------------------------------*/
+.panel{
+  background:linear-gradient(180deg, var(--navy-800), var(--navy-850));
+  border:1px solid var(--line-strong);border-radius:var(--radius);
+  padding:16px;margin-bottom:16px;box-shadow:var(--shadow);
+}
+.panel h3{font-size:12px;text-transform:uppercase;letter-spacing:1.4px;color:var(--gold-soft);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.sticky{position:sticky;top:14px}
+
+/* gauge score */
+.gauge-wrap{display:flex;flex-direction:column;align-items:center;gap:6px;padding:6px 0 10px}
+.gauge{position:relative;width:200px;height:118px}
+.gauge svg{width:100%;height:100%;overflow:visible}
+.gauge .val{position:absolute;left:0;right:0;bottom:6px;text-align:center}
+.gauge .val .num{font-size:40px;font-weight:800;color:var(--ink-100);line-height:1}
+.gauge .val .lab{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--ink-300)}
+
+/* bias chip grande */
+.bias{
+  text-align:center;padding:12px;border-radius:var(--radius-sm);margin-bottom:12px;
+  font-weight:800;font-size:20px;letter-spacing:3px;border:1px solid var(--line-strong);
+  background:var(--navy-750);color:var(--ink-200);transition:.2s;
+}
+.bias.long{background:var(--green-dim);color:var(--green);border-color:var(--green)}
+.bias.short{background:var(--red-dim);color:var(--red);border-color:var(--red)}
+.bias.notrade{background:var(--red-dim);color:var(--red);border-color:var(--red)}
+.bias .sub{display:block;font-size:10px;letter-spacing:1.5px;font-weight:600;margin-top:4px;opacity:.85}
+
+/* semafori allineamento TF */
+.align{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
+.align .t{
+  text-align:center;padding:8px 4px;border-radius:var(--radius-sm);background:var(--navy-750);
+  border:1px solid var(--line);font-size:10px;color:var(--ink-300)
+}
+.align .dot{width:14px;height:14px;border-radius:50%;margin:0 auto 5px;background:var(--navy-600);box-shadow:0 0 0 3px rgba(255,255,255,.02)}
+.align .dot.g{background:var(--green);box-shadow:0 0 10px var(--green)}
+.align .dot.y{background:var(--yellow);box-shadow:0 0 10px var(--yellow)}
+.align .dot.r{background:var(--red);box-shadow:0 0 10px var(--red)}
+.align .t b{display:block;color:var(--ink-200);font-size:11px;margin-top:2px}
+
+/* breakdown barre per TF */
+.bd-row{display:flex;align-items:center;gap:10px;margin-bottom:9px;font-size:11px}
+.bd-row .nm{width:46px;color:var(--ink-300);flex:0 0 auto}
+.bar{flex:1;height:8px;border-radius:6px;background:var(--navy-700);overflow:hidden;position:relative}
+.bar>span{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,var(--gold-soft),var(--gold));transition:width .4s ease;width:0}
+.bd-row .pc{width:54px;text-align:right;color:var(--ink-200);font-weight:600;flex:0 0 auto}
+
+/* input fields */
+.field{margin-bottom:11px}
+.field label{display:block;font-size:10.5px;color:var(--ink-300);margin-bottom:5px;letter-spacing:.4px}
+.field .hint{font-weight:400;opacity:.7;text-transform:none;letter-spacing:0}
+.field input,.field select{
+  width:100%;background:var(--navy-900);border:1px solid var(--line-strong);color:var(--ink-100);
+  padding:9px 11px;border-radius:var(--radius-sm);font-family:var(--mono);font-size:13px;transition:.12s
+}
+.field input:focus,.field select:focus{outline:none;border-color:var(--gold-soft);box-shadow:0 0 0 3px var(--gold-dim)}
+.f2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.f3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+
+/* results levels */
+.lvl{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px dashed var(--line);font-size:12.5px}
+.lvl:last-child{border-bottom:none}
+.lvl .k{color:var(--ink-300)}
+.lvl .v{font-weight:700;color:var(--ink-100)}
+.lvl .v.green{color:var(--green)}
+.lvl .v.red{color:var(--red)}
+.lvl .v.gold{color:var(--gold)}
+.lvl .tag{font-size:9.5px;padding:2px 7px;border-radius:20px;background:var(--navy-700);color:var(--ink-300);margin-left:6px}
+
+/* warnings */
+.warns{margin-top:6px}
+.warn{
+  display:flex;gap:8px;align-items:flex-start;padding:9px 11px;border-radius:var(--radius-sm);
+  background:var(--red-dim);border:1px solid rgba(239,94,110,.35);color:#ffd0d6;font-size:11.5px;margin-bottom:7px
+}
+.warn.info{background:var(--gold-dim);border-color:rgba(231,181,74,.35);color:#ffe7b3}
+.warn.ok{background:var(--green-dim);border-color:rgba(39,192,138,.35);color:#bdf1de}
+.warn .ic{flex:0 0 auto}
+
+/* active confluences chips */
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.chip{font-size:10.5px;padding:4px 9px;border-radius:20px;background:var(--navy-700);border:1px solid var(--line-strong);color:var(--ink-200)}
+.chip b{color:var(--gold-soft)}
+.muted{color:var(--ink-300);font-size:11px}
+
+/* buttons */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;
+  padding:11px 14px;border-radius:var(--radius-sm);border:1px solid var(--line-strong);
+  background:var(--navy-750);color:var(--ink-100);font-weight:600;font-size:12.5px;transition:.14s
+}
+.btn:hover{border-color:var(--gold-soft);background:var(--navy-700)}
+.btn.gold{background:linear-gradient(180deg,var(--gold),var(--gold-soft));color:var(--navy-900);border-color:var(--gold)}
+.btn.gold:hover{filter:brightness(1.07)}
+.btn.ghost{background:transparent}
+.btn-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px}
+.btn-row.one{grid-template-columns:1fr}
+
+/* settings sliders */
+.slider{display:flex;align-items:center;gap:10px;margin-bottom:9px}
+.slider label{width:96px;font-size:10.5px;color:var(--ink-300);flex:0 0 auto}
+.slider input[type=range]{flex:1;accent-color:var(--gold)}
+.slider .num{width:34px;text-align:right;font-size:11px;color:var(--ink-100);font-weight:700}
+
+/* modal */
+.modal-bg{position:fixed;inset:0;background:rgba(3,6,12,.78);backdrop-filter:blur(4px);z-index:60;display:none;align-items:center;justify-content:center;padding:20px}
+.modal-bg.show{display:flex}
+.modal{background:var(--navy-800);border:1px solid var(--line-strong);border-radius:var(--radius);max-width:640px;width:100%;max-height:86vh;overflow:auto;box-shadow:var(--shadow)}
+.modal-h{display:flex;align-items:center;justify-content:space-between;padding:16px;border-bottom:1px solid var(--line)}
+.modal-h h3{font-size:13px;color:var(--gold-soft);text-transform:uppercase;letter-spacing:1.5px}
+.modal-b{padding:16px}
+.x{background:var(--navy-700);border:1px solid var(--line-strong);color:var(--ink-200);width:30px;height:30px;border-radius:8px;font-size:14px}
+textarea.note{
+  width:100%;min-height:300px;background:var(--navy-900);border:1px solid var(--line-strong);
+  color:var(--ink-100);border-radius:var(--radius-sm);padding:14px;font-family:var(--mono);font-size:12px;line-height:1.6;resize:vertical
+}
+
+/* history */
+.hist-item{padding:10px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--navy-750);margin-bottom:8px;font-size:11.5px}
+.hist-item .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.hist-item .top b{color:var(--ink-100)}
+.hist-item .meta{color:var(--ink-300);font-size:10.5px}
+.b-pill{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px}
+.b-pill.long{background:var(--green-dim);color:var(--green)}
+.b-pill.short{background:var(--red-dim);color:var(--red)}
+.b-pill.notrade{background:var(--red-dim);color:var(--red)}
+
+/* footer */
+.foot{text-align:center;color:var(--ink-300);font-size:10.5px;margin-top:18px;opacity:.7;line-height:1.7}
+.disclaimer{font-size:10px;color:var(--ink-300);opacity:.7;margin-top:10px;line-height:1.5;border-top:1px solid var(--line);padding-top:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ===================== TOPBAR ===================== -->
+  <div class="topbar">
+    <div class="brand">
+      <div class="logo">KID</div>
+      <div>
+        <div class="t">Confluence Helper</div>
+        <div class="s">Digital Wealth · Multi-TF</div>
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <div class="instruments" id="instruments"><!-- popolato da JS --></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn ghost" style="width:auto;padding:9px 12px" id="btnSettings" title="Impostazioni pesi e soglie">⚙︎ Pesi</button>
+      <button class="btn ghost" style="width:auto;padding:9px 12px" id="btnHistory" title="Storico setup">🗂 Storico</button>
+    </div>
+  </div>
+
+  <div class="grid">
+    <!-- ===================== COLONNA SINISTRA: WORKFLOW TOP-DOWN ===================== -->
+    <div id="workflow"><!-- card timeframe generate da JS --></div>
+
+    <!-- ===================== COLONNA DESTRA: SETUP + LIVELLI ===================== -->
+    <div class="sidebar">
+      <div class="sticky">
+
+        <!-- Trade Setup Card -->
+        <div class="panel" id="setupCard">
+          <h3>◇ Trade Setup Card · <span id="instLabel" style="color:var(--ink-100)">XAUUSD</span></h3>
+
+          <div class="bias notrade" id="biasBox">NO-TRADE<span class="sub" id="biasSub">in attesa di input</span></div>
+
+          <div class="gauge-wrap">
+            <div class="gauge">
+              <svg viewBox="0 0 200 118">
+                <defs>
+                  <linearGradient id="gGrad" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0" stop-color="#ef5e6e"/>
+                    <stop offset="0.5" stop-color="#e8b84b"/>
+                    <stop offset="1" stop-color="#27c08a"/>
+                  </linearGradient>
+                </defs>
+                <path d="M16 108 A92 92 0 0 1 184 108" fill="none" stroke="#16223d" stroke-width="14" stroke-linecap="round"/>
+                <path id="gArc" d="M16 108 A92 92 0 0 1 184 108" fill="none" stroke="url(#gGrad)" stroke-width="14" stroke-linecap="round" stroke-dasharray="0 999"/>
+                <line id="gNeedle" x1="100" y1="108" x2="100" y2="30" stroke="#e8eefb" stroke-width="3" stroke-linecap="round"/>
+                <circle cx="100" cy="108" r="6" fill="#e8eefb"/>
+              </svg>
+              <div class="val"><div class="num" id="scoreNum">0</div><div class="lab">Confluence Score</div></div>
+            </div>
+          </div>
+
+          <!-- semafori allineamento -->
+          <div class="align" id="alignRow"></div>
+
+          <!-- breakdown per TF -->
+          <div id="breakdown"></div>
+        </div>
+
+        <!-- Livelli operativi -->
+        <div class="panel">
+          <h3>⊿ Livelli Operativi</h3>
+          <div class="f2">
+            <div class="field"><label>Prezzo corrente</label><input type="number" step="any" id="inPrice" placeholder="es. 2345.0" /></div>
+            <div class="field"><label>Invalidazione (SL)<span class="hint"> · oltre OB/struttura</span></label><input type="number" step="any" id="inSL" placeholder="es. 2330.0" /></div>
+          </div>
+          <div class="f2">
+            <div class="field"><label>ATR(14)<span class="hint"> · opz.</span></label><input type="number" step="any" id="inATR" placeholder="es. 12.5" /></div>
+            <div class="field"><label>Modalità SL</label>
+              <select id="slMode">
+                <option value="manual">Manuale (invalidazione)</option>
+                <option value="atr">ATR ×</option>
+              </select>
+            </div>
+          </div>
+          <div class="f3">
+            <div class="field"><label>Capitale</label><input type="number" step="any" id="inCap" value="10000" /></div>
+            <div class="field"><label>Rischio %</label><input type="number" step="any" id="inRisk" value="1" /></div>
+            <div class="field"><label>ATR× (se SL ATR)</label><input type="number" step="any" id="inAtrMult" value="1.5" /></div>
+          </div>
+
+          <div id="levels" style="margin-top:6px"></div>
+        </div>
+
+        <!-- Warnings -->
+        <div class="panel">
+          <h3>⚑ Warning & Note</h3>
+          <div class="warns" id="warns"><div class="muted">Nessun warning.</div></div>
+          <div style="margin-top:10px">
+            <div class="cat-h"><span>Confluenze attive</span><span class="line"></span></div>
+            <div class="chips" id="activeChips"><span class="muted">Nessuna confluenza selezionata.</span></div>
+          </div>
+        </div>
+
+        <!-- Azioni -->
+        <div class="panel">
+          <h3>⌘ Azioni</h3>
+          <div class="btn-row one"><button class="btn gold" id="btnNote">📝 Genera nota operativa</button></div>
+          <div class="btn-row">
+            <button class="btn" id="btnSave">💾 Salva setup</button>
+            <button class="btn" id="btnReset">↺ Reset analisi</button>
+          </div>
+          <div class="btn-row">
+            <button class="btn ghost" id="btnExport">⤓ Esporta JSON</button>
+            <button class="btn ghost" id="btnHistory2">🗂 Storico</button>
+          </div>
+          <div class="disclaimer">
+            Strumento di supporto all'analisi discrezionale. Nessun consiglio
+            d'investimento personalizzato. Le decisioni operative e i livelli
+            restano responsabilità del trader.
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    KID · Digital Wealth — Confluence Helper v1 · Single-file · Top-down D→H4→H1→30m<br/>
+    Pesi e soglie centralizzati in <b>CONFIG</b> (vedi inizio &lt;script&gt;). Nessun dato live in v1.
+  </div>
+</div>
+
+<!-- ===================== MODALE: NOTA OPERATIVA ===================== -->
+<div class="modal-bg" id="noteModal">
+  <div class="modal">
+    <div class="modal-h"><h3>📝 Nota operativa / Journal entry</h3><button class="x" data-close>✕</button></div>
+    <div class="modal-b">
+      <textarea class="note" id="noteText" readonly></textarea>
+      <div class="btn-row" style="margin-top:12px">
+        <button class="btn gold" id="btnCopyNote">📋 Copia negli appunti</button>
+        <button class="btn" id="btnDownloadNote">⤓ Scarica .txt</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODALE: IMPOSTAZIONI PESI/SOGLIE ===================== -->
+<div class="modal-bg" id="settingsModal">
+  <div class="modal">
+    <div class="modal-h"><h3>⚙︎ Pesi & Soglie</h3><button class="x" data-close>✕</button></div>
+    <div class="modal-b">
+      <div class="cat-h"><span>Peso per timeframe (bias)</span><span class="line"></span></div>
+      <div id="tfWeights"></div>
+      <div class="cat-h"><span>Soglie di score</span><span class="line"></span></div>
+      <div id="thresholds"></div>
+      <div class="cat-h"><span>Penalità</span><span class="line"></span></div>
+      <div id="penalties"></div>
+      <div class="btn-row" style="margin-top:14px">
+        <button class="btn gold" id="btnApplySettings">Applica</button>
+        <button class="btn" id="btnResetSettings">Ripristina default</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODALE: STORICO ===================== -->
+<div class="modal-bg" id="historyModal">
+  <div class="modal">
+    <div class="modal-h"><h3>🗂 Storico setup</h3><button class="x" data-close>✕</button></div>
+    <div class="modal-b">
+      <div id="historyList"><div class="muted">Nessun setup salvato.</div></div>
+      <div class="btn-row" style="margin-top:12px">
+        <button class="btn ghost" id="btnExportHist">⤓ Esporta storico JSON</button>
+        <button class="btn ghost" id="btnClearHist">🗑 Svuota storico</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================================
+ * CONFLUENCE HELPER — Swing Trading Multi-Timeframe (KID / Digital Wealth)
+ * Single-file, vanilla JS. Nessun build step.
+ *
+ * ── ARCHITETTURA ──
+ *  CONFIG       → tutti i pesi/soglie centralizzati (tuning facile)
+ *  STATE        → stato runtime dell'analisi corrente
+ *  Storage      → wrapper window.storage con fallback in RAM (NO localStorage)
+ *  render*()    → costruzione UI da CONFIG
+ *  compute()    → motore di scoring + bias + livelli
+ * ========================================================================== */
+
+/* ============================================================================
+ * 1) CONFIG — modifica qui pesi e soglie
+ * ========================================================================== */
+const CONFIG = {
+
+  /* Strumenti supportati. `macro` indica quale set di confluenze macro usare. */
+  instruments: {
+    XAUUSD: { label:'XAUUSD', sub:'Gold',   macro:'metals',  bias:'long',
+              note:'Bias strutturalmente rialzista · correlazione inversa DXY' },
+    XAGUSD: { label:'XAGUSD', sub:'Silver', macro:'metals',  bias:'long',
+              note:'Più volatile · beta alto vs Gold · sensibile a DXY/real yields' },
+    US500:  { label:'US500',  sub:'SPX',    macro:'indices', bias:'long',
+              note:'Indice risk-on · breadth & VIX rilevanti' },
+    US100:  { label:'US100',  sub:'NDX',    macro:'indices', bias:'long',
+              note:'Growth/tech beta alto · sensibile a yields & VIX' },
+    GER40:  { label:'GER40',  sub:'DAX',    macro:'indices', bias:'long',
+              note:'Sessione EU · correlato a US ed EURUSD' },
+  },
+
+  /* Peso di ciascun timeframe nel calcolo del bias (somma libera, normalizzata).
+     Daily/H4 dominano il bias; il 30m pesa per il trigger d'ingresso. */
+  tfWeights: { daily:30, h4:25, h1:18, m30:17 },
+
+  /* Peso del blocco macro (contesto) nel totale, relativo ai TF. */
+  macroWeight: 10,
+
+  /* Soglie di interpretazione dello score totale (0–100). */
+  thresholds: { noTrade:40, weak:65, valid:80 }, // <40 no-trade, 40-65 debole, 65-80 valido, >80 high-conviction
+
+  /* Penalità automatiche (sottratte allo score 0–100). */
+  penalties: {
+    tfConflict:   12,  // per ogni TF (h4/h1) che si oppone al Daily
+    triggerConflict: 18, // 30m opposto al Daily → trigger non valido
+    newsImminent: 15,  // news ad alto impatto imminente
+    noDailyDir:   10,  // direzione Daily non impostata
+  },
+
+  /* ── DEFINIZIONE CONFLUENZE PER TIMEFRAME ──
+     Ogni TF condivide lo stesso set di categorie/voci (analisi top-down coerente).
+     `w` = peso relativo della voce all'interno del proprio TF. */
+  categories: [
+    { id:'struttura', name:'Struttura', items:[
+      { id:'trend',  label:'Trend allineato al bias', w:10 },
+      { id:'bos',    label:'BOS / CHoCH a favore',     w:8 },
+      { id:'swing',  label:'Swing point validi (HH/HL · LH/LL)', w:6 },
+    ]},
+    { id:'livelli', name:'Livelli chiave', items:[
+      { id:'sr',     label:'Supporto / Resistenza',    w:7 },
+      { id:'sd',     label:'Supply / Demand zone',     w:7 },
+      { id:'ob',     label:'Order block',              w:6 },
+      { id:'fvg',    label:'Fair Value Gap (FVG)',     w:5 },
+    ]},
+    { id:'fibo', name:'Fibonacci', items:[
+      { id:'retr',   label:'Ritracciamento 0.618–0.786', w:6 },
+      { id:'ote',    label:'Confluenza OTE',           w:5 },
+    ]},
+    { id:'ma', name:'Medie mobili', items:[
+      { id:'ema',    label:'Prezzo vs EMA 20/50/200',  w:6 },
+      { id:'cross',  label:'Golden / Death cross',     w:5 },
+    ]},
+    { id:'momentum', name:'Momentum', items:[
+      { id:'rsi',    label:'RSI in zona favorevole',   w:5 },
+      { id:'rsidiv', label:'Divergenza RSI',           w:6 },
+      { id:'macd',   label:'MACD cross a favore',      w:5 },
+      { id:'macddiv',label:'Divergenza MACD',          w:5 },
+    ]},
+    { id:'volvol', name:'Volume / Volatilità', items:[
+      { id:'vspike', label:'Spike di volume',          w:5 },
+      { id:'atrok',  label:'ATR adeguato al sizing',   w:4 },
+    ]},
+  ],
+
+  /* Categorie MACRO (contesto), specifiche per tipo strumento. */
+  macro: {
+    metals: { name:'Contesto macro · Metalli', items:[
+      { id:'dxy',     label:'DXY a favore (inverso)',    w:10 },
+      { id:'cot',     label:'COT: commercials a favore', w:7 },
+      { id:'ryields', label:'Real yields a favore',      w:7 },
+      { id:'riskoff', label:'Flusso risk-on/off coerente', w:4 },
+    ]},
+    indices: { name:'Contesto macro · Indici', items:[
+      { id:'vix',     label:'VIX coerente (basso/scende = risk-on)', w:9 },
+      { id:'breadth', label:'Market breadth a favore',   w:8 },
+      { id:'riskon',  label:'Regime risk-on/off coerente', w:7 },
+      { id:'yields',  label:'Yields/tassi coerenti',     w:4 },
+    ]},
+  },
+
+  /* TIMING — sessione attiva (bonus piccolo) + news (warning/penalità). */
+  sessions: [
+    { id:'asia',   label:'Asia (CET 01–09)',   bonus:2 },
+    { id:'london', label:'London (CET 09–17)', bonus:4 },
+    { id:'ny',     label:'New York (CET 14–22)', bonus:4 },
+  ],
+  newsBonus: 0, // il timing news incide via penalità, non bonus
+
+  /* ── HOOK FUTURI (v2) — predisposizione feed live, attualmente non usati ──
+     async function fetchPrice(symbol){ /* TODO: REST/WebSocket prezzo *\/ }
+     async function fetchDXY(){ /* TODO: feed DXY per i metalli *\/ }
+     async function fetchCOT(symbol){ /* TODO: report COT settimanale *\/ }
+     async function fetchVIX(){ /* TODO: feed VIX per indici *\/ }
+  */
+};
+
+const TFS = [
+  { id:'daily', code:'1D',  name:'Daily',  desc:'Bias di fondo · struttura di mercato (HH/HL vs LH/LL)' },
+  { id:'h4',    code:'H4',  name:'H4',     desc:'Direzione intermedia · S/R e supply/demand maggiori' },
+  { id:'h1',    code:'H1',  name:'H1',     desc:'Affinamento · order block / FVG · allineamento al bias' },
+  { id:'m30',   code:'30m', name:'30m',    desc:'Timing d\'ingresso · price action · divergenze · sessione' },
+];
+
+/* ============================================================================
+ * 2) STORAGE — window.storage se disponibile, altrimenti RAM. NO localStorage.
+ * ========================================================================== */
+const Storage = (() => {
+  let mem = {};                       // fallback in-RAM
+  const hasWS = typeof window !== 'undefined' && window.storage &&
+                typeof window.storage.getItem === 'function';
+  return {
+    async get(key){
+      try{
+        if(hasWS){ const v = await window.storage.getItem(key); return v ? JSON.parse(v) : null; }
+      }catch(e){ /* fallback */ }
+      return mem[key] != null ? mem[key] : null;
+    },
+    async set(key,val){
+      try{
+        if(hasWS){ await window.storage.setItem(key, JSON.stringify(val)); }
+      }catch(e){ /* fallback */ }
+      mem[key] = val; // mantieni sempre anche copia in RAM
+    }
+  };
+})();
+const HIST_KEY = 'kid_confluence_history';
+const CUR_KEY  = 'kid_confluence_current';
+
+/* ============================================================================
+ * 3) STATE — analisi corrente
+ * ========================================================================== */
+const STATE = {
+  instrument: 'XAUUSD',
+  // direzione scelta per ogni TF: 'long' | 'short' | 'neutral'
+  dir: { daily:'', h4:'', h1:'', m30:'' },
+  // confluenze attive: checks[tf][catId.itemId] = true
+  checks: {},
+  macro: {},          // confluenze macro attive
+  sessions: {},       // sessioni attive
+  news: false,        // news ad alto impatto imminente
+  // input livelli
+  price:null, sl:null, atr:null, capital:10000, riskPct:1, slMode:'manual', atrMult:1.5,
+  // override impostazioni (copia mutabile di CONFIG)
+  cfg: JSON.parse(JSON.stringify({tfWeights:CONFIG.tfWeights, thresholds:CONFIG.thresholds, penalties:CONFIG.penalties, macroWeight:CONFIG.macroWeight})),
+};
+TFS.forEach(t => STATE.checks[t.id] = {});
+
+/* ============================================================================
+ * 4) RENDER — costruzione UI da CONFIG
+ * ========================================================================== */
+const $ = (s,el=document)=>el.querySelector(s);
+const $$ = (s,el=document)=>[...el.querySelectorAll(s)];
+const fmt = (n,d=2)=> (n==null||isNaN(n))?'—':Number(n).toLocaleString('it-IT',{minimumFractionDigits:d,maximumFractionDigits:d});
+
+/* selettore strumento */
+function renderInstruments(){
+  const box = $('#instruments'); box.innerHTML='';
+  Object.entries(CONFIG.instruments).forEach(([k,v])=>{
+    const b=document.createElement('button');
+    b.className='inst-btn'+(k===STATE.instrument?' active':'');
+    b.innerHTML=`${v.label} <small>${v.sub}</small>`;
+    b.onclick=()=>{ STATE.instrument=k; renderInstruments(); renderWorkflow(); compute(); };
+    box.appendChild(b);
+  });
+}
+
+/* card timeframe + macro/timing */
+function renderWorkflow(){
+  const wf = $('#workflow'); wf.innerHTML='';
+
+  TFS.forEach((tf,idx)=>{
+    const card=document.createElement('div');
+    card.className='card'+(idx===0?' open':'');
+    card.dataset.tf=tf.id;
+    card.innerHTML=`
+      <div class="card-head">
+        <div class="tf-badge">${tf.code}</div>
+        <div class="ttl"><b>${idx+1}. ${tf.name}</b><span>${tf.desc}</span></div>
+        <div class="tf-score-pill" data-pill="${tf.id}">0%</div>
+        <div class="chev">▼</div>
+      </div>
+      <div class="card-body">
+        <div class="dir-row">
+          <span class="lbl">Direzione ${tf.name}:</span>
+          <div class="seg" data-seg="${tf.id}">
+            <button data-d="long">LONG</button>
+            <button data-d="neutral">NEUTRAL</button>
+            <button data-d="short">SHORT</button>
+          </div>
+          ${tf.id==='m30'?'<span class="muted" style="margin-left:auto">trigger valido solo se = bias Daily</span>':''}
+        </div>
+        <div data-cats="${tf.id}"></div>
+      </div>`;
+    // categorie
+    const cwrap = $(`[data-cats="${tf.id}"]`, card);
+    CONFIG.categories.forEach(cat=>{
+      const c=document.createElement('div'); c.className='cat';
+      c.innerHTML=`<div class="cat-h"><span>${cat.name}</span><span class="line"></span></div>`;
+      const opts=document.createElement('div'); opts.className='opts';
+      cat.items.forEach(it=>{
+        const key=`${cat.id}.${it.id}`;
+        const on=!!STATE.checks[tf.id][key];
+        const o=document.createElement('label');
+        o.className='opt'+(on?' checked':'');
+        o.innerHTML=`<input type="checkbox" ${on?'checked':''}/><span>${it.label}</span><span class="w">+${it.w}</span>`;
+        o.querySelector('input').onchange=(e)=>{
+          STATE.checks[tf.id][key]=e.target.checked;
+          o.classList.toggle('checked',e.target.checked);
+          compute();
+        };
+        opts.appendChild(o);
+      });
+      c.appendChild(opts); cwrap.appendChild(c);
+    });
+    // header toggle accordion
+    $('.card-head',card).onclick=(e)=>{ if(e.target.closest('.seg'))return; card.classList.toggle('open'); };
+    // direzione handlers
+    $$(`[data-seg="${tf.id}"] button`,card).forEach(btn=>{
+      if(STATE.dir[tf.id]===btn.dataset.d) btn.classList.add('on');
+      btn.onclick=()=>{
+        STATE.dir[tf.id] = (STATE.dir[tf.id]===btn.dataset.d)?'':btn.dataset.d;
+        $$(`[data-seg="${tf.id}"] button`,card).forEach(b=>b.classList.toggle('on',STATE.dir[tf.id]===b.dataset.d));
+        compute();
+      };
+    });
+    wf.appendChild(card);
+  });
+
+  // ── Card MACRO + TIMING ──
+  const inst=CONFIG.instruments[STATE.instrument];
+  const macroSet=CONFIG.macro[inst.macro];
+  const mcard=document.createElement('div');
+  mcard.className='card open'; mcard.dataset.tf='macro';
+  mcard.innerHTML=`
+    <div class="card-head">
+      <div class="tf-badge" style="background:linear-gradient(180deg,#ffd98a,#caa14a)">M</div>
+      <div class="ttl"><b>Contesto macro & Timing</b><span>${inst.note}</span></div>
+      <div class="tf-score-pill" data-pill="macro">0%</div>
+      <div class="chev">▼</div>
+    </div>
+    <div class="card-body">
+      <div class="cat"><div class="cat-h"><span>${macroSet.name}</span><span class="line"></span></div>
+        <div class="opts" data-macro></div></div>
+      <div class="cat"><div class="cat-h"><span>Timing · Sessione (CET)</span><span class="line"></span></div>
+        <div class="opts" data-sessions></div></div>
+      <div class="cat"><div class="cat-h"><span>News ad alto impatto</span><span class="line"></span></div>
+        <div class="opts" data-news></div></div>
+    </div>`;
+  // macro items
+  const mo=$('[data-macro]',mcard);
+  macroSet.items.forEach(it=>{
+    const on=!!STATE.macro[it.id];
+    const o=document.createElement('label'); o.className='opt'+(on?' checked':'');
+    o.innerHTML=`<input type="checkbox" ${on?'checked':''}/><span>${it.label}</span><span class="w">+${it.w}</span>`;
+    o.querySelector('input').onchange=e=>{ STATE.macro[it.id]=e.target.checked; o.classList.toggle('checked',e.target.checked); compute(); };
+    mo.appendChild(o);
+  });
+  // sessioni
+  const so=$('[data-sessions]',mcard);
+  CONFIG.sessions.forEach(s=>{
+    const on=!!STATE.sessions[s.id];
+    const o=document.createElement('label'); o.className='opt'+(on?' checked':'');
+    o.innerHTML=`<input type="checkbox" ${on?'checked':''}/><span>${s.label}</span><span class="w">+${s.bonus}</span>`;
+    o.querySelector('input').onchange=e=>{ STATE.sessions[s.id]=e.target.checked; o.classList.toggle('checked',e.target.checked); compute(); };
+    so.appendChild(o);
+  });
+  // news flag
+  const no=$('[data-news]',mcard);
+  const o=document.createElement('label'); o.className='opt'+(STATE.news?' checked':'');
+  o.innerHTML=`<input type="checkbox" ${STATE.news?'checked':''}/><span>⚠ News imminente (NFP/CPI/FOMC)</span><span class="w">−${STATE.cfg.penalties.newsImminent}</span>`;
+  o.querySelector('input').onchange=e=>{ STATE.news=e.target.checked; o.classList.toggle('checked',e.target.checked); compute(); };
+  no.appendChild(o);
+  $('.card-head',mcard).onclick=()=>mcard.classList.toggle('open');
+  wf.appendChild(mcard);
+}
+
+/* ============================================================================
+ * 5) COMPUTE — motore di scoring, bias, livelli
+ * ========================================================================== */
+function tfFill(tfId){
+  // ritorna {active,max,ratio} per un timeframe
+  let active=0,max=0;
+  CONFIG.categories.forEach(cat=>cat.items.forEach(it=>{
+    max+=it.w;
+    if(STATE.checks[tfId][`${cat.id}.${it.id}`]) active+=it.w;
+  }));
+  return {active,max,ratio:max?active/max:0};
+}
+function macroFill(){
+  const set=CONFIG.macro[CONFIG.instruments[STATE.instrument].macro];
+  let active=0,max=0;
+  set.items.forEach(it=>{ max+=it.w; if(STATE.macro[it.id]) active+=it.w; });
+  return {active,max,ratio:max?active/max:0};
+}
+
+function compute(){
+  const cfg=STATE.cfg;
+  const daily=STATE.dir.daily;
+
+  // ── score grezzo pesato (0–100) ──
+  const wsum = cfg.tfWeights.daily+cfg.tfWeights.h4+cfg.tfWeights.h1+cfg.tfWeights.m30+cfg.macroWeight;
+  let weighted=0;
+  const fills={};
+  TFS.forEach(tf=>{ const f=tfFill(tf.id); fills[tf.id]=f; weighted += cfg.tfWeights[tf.id]*f.ratio; });
+  const mf=macroFill(); fills.macro=mf; weighted += cfg.macroWeight*mf.ratio;
+  let score = (weighted/wsum)*100;
+
+  // bonus sessione (piccolo, capato)
+  let sessBonus=0; CONFIG.sessions.forEach(s=>{ if(STATE.sessions[s.id]) sessBonus+=s.bonus; });
+  sessBonus=Math.min(sessBonus,6);
+  score += sessBonus;
+
+  // ── allineamento timeframe / penalità ──
+  const warns=[]; let penalty=0;
+  if(!daily){ penalty+=cfg.penalties.noDailyDir; warns.push({t:'info',m:'Direzione Daily non impostata: il bias non è definito.'}); }
+
+  const align={}; // per semafori
+  TFS.forEach(tf=>{
+    const d=STATE.dir[tf.id];
+    if(!daily){ align[tf.id]= d?'y':'gray'; return; }
+    if(tf.id==='daily'){ align.daily='g'; return; }
+    if(!d || d==='neutral'){ align[tf.id]='y'; }
+    else if(d===daily){ align[tf.id]='g'; }
+    else { align[tf.id]='r'; }
+  });
+
+  if(daily){
+    // h4/h1 opposti
+    ['h4','h1'].forEach(t=>{ if(STATE.dir[t] && STATE.dir[t]!=='neutral' && STATE.dir[t]!==daily){
+      penalty+=cfg.penalties.tfConflict; warns.push({t:'warn',m:`${t.toUpperCase()} in conflitto col bias Daily (${daily.toUpperCase()}).`});
+    }});
+    // 30m trigger
+    if(STATE.dir.m30 && STATE.dir.m30!=='neutral' && STATE.dir.m30!==daily){
+      penalty+=cfg.penalties.triggerConflict;
+      warns.push({t:'warn',m:`Trigger 30m opposto al Daily: ingresso NON valido (degrado a NO-TRADE).`});
+    }
+  }
+  // news
+  if(STATE.news){ penalty+=cfg.penalties.newsImminent; warns.push({t:'warn',m:'News ad alto impatto imminente: evitare ingressi pre-news.'}); }
+
+  score = Math.max(0,Math.min(100, score - penalty));
+
+  // ── determinazione bias ──
+  let bias='NO-TRADE', biasCls='notrade', biasSub='';
+  const triggerConflict = daily && STATE.dir.m30 && STATE.dir.m30!=='neutral' && STATE.dir.m30!==daily;
+  if(!daily){ bias='NO-TRADE'; biasCls='notrade'; biasSub='imposta la direzione Daily'; }
+  else if(triggerConflict){ bias='NO-TRADE'; biasCls='notrade'; biasSub='conflitto trigger 30m vs Daily'; }
+  else if(score<cfg.thresholds.noTrade){ bias='NO-TRADE'; biasCls='notrade'; biasSub=`score ${Math.round(score)} < ${cfg.thresholds.noTrade}`; }
+  else {
+    bias = daily==='long'?'LONG':'SHORT'; biasCls=daily;
+    if(score<cfg.thresholds.weak) biasSub='setup debole · attendi più confluenze';
+    else if(score<cfg.thresholds.valid) biasSub='setup valido';
+    else biasSub='high-conviction ★';
+  }
+
+  // ── render UI ──
+  renderGauge(score);
+  $('#scoreNum').textContent=Math.round(score);
+  $('#instLabel').textContent=CONFIG.instruments[STATE.instrument].label;
+  const bb=$('#biasBox'); bb.className='bias '+biasCls; bb.innerHTML=`${bias}<span class="sub">${biasSub}</span>`;
+
+  // pill per TF + breakdown
+  TFS.forEach(tf=>{ const p=$(`[data-pill="${tf.id}"]`); if(p)p.textContent=Math.round(fills[tf.id].ratio*100)+'%'; });
+  const mp=$('[data-pill="macro"]'); if(mp)mp.textContent=Math.round(mf.ratio*100)+'%';
+
+  // semafori
+  const ar=$('#alignRow'); ar.innerHTML='';
+  TFS.forEach(tf=>{
+    const cls=align[tf.id]==='g'?'g':align[tf.id]==='y'?'y':align[tf.id]==='r'?'r':'';
+    ar.innerHTML+=`<div class="t"><div class="dot ${cls}"></div>${tf.code}<b>${(STATE.dir[tf.id]||'—').toUpperCase().slice(0,4)}</b></div>`;
+  });
+
+  // breakdown barre
+  const bd=$('#breakdown'); bd.innerHTML='';
+  TFS.forEach(tf=>{
+    const pc=Math.round(fills[tf.id].ratio*100);
+    bd.innerHTML+=`<div class="bd-row"><span class="nm">${tf.code}</span><div class="bar"><span style="width:${pc}%"></span></div><span class="pc">${fills[tf.id].active}/${fills[tf.id].max}</span></div>`;
+  });
+  bd.innerHTML+=`<div class="bd-row"><span class="nm">MACRO</span><div class="bar"><span style="width:${Math.round(mf.ratio*100)}%"></span></div><span class="pc">${mf.active}/${mf.max}</span></div>`;
+
+  // warnings
+  const wbox=$('#warns');
+  if(!warns.length){ wbox.innerHTML='<div class="warn ok"><span class="ic">✓</span><span>Nessun conflitto rilevato. Allineamento coerente.</span></div>'; }
+  else { wbox.innerHTML=warns.map(w=>`<div class="warn ${w.t==='warn'?'':w.t}"><span class="ic">${w.t==='warn'?'⚠':'ℹ'}</span><span>${w.m}</span></div>`).join(''); }
+
+  // active chips
+  renderActiveChips();
+
+  // livelli
+  const lvl=computeLevels(daily, bias);
+  renderLevels(lvl, bias);
+
+  // salva snapshot corrente (best-effort)
+  STATE._lastScore=Math.round(score); STATE._lastBias=bias; STATE._lastLevels=lvl;
+  Storage.set(CUR_KEY, snapshot());
+
+  return {score,bias,warns,fills,align,levels:lvl};
+}
+
+function renderGauge(score){
+  // arco semicircolare: lunghezza ~ π*r ; r=92 → ~289
+  const r=92, len=Math.PI*r;
+  const arc=$('#gArc'); arc.setAttribute('stroke-dasharray', `${(score/100)*len} 999`);
+  // ago
+  const ang=Math.PI - (score/100)*Math.PI; // da sinistra(π) a destra(0)
+  const cx=100, cy=108, L=72;
+  $('#gNeedle').setAttribute('x2', cx+Math.cos(ang)*L);
+  $('#gNeedle').setAttribute('y2', cy-Math.sin(ang)*L);
+}
+
+function renderActiveChips(){
+  const box=$('#activeChips'); const chips=[];
+  TFS.forEach(tf=>{
+    CONFIG.categories.forEach(cat=>cat.items.forEach(it=>{
+      if(STATE.checks[tf.id][`${cat.id}.${it.id}`]) chips.push(`<span class="chip"><b>${tf.code}</b> ${it.label}</span>`);
+    }));
+  });
+  const mset=CONFIG.macro[CONFIG.instruments[STATE.instrument].macro];
+  mset.items.forEach(it=>{ if(STATE.macro[it.id]) chips.push(`<span class="chip"><b>M</b> ${it.label}</span>`); });
+  box.innerHTML = chips.length? chips.join('') : '<span class="muted">Nessuna confluenza selezionata.</span>';
+}
+
+/* livelli operativi */
+function computeLevels(daily, bias){
+  const price=parseFloat(STATE.price), atr=parseFloat(STATE.atr);
+  let sl=parseFloat(STATE.sl);
+  if(STATE.slMode==='atr' && !isNaN(price) && !isNaN(atr)){
+    const mult=parseFloat(STATE.atrMult)||1.5;
+    sl = daily==='short' ? price+atr*mult : price-atr*mult;
+  }
+  if(isNaN(price)||isNaN(sl)) return null;
+  const dir = (bias==='SHORT')?-1:1; // default long
+  const risk=Math.abs(price-sl);
+  if(risk<=0) return null;
+  const tp=[1,2,3].map(R=> price + dir*risk*R);
+  const cap=parseFloat(STATE.capital)||0, rp=parseFloat(STATE.riskPct)||0;
+  const riskMoney=cap*rp/100;
+  const size= risk>0 ? riskMoney/risk : 0; // unità (contratti/oz) a parità di valuta quotata
+  return { price, sl, risk, tp, dir, riskMoney, size,
+           rr:[1,2,3], slDist:risk };
+}
+function renderLevels(l, bias){
+  const box=$('#levels');
+  if(!l){ box.innerHTML='<div class="muted">Inserisci prezzo e invalidazione (SL) per calcolare i livelli.</div>'; return; }
+  const c = l.dir>0?'green':'red';
+  box.innerHTML=`
+    <div class="lvl"><span class="k">Entry</span><span class="v gold">${fmt(l.price)}</span></div>
+    <div class="lvl"><span class="k">Stop Loss</span><span class="v red">${fmt(l.sl)} <span class="tag">${fmt(l.slDist)} dist</span></span></div>
+    <div class="lvl"><span class="k">TP1 · 1R</span><span class="v ${c}">${fmt(l.tp[0])}</span></div>
+    <div class="lvl"><span class="k">TP2 · 2R</span><span class="v ${c}">${fmt(l.tp[1])}</span></div>
+    <div class="lvl"><span class="k">TP3 · 3R</span><span class="v ${c}">${fmt(l.tp[2])}</span></div>
+    <div class="lvl"><span class="k">Risk / Reward</span><span class="v">1:1 · 1:2 · 1:3</span></div>
+    <div class="lvl"><span class="k">Rischio</span><span class="v">${fmt(l.riskMoney)} <span class="tag">${fmt(STATE.riskPct,1)}%</span></span></div>
+    <div class="lvl"><span class="k">Size suggerita</span><span class="v gold">${fmt(l.size,3)} <span class="tag">unità</span></span></div>`;
+}
+
+/* ============================================================================
+ * 6) NOTA OPERATIVA / JOURNAL
+ * ========================================================================== */
+function buildNote(){
+  const r=compute();
+  const inst=CONFIG.instruments[STATE.instrument];
+  const l=r.levels;
+  const date=new Date().toLocaleString('it-IT');
+  const activeBy=tf=>{
+    const arr=[];
+    CONFIG.categories.forEach(cat=>cat.items.forEach(it=>{ if(STATE.checks[tf]?.[`${cat.id}.${it.id}`]) arr.push(it.label); }));
+    return arr.length?arr.join(', '):'—';
+  };
+  const macroSet=CONFIG.macro[inst.macro];
+  const macroActive=macroSet.items.filter(it=>STATE.macro[it.id]).map(it=>it.label);
+  const lines=[];
+  lines.push('═══════════════════════════════════════════');
+  lines.push('  KID · DIGITAL WEALTH — TRADE SETUP NOTE');
+  lines.push('═══════════════════════════════════════════');
+  lines.push(`Data        : ${date}`);
+  lines.push(`Strumento   : ${inst.label} (${inst.sub})`);
+  lines.push(`BIAS        : ${r.bias}  —  ${$('#biasSub').textContent}`);
+  lines.push(`Score       : ${r.score!=null?Math.round(r.score):0}/100`);
+  lines.push('');
+  lines.push('── ALLINEAMENTO TIMEFRAME ──');
+  TFS.forEach(tf=>{
+    const sym = r.align[tf.id]==='g'?'🟢':r.align[tf.id]==='y'?'🟡':r.align[tf.id]==='r'?'🔴':'⚪';
+    lines.push(`${sym} ${tf.name.padEnd(6)} dir:${(STATE.dir[tf.id]||'—').toUpperCase().padEnd(8)} confluenza:${Math.round(r.fills[tf.id].ratio*100)}%`);
+  });
+  lines.push(`   Macro ${inst.macro.padEnd(6)} confluenza:${Math.round(r.fills.macro.ratio*100)}%`);
+  lines.push('');
+  if(l){
+    lines.push('── LIVELLI OPERATIVI ──');
+    lines.push(`Entry : ${fmt(l.price)}`);
+    lines.push(`SL    : ${fmt(l.sl)}  (dist ${fmt(l.slDist)})`);
+    lines.push(`TP1   : ${fmt(l.tp[0])}  (1R)`);
+    lines.push(`TP2   : ${fmt(l.tp[1])}  (2R)`);
+    lines.push(`TP3   : ${fmt(l.tp[2])}  (3R)`);
+    lines.push(`R:R   : 1:1 / 1:2 / 1:3`);
+    lines.push(`Rischio: ${fmt(l.riskMoney)} (${fmt(STATE.riskPct,1)}% di ${fmt(STATE.capital,0)})`);
+    lines.push(`Size  : ${fmt(l.size,3)} unità`);
+    lines.push('');
+  }
+  lines.push('── CONFLUENZE ATTIVE ──');
+  TFS.forEach(tf=> lines.push(`[${tf.code}] ${activeBy(tf.id)}`));
+  lines.push(`[Macro] ${macroActive.length?macroActive.join(', '):'—'}`);
+  const activeSess=CONFIG.sessions.filter(s=>STATE.sessions[s.id]).map(s=>s.label);
+  lines.push(`[Sessione] ${activeSess.length?activeSess.join(', '):'—'}`);
+  lines.push('');
+  if(r.warns.length){
+    lines.push('── ⚠ WARNING ──');
+    r.warns.forEach(w=>lines.push(`• ${w.m}`));
+    lines.push('');
+  }
+  lines.push('── PIANO / NOTE DISCREZIONALI ──');
+  lines.push('(scrivi qui il tuo piano di gestione del trade)');
+  lines.push('');
+  lines.push('Disclaimer: analisi discrezionale, nessun consiglio finanziario.');
+  return lines.join('\n');
+}
+
+/* ============================================================================
+ * 7) PERSISTENZA — snapshot, storico, export
+ * ========================================================================== */
+function snapshot(){
+  return {
+    ts:Date.now(), date:new Date().toISOString(),
+    instrument:STATE.instrument, dir:{...STATE.dir},
+    checks:JSON.parse(JSON.stringify(STATE.checks)), macro:{...STATE.macro},
+    sessions:{...STATE.sessions}, news:STATE.news,
+    price:STATE.price, sl:STATE.sl, atr:STATE.atr, capital:STATE.capital,
+    riskPct:STATE.riskPct, slMode:STATE.slMode, atrMult:STATE.atrMult,
+    score:STATE._lastScore, bias:STATE._lastBias, levels:STATE._lastLevels,
+  };
+}
+async function saveSetup(){
+  const snap=snapshot();
+  const hist=(await Storage.get(HIST_KEY))||[];
+  hist.unshift(snap);
+  await Storage.set(HIST_KEY, hist.slice(0,100));
+  toast('Setup salvato nello storico ✓');
+  renderHistory();
+}
+async function renderHistory(){
+  const hist=(await Storage.get(HIST_KEY))||[];
+  const box=$('#historyList');
+  if(!hist.length){ box.innerHTML='<div class="muted">Nessun setup salvato.</div>'; return; }
+  box.innerHTML=hist.map((h,i)=>{
+    const cls=(h.bias||'').toLowerCase().includes('long')?'long':(h.bias||'').toLowerCase().includes('short')?'short':'notrade';
+    return `<div class="hist-item">
+      <div class="top"><b>${CONFIG.instruments[h.instrument]?.label||h.instrument}</b>
+        <span class="b-pill ${cls}">${h.bias||'—'} · ${h.score||0}</span></div>
+      <div class="meta">${new Date(h.ts).toLocaleString('it-IT')} ${h.levels?`· E ${fmt(h.levels.price)} / SL ${fmt(h.levels.sl)}`:''}</div>
+      <div class="btn-row" style="margin-top:8px">
+        <button class="btn ghost" data-load="${i}" style="padding:6px">↥ Carica</button>
+        <button class="btn ghost" data-del="${i}" style="padding:6px">🗑 Elimina</button>
+      </div>
+    </div>`;
+  }).join('');
+  $$('[data-load]',box).forEach(b=>b.onclick=()=>loadSetup(hist[+b.dataset.load]));
+  $$('[data-del]',box).forEach(b=>b.onclick=async()=>{ hist.splice(+b.dataset.del,1); await Storage.set(HIST_KEY,hist); renderHistory(); });
+}
+function loadSetup(s){
+  if(!s)return;
+  STATE.instrument=s.instrument; STATE.dir={...s.dir}; STATE.checks=JSON.parse(JSON.stringify(s.checks));
+  STATE.macro={...s.macro}; STATE.sessions={...(s.sessions||{})}; STATE.news=!!s.news;
+  STATE.price=s.price; STATE.sl=s.sl; STATE.atr=s.atr; STATE.capital=s.capital;
+  STATE.riskPct=s.riskPct; STATE.slMode=s.slMode||'manual'; STATE.atrMult=s.atrMult||1.5;
+  // ripristina input fields
+  $('#inPrice').value=s.price??''; $('#inSL').value=s.sl??''; $('#inATR').value=s.atr??'';
+  $('#inCap').value=s.capital??''; $('#inRisk').value=s.riskPct??''; $('#slMode').value=STATE.slMode; $('#inAtrMult').value=STATE.atrMult;
+  renderInstruments(); renderWorkflow(); compute();
+  closeModal('#historyModal'); toast('Setup caricato ✓');
+}
+function download(name, content, type='text/plain'){
+  const blob=new Blob([content],{type}); const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download=name; a.click(); URL.revokeObjectURL(url);
+}
+async function exportHistory(){
+  const hist=(await Storage.get(HIST_KEY))||[];
+  download(`kid_confluence_history_${Date.now()}.json`, JSON.stringify(hist,null,2),'application/json');
+}
+function exportCurrent(){
+  download(`kid_setup_${STATE.instrument}_${Date.now()}.json`, JSON.stringify(snapshot(),null,2),'application/json');
+}
+
+/* ============================================================================
+ * 8) IMPOSTAZIONI (pesi/soglie) — modale
+ * ========================================================================== */
+function renderSettings(){
+  const tw=$('#tfWeights'); tw.innerHTML='';
+  [['daily','Daily'],['h4','H4'],['h1','H1'],['m30','30m']].forEach(([k,lbl])=>{
+    tw.innerHTML+=sliderHTML(`tfw_${k}`,lbl,STATE.cfg.tfWeights[k],0,40);
+  });
+  tw.innerHTML+=sliderHTML('macroW','Macro',STATE.cfg.macroWeight,0,30);
+
+  const th=$('#thresholds'); th.innerHTML='';
+  th.innerHTML+=sliderHTML('th_noTrade','No-trade <',STATE.cfg.thresholds.noTrade,0,100);
+  th.innerHTML+=sliderHTML('th_weak','Debole <',STATE.cfg.thresholds.weak,0,100);
+  th.innerHTML+=sliderHTML('th_valid','Valido <',STATE.cfg.thresholds.valid,0,100);
+
+  const pe=$('#penalties'); pe.innerHTML='';
+  pe.innerHTML+=sliderHTML('pe_tf','Conflitto TF',STATE.cfg.penalties.tfConflict,0,40);
+  pe.innerHTML+=sliderHTML('pe_trig','Trigger 30m',STATE.cfg.penalties.triggerConflict,0,40);
+  pe.innerHTML+=sliderHTML('pe_news','News',STATE.cfg.penalties.newsImminent,0,40);
+  pe.innerHTML+=sliderHTML('pe_nodir','No dir Daily',STATE.cfg.penalties.noDailyDir,0,40);
+
+  $$('#settingsModal input[type=range]').forEach(r=>{
+    r.oninput=()=>{ r.nextElementSibling.textContent=r.value; };
+  });
+}
+function sliderHTML(id,label,val,min,max){
+  return `<div class="slider"><label>${label}</label><input type="range" id="${id}" min="${min}" max="${max}" value="${val}"/><span class="num">${val}</span></div>`;
+}
+function applySettings(){
+  const v=id=>parseFloat($('#'+id).value);
+  STATE.cfg.tfWeights={daily:v('tfw_daily'),h4:v('tfw_h4'),h1:v('tfw_h1'),m30:v('tfw_m30')};
+  STATE.cfg.macroWeight=v('macroW');
+  STATE.cfg.thresholds={noTrade:v('th_noTrade'),weak:v('th_weak'),valid:v('th_valid')};
+  STATE.cfg.penalties={tfConflict:v('pe_tf'),triggerConflict:v('pe_trig'),newsImminent:v('pe_news'),noDailyDir:v('pe_nodir')};
+  closeModal('#settingsModal'); renderWorkflow(); compute(); toast('Pesi aggiornati ✓');
+}
+function resetSettings(){
+  STATE.cfg=JSON.parse(JSON.stringify({tfWeights:CONFIG.tfWeights,thresholds:CONFIG.thresholds,penalties:CONFIG.penalties,macroWeight:CONFIG.macroWeight}));
+  renderSettings(); toast('Default ripristinati');
+}
+
+/* ============================================================================
+ * 9) UI helpers — modali, toast, reset
+ * ========================================================================== */
+function openModal(sel){ $(sel).classList.add('show'); }
+function closeModal(sel){ $(sel).classList.remove('show'); }
+let toastT;
+function toast(msg){
+  let t=$('#toast');
+  if(!t){ t=document.createElement('div'); t.id='toast';
+    t.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--navy-700);border:1px solid var(--gold-soft);color:var(--ink-100);padding:11px 18px;border-radius:10px;font-size:12.5px;z-index:90;box-shadow:var(--shadow);transition:.25s;font-family:var(--mono)';
+    document.body.appendChild(t);
+  }
+  t.textContent=msg; t.style.opacity='1'; t.style.transform='translateX(-50%) translateY(0)';
+  clearTimeout(toastT); toastT=setTimeout(()=>{ t.style.opacity='0'; t.style.transform='translateX(-50%) translateY(8px)'; },2200);
+}
+function resetAnalysis(){
+  STATE.dir={daily:'',h4:'',h1:'',m30:''};
+  TFS.forEach(t=>STATE.checks[t.id]={});
+  STATE.macro={}; STATE.sessions={}; STATE.news=false;
+  STATE.price=null; STATE.sl=null; STATE.atr=null;
+  ['inPrice','inSL','inATR'].forEach(id=>$('#'+id).value='');
+  renderWorkflow(); compute(); toast('Analisi resettata ↺');
+}
+
+/* ============================================================================
+ * 10) INIT — bind eventi
+ * ========================================================================== */
+function bindInputs(){
+  const map=[['inPrice','price'],['inSL','sl'],['inATR','atr'],['inCap','capital'],['inRisk','riskPct'],['inAtrMult','atrMult']];
+  map.forEach(([id,key])=>{ $('#'+id).oninput=e=>{ STATE[key]=e.target.value===''?null:parseFloat(e.target.value); compute(); }; });
+  $('#slMode').onchange=e=>{ STATE.slMode=e.target.value; compute(); };
+
+  $('#btnNote').onclick=()=>{ $('#noteText').value=buildNote(); openModal('#noteModal'); };
+  $('#btnCopyNote').onclick=async()=>{ try{ await navigator.clipboard.writeText($('#noteText').value); toast('Nota copiata 📋'); }catch(e){ $('#noteText').select(); document.execCommand('copy'); toast('Nota copiata 📋'); } };
+  $('#btnDownloadNote').onclick=()=>download(`kid_note_${STATE.instrument}_${Date.now()}.txt`,$('#noteText').value);
+
+  $('#btnSave').onclick=saveSetup;
+  $('#btnReset').onclick=resetAnalysis;
+  $('#btnExport').onclick=exportCurrent;
+  $('#btnExportHist').onclick=exportHistory;
+  $('#btnClearHist').onclick=async()=>{ await Storage.set(HIST_KEY,[]); renderHistory(); toast('Storico svuotato'); };
+
+  $('#btnSettings').onclick=()=>{ renderSettings(); openModal('#settingsModal'); };
+  $('#btnApplySettings').onclick=applySettings;
+  $('#btnResetSettings').onclick=resetSettings;
+  $('#btnHistory').onclick=()=>{ renderHistory(); openModal('#historyModal'); };
+  $('#btnHistory2').onclick=()=>{ renderHistory(); openModal('#historyModal'); };
+
+  $$('[data-close]').forEach(b=>b.onclick=()=>b.closest('.modal-bg').classList.remove('show'));
+  $$('.modal-bg').forEach(m=>m.onclick=e=>{ if(e.target===m) m.classList.remove('show'); });
+  document.addEventListener('keydown',e=>{ if(e.key==='Escape') $$('.modal-bg').forEach(m=>m.classList.remove('show')); });
+}
+
+(function init(){
+  renderInstruments();
+  renderWorkflow();
+  bindInputs();
+  compute();
+})();
+</script>
+</body>
+</html>

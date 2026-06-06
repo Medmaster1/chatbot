@@ -1,0 +1,51 @@
+name: Deploy Confluence Helper to GitHub Pages
+
+# Pubblica l'app single-file su GitHub Pages.
+# La root del sito (index.html) serve direttamente confluence-helper.html.
+on:
+  push:
+    branches: [main]
+    paths:
+      - confluence-helper.html
+      - .github/workflows/pages.yml
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Una sola deploy concorrente; non annullare quelle in corso.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepara contenuto del sito
+        run: |
+          mkdir -p _site
+          cp confluence-helper.html _site/confluence-helper.html
+          cp confluence-helper.html _site/index.html
+
+      - name: Configura Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true   # abilita Pages (source: GitHub Actions) se non già attivo
+
+      - name: Carica artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy su Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
