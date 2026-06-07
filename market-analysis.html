@@ -387,10 +387,19 @@ const PROXIES=[
 const yahooURL=(sym)=>`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=3mo`;
 const cotURL=(code)=>`https://publicreporting.cftc.gov/resource/6dca-aqww.json?cftc_contract_market_code=${code}&$order=report_date_as_yyyy_mm_dd%20DESC&$limit=16`;
 
-/* storage */
+/* storage: window.storage (artifact) → localStorage (browser, persistente) → RAM */
 const Storage=(()=>{let m={};const ws=(typeof window!=='undefined'&&window.storage&&typeof window.storage.getItem==='function');
-  return{async get(k){try{if(ws){const v=await window.storage.getItem(k);return v?JSON.parse(v):null}}catch(e){}return m[k]??null},
-  async set(k,v){try{if(ws){await window.storage.setItem(k,JSON.stringify(v))}}catch(e){}m[k]=v}}})();
+  const ls=(()=>{try{localStorage.setItem('__t','1');localStorage.removeItem('__t');return true;}catch(e){return false;}})();
+  return{async get(k){try{if(ws){const v=await window.storage.getItem(k);return v?JSON.parse(v):null}}catch(e){}
+    if(ls){try{const v=localStorage.getItem(k);if(v!=null)return JSON.parse(v);}catch(e){}} return m[k]??null},
+  async set(k,v){try{if(ws){await window.storage.setItem(k,JSON.stringify(v))}}catch(e){}
+    if(ls){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}} m[k]=v}}})();
+// Import chiavi dal link (#td=...&agsi=...) → salvataggio locale + pulizia URL (niente chiavi nel repo)
+async function importKeysFromHash(){const h=location.hash?location.hash.slice(1):'';if(!h)return;
+  const q=new URLSearchParams(h);let ch=false;
+  if(q.get('td')){await Storage.set('td_apikey',q.get('td').trim());ch=true;}
+  if(q.get('agsi')){await Storage.set('agsi_apikey',q.get('agsi').trim());ch=true;}
+  if(ch){try{history.replaceState(null,'',location.pathname+location.search);}catch(e){}}}
 
 /* utils */
 const $=(s,e=document)=>e.querySelector(s);const $$=(s,e=document)=>[...e.querySelectorAll(s)];
@@ -409,6 +418,9 @@ const DATA={};
 const STATE={symbol:'XAUUSD',legendOff:{},cot:'088691',status:'init',lastUpdate:null};
 let APIKEY='';            // Twelve Data API key (fonte primaria, opzionale)
 let AGSIKEY='';           // AGSI/GIE API key per riserve gas UE
+// Rate-limiter Twelve Data: free = 8 req/min. Token bucket ~7/min, con riserva.
+const TD=(()=>{let tok=7,last=Date.now();function refill(){const n=Date.now();const a=Math.floor((n-last)/8700);if(a>0){tok=Math.min(7,tok+a);last=n;}}
+  return{take(reserve=0){refill();if(tok>reserve){tok--;return true;}return false;}};})();
 const tdURL=(sym)=>`https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(sym)}&interval=1day&outputsize=${CONFIG.histDays}&apikey=${APIKEY}`;
 const tdIntraURL=(sym,intv,n)=>`https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(sym)}&interval=${intv}&outputsize=${n}&apikey=${APIKEY}`;
 
@@ -456,7 +468,8 @@ async function fetchYahoo(sym){
 // Sorgente primaria Twelve Data (se key + simbolo), altrimenti Yahoo, altrimenti errore→sim
 async function fetchAsset(sym){
   const a=CONFIG.assets[sym];
-  if(APIKEY && a.td){ try{ return await fetchTD(sym); }catch(e){ /* fallback Yahoo */ } }
+  // TD primario ma con riserva di 2 token per le divergenze intraday
+  if(APIKEY && a.td && TD.take(2)){ try{ return await fetchTD(sym); }catch(e){ /* fallback Yahoo */ } }
   return await fetchYahoo(sym);
 }
 function ensureSim(s){ if(DATA[s]&&DATA[s].src!=='SIM')return;
@@ -698,7 +711,7 @@ async function loadGas(){
   $('#agsiOk')?.classList.add('on');
   body.innerHTML='<div class="loading">caricamento dati gas…</div>';
   try{
-    const r=await fetch('https://agsi.gie.eu/api?country=eu&size=120',{headers:{'x-key':AGSIKEY}});
+    const r=await fetch('https://agsi.gie.eu/api?continent=eu&size=120',{headers:{'x-key':AGSIKEY}});
     const j=await r.json();
     if(!j||!Array.isArray(j.data)||!j.data.length) throw new Error(j&&j.error||'no data');
     const recs=j.data.map(d=>({date:d.gasDayStart,full:+d.full,trend:+d.trend,inj:+d.injection,wit:+d.withdrawal})).reverse(); // vecchio→nuovo
@@ -740,7 +753,7 @@ function drawGasChart(recs){const cv=$('#gasChart');if(!cv)return;const ctx=cv.g
 function aggregate(closes,factor){const o=[];for(let i=0;i<closes.length;i+=factor){const c=closes.slice(i,i+factor);if(c.length)o.push(c.at(-1));}return o;}
 async function fetchIntraday(sym,tf){ // tf: 'H1'|'H4' → ritorna array di chiusure
   const a=CONFIG.assets[sym];
-  if(APIKEY && a.td){ try{ const intv=tf==='H4'?'4h':'1h';
+  if(APIKEY && a.td && TD.take(0)){ try{ const intv=tf==='H4'?'4h':'1h';
     const j=await getJSON(tdIntraURL(a.td,intv,150),14000);
     if(j&&j.status!=='error'&&Array.isArray(j.values)){ const c=j.values.slice().reverse().map(v=>+v.close).filter(isFinite); if(c.length>40)return c; } }catch(e){} }
   // Yahoo: 60m → H1; aggrego ×4 → H4
@@ -830,6 +843,7 @@ function bind(){
   $('#agsiKey').addEventListener('keydown',e=>{ if(e.key==='Enter')$('#agsiSave').click(); });
   window.addEventListener('resize',()=>{drawDetailChart();drawComp();});}
 (async function boot(){
+  await importKeysFromHash();
   APIKEY=(await Storage.get('td_apikey'))||''; if(APIKEY)$('#tdKey').value=APIKEY;
   AGSIKEY=(await Storage.get('agsi_apikey'))||''; if(AGSIKEY)$('#agsiKey').value=AGSIKEY;
   SY.forEach(ensureSim);bind();setKeyDot();initCotSel();renderCal();renderClock();renderAll();
