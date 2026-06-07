@@ -65,7 +65,7 @@ button{font-family:var(--mono);cursor:pointer;color:inherit}select{font-family:v
 .kpi .c{font-size:11px;font-weight:700}
 .kpi .spk{position:absolute;right:8px;bottom:6px;width:88px;height:34px;opacity:.85}
 .kpi .tagsrc{position:absolute;top:9px;right:10px;font-size:7.5px;letter-spacing:.5px;padding:2px 5px;border-radius:4px}
-.tagsrc.TD{background:var(--green-d);color:var(--green)}.tagsrc.YH{background:rgba(72,160,255,.16);color:var(--blue)}.tagsrc.SIM{background:var(--red-d);color:var(--red)}
+.tagsrc.TD{background:var(--green-d);color:var(--green)}.tagsrc.CG{background:rgba(155,123,255,.18);color:var(--violet)}.tagsrc.FX{background:rgba(35,209,139,.16);color:var(--green)}.tagsrc.YH{background:rgba(72,160,255,.16);color:var(--blue)}.tagsrc.SIM{background:var(--red-d);color:var(--red)}
 .apikey{display:flex;align-items:center;gap:6px;background:var(--panel2);border:1px solid var(--line2);padding:5px 7px;border-radius:9px}
 .apikey input{background:var(--bg);border:1px solid var(--line);color:#fff;padding:6px 8px;border-radius:6px;font-family:var(--mono);font-size:10.5px;width:150px}
 .apikey input:focus{outline:none;border-color:var(--gold2)}
@@ -337,7 +337,7 @@ button{font-family:var(--mono);cursor:pointer;color:inherit}select{font-family:v
   </div>
 
   <div class="foot">
-    AURUM Research v4 · <b class="gd">dati reali</b> Twelve Data / Yahoo · COT da CFTC · riserve gas da <b class="gd">AGSI/GIE</b> · divergenze MACD·RSI su H4/H1.
+    AURUM Research v5 · <b class="gd">dati reali</b>: CoinGecko (metalli/crypto) · Frankfurter/BCE (forex) · Yahoo (indici/materie/bond) · Twelve Data (oro, con key) · COT da CFTC · gas da <b class="gd">AGSI/GIE</b> · divergenze MACD·RSI H4/H1.
     Prezzi con possibile ritardo. Advisor, divergenze e bias gas sono supporti analitici, non consigli d'investimento.<br/>
     Strumento educativo · KID Digital Wealth
   </div>
@@ -354,21 +354,22 @@ const CONFIG = {
   corrWindow: 40,
   concurrency: 4,             // fetch paralleli max
   // Universo (Yahoo symbols)
-  // y = simbolo Yahoo (fallback) · td = simbolo Twelve Data (primario se c'è la key)
+  // feed = fonte primaria: cg (CoinGecko), fx (Frankfurter/BCE), yh (Yahoo proxy)
+  // td = simbolo Twelve Data (usato come primario SOLO dove il piano free lo copre: oro/forex major/BTC)
   assets:{
-    XAUUSD:{name:'Gold',cls:'Metalli',y:'GC=F',td:'XAU/USD',digits:2,color:'#e7b54a'},
-    XAGUSD:{name:'Silver',cls:'Metalli',y:'SI=F',td:'XAG/USD',digits:3,color:'#cfd8e3'},
-    US500:{name:'S&P 500',cls:'Indici',y:'^GSPC',td:'GSPC',digits:2,color:'#48a0ff'},
-    US100:{name:'Nasdaq 100',cls:'Indici',y:'^NDX',td:'NDX',digits:2,color:'#7fb2ff'},
-    GER40:{name:'DAX',cls:'Indici',y:'^GDAXI',td:'DAX',digits:2,color:'#9bc4ff'},
-    WTIUSD:{name:'Crude Oil',cls:'Materie',y:'CL=F',td:'WTI/USD',digits:2,color:'#ff8a5c'},
-    NATGAS:{name:'Natural Gas',cls:'Materie',y:'NG=F',td:'NG/USD',digits:3,color:'#5fc9e8'},
-    COPPER:{name:'Copper',cls:'Materie',y:'HG=F',digits:3,color:'#e0894e'},
-    DXY:{name:'Dollar Index',cls:'Forex',y:'DX-Y.NYB',td:'DXY',digits:2,color:'#ffb547'},
-    EURUSD:{name:'Euro',cls:'Forex',y:'EURUSD=X',td:'EUR/USD',digits:4,color:'#23d18b'},
-    USDJPY:{name:'USD/JPY',cls:'Forex',y:'JPY=X',td:'USD/JPY',digits:2,color:'#36c98f'},
-    BTCUSD:{name:'Bitcoin',cls:'Crypto',y:'BTC-USD',td:'BTC/USD',digits:0,color:'#f7931a'},
-    US10Y:{name:'US 10Y Yield',cls:'Bond',y:'^TNX',digits:3,color:'#c08bff'},
+    XAUUSD:{name:'Gold',cls:'Metalli',feed:'cg',cg:'pax-gold',y:'GC=F',td:'XAU/USD',digits:2,color:'#e7b54a'},
+    XAGUSD:{name:'Silver',cls:'Metalli',feed:'cg',cg:'kinesis-silver',y:'SI=F',digits:3,color:'#cfd8e3'},
+    US500:{name:'S&P 500',cls:'Indici',feed:'yh',y:'^GSPC',digits:2,color:'#48a0ff'},
+    US100:{name:'Nasdaq 100',cls:'Indici',feed:'yh',y:'^NDX',digits:2,color:'#7fb2ff'},
+    GER40:{name:'DAX',cls:'Indici',feed:'yh',y:'^GDAXI',digits:2,color:'#9bc4ff'},
+    WTIUSD:{name:'Crude Oil',cls:'Materie',feed:'yh',y:'CL=F',digits:2,color:'#ff8a5c'},
+    NATGAS:{name:'Natural Gas',cls:'Materie',feed:'yh',y:'NG=F',digits:3,color:'#5fc9e8'},
+    COPPER:{name:'Copper',cls:'Materie',feed:'yh',y:'HG=F',digits:3,color:'#e0894e'},
+    DXY:{name:'Dollar Index',cls:'Forex',feed:'fx',y:'DX-Y.NYB',digits:2,color:'#ffb547'},
+    EURUSD:{name:'Euro',cls:'Forex',feed:'fx',y:'EURUSD=X',td:'EUR/USD',digits:4,color:'#23d18b'},
+    USDJPY:{name:'USD/JPY',cls:'Forex',feed:'fx',y:'JPY=X',td:'USD/JPY',digits:2,color:'#36c98f'},
+    BTCUSD:{name:'Bitcoin',cls:'Crypto',feed:'cg',cg:'bitcoin',y:'BTC-USD',td:'BTC/USD',digits:0,color:'#f7931a'},
+    US10Y:{name:'US 10Y Yield',cls:'Bond',feed:'yh',y:'^TNX',digits:3,color:'#c08bff'},
   },
   classColors:{Metalli:'#e7b54a',Indici:'#48a0ff',Materie:'#ff8a5c',Forex:'#23d18b',Crypto:'#9b7bff',Bond:'#c08bff'},
   cot:[
@@ -456,7 +457,8 @@ function parseYahoo(j,sym){
   const closes=closesRaw.filter(x=>x!=null);
   const price=meta.regularMarketPrice ?? closes.at(-1);
   if(closes.length)closes[closes.length-1]=price;
-  const prev=meta.chartPreviousClose ?? meta.previousClose ?? closes[closes.length-2] ?? price;
+  // variazione GIORNALIERA: prezzo vs chiusura del giorno precedente
+  const prev=closes.length>1?closes[closes.length-2]:(meta.chartPreviousClose ?? price);
   const change=prev?(price/prev-1)*100:0;
   return {daily:closes.slice(-CONFIG.histDays), price, change, src:'YH', y:meta.symbol};
 }
@@ -465,12 +467,31 @@ async function fetchYahoo(sym){
   if(!j||!j.chart||!j.chart.result) throw new Error('no data');
   return parseYahoo(j,sym);
 }
-// Sorgente primaria Twelve Data (se key + simbolo), altrimenti Yahoo, altrimenti errore→sim
-async function fetchAsset(sym){
-  const a=CONFIG.assets[sym];
-  // TD primario ma con riserva di 2 token per le divergenze intraday
-  if(APIKEY && a.td && TD.take(2)){ try{ return await fetchTD(sym); }catch(e){ /* fallback Yahoo */ } }
-  return await fetchYahoo(sym);
+// ---- Fonti CORS-native (nessun proxy, nessuna key) ----
+// CoinGecko: oro (PAX Gold), argento (Kinesis Silver), BTC → prezzo + var 24h + storico
+async function loadCG(){
+  const map={}; SY.forEach(s=>{ if(CONFIG.assets[s].feed==='cg') map[CONFIG.assets[s].cg]=s; });
+  const ids=Object.keys(map); if(!ids.length) return;
+  const j=await getJSON(`https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${ids.join(',')}&sparkline=true&price_change_percentage=24h`,15000);
+  (j||[]).forEach(x=>{ const s=map[x.id]; if(!s)return;
+    const hist=(x.sparkline_in_7d&&x.sparkline_in_7d.price)||[];
+    DATA[s]={daily:(hist.length?hist:[x.current_price]).slice(-CONFIG.histDays),price:x.current_price,change:x.price_change_percentage_24h??0,src:'CG'};
+  });
+}
+// Frankfurter (BCE): EUR/USD, USD/JPY, DXY (calcolato) → prezzo + storico giornaliero
+function dxyFromRates(r){const EURUSD=1/r.EUR,GBPUSD=1/r.GBP,USDJPY=r.JPY,USDCAD=r.CAD,USDSEK=r.SEK,USDCHF=r.CHF;
+  return 50.14348112*Math.pow(EURUSD,-0.576)*Math.pow(USDJPY,0.136)*Math.pow(GBPUSD,-0.119)*Math.pow(USDCAD,0.091)*Math.pow(USDSEK,0.042)*Math.pow(USDCHF,0.036);}
+function fxPair(pair,r){return pair==='EURUSD'?1/r.EUR:pair==='USDJPY'?r.JPY:pair==='DXY'?dxyFromRates(r):null;}
+async function loadFX(){
+  const fxs=SY.filter(s=>CONFIG.assets[s].feed==='fx'); if(!fxs.length)return;
+  const end=new Date(),start=new Date(Date.now()-160*864e5);const ymd=d=>d.toISOString().slice(0,10);
+  const j=await getJSON(`https://api.frankfurter.dev/v1/${ymd(start)}..${ymd(end)}?base=USD&symbols=EUR,JPY,GBP,CAD,SEK,CHF`,15000);
+  const dates=Object.keys(j.rates||{}).sort(); if(!dates.length)throw new Error('fx vuoto');
+  fxs.forEach(s=>{ const pair={EURUSD:'EURUSD',USDJPY:'USDJPY',DXY:'DXY'}[s]||s;
+    const arr=dates.map(d=>fxPair(pair,j.rates[d])).filter(v=>isFinite(v));
+    const prev=arr[arr.length-2]||arr.at(-1);
+    DATA[s]={daily:arr.slice(-CONFIG.histDays),price:arr.at(-1),change:prev?(arr.at(-1)/prev-1)*100:0,src:'FX'};
+  });
 }
 function ensureSim(s){ if(DATA[s]&&DATA[s].src!=='SIM')return;
   const base={XAUUSD:2350,XAGUSD:30,US500:5300,US100:18600,GER40:18400,WTIUSD:78,NATGAS:3.0,COPPER:4.5,DXY:104.5,EURUSD:1.08,USDJPY:157,BTCUSD:68000,US10Y:4.3}[s]||100;
@@ -478,9 +499,15 @@ function ensureSim(s){ if(DATA[s]&&DATA[s].src!=='SIM')return;
   DATA[s]={daily:arr,price:arr.at(-1),change:0,src:'SIM'};
 }
 async function fetchAll(){
-  const syms=SY.slice();let i=0;
-  async function worker(){ while(i<syms.length){ const s=syms[i++]; try{ DATA[s]=await fetchAsset(s); }catch(e){ ensureSim(s); } } }
-  await Promise.all(Array.from({length:CONFIG.concurrency},worker));
+  // 1) fonti CORS-native affidabili (in parallelo): crypto/metalli + forex
+  await Promise.allSettled([loadCG().catch(()=>{}), loadFX().catch(()=>{})]);
+  // 2) oro: se c'è la key TD, raffina con XAU/USD (più preciso dello spot proxy)
+  if(APIKEY && CONFIG.assets.XAUUSD.td && TD.take(2)){ try{ DATA.XAUUSD=await fetchTD('XAUUSD'); }catch(e){} }
+  // 3) indici/materie/bond: solo Yahoo (proxy), concorrenza limitata
+  const yhs=SY.filter(s=>CONFIG.assets[s].feed==='yh'); let i=0;
+  async function w(){ while(i<yhs.length){ const s=yhs[i++]; try{ DATA[s]=await fetchYahoo(s); }catch(e){ ensureSim(s); } } }
+  await Promise.all([w(),w(),w()]);
+  SY.forEach(s=>{ if(!DATA[s]||!DATA[s].daily) ensureSim(s); });
   const liveN=SY.filter(s=>DATA[s].src!=='SIM').length;
   STATE.status=liveN===SY.length?'live':liveN>0?'part':'off';STATE.lastUpdate=new Date();updateBadge();
 }
