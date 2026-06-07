@@ -378,13 +378,19 @@ const yahooURL=(sym,interval,range)=>`https://query1.finance.yahoo.com/v8/financ
 const tdSeriesURL=(sym,key)=>`https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(sym)}&interval=1day&outputsize=180&apikey=${key}`;
 let APIKEY='';
 
-/* --------------------------- STORAGE (window.storage / RAM) --------------- */
+/* --------------------------- STORAGE (window.storage → localStorage → RAM) -- */
 const Storage = (()=>{ let mem={}; const ws = (typeof window!=='undefined'&&window.storage&&typeof window.storage.getItem==='function');
+  const ls=(()=>{try{localStorage.setItem('__t','1');localStorage.removeItem('__t');return true;}catch(e){return false;}})();
   return {
-    async get(k){ try{ if(ws){const v=await window.storage.getItem(k); return v?JSON.parse(v):null;} }catch(e){} return mem[k]??null; },
-    async set(k,v){ try{ if(ws){await window.storage.setItem(k,JSON.stringify(v));} }catch(e){} mem[k]=v; }
+    async get(k){ try{ if(ws){const v=await window.storage.getItem(k); return v?JSON.parse(v):null;} }catch(e){}
+      if(ls){try{const v=localStorage.getItem(k); if(v!=null)return JSON.parse(v);}catch(e){}} return mem[k]??null; },
+    async set(k,v){ try{ if(ws){await window.storage.setItem(k,JSON.stringify(v));} }catch(e){}
+      if(ls){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}} mem[k]=v; }
   };
 })();
+async function importKeysFromHash(){const h=location.hash?location.hash.slice(1):'';if(!h)return;
+  const q=new URLSearchParams(h);if(q.get('td')){await Storage.set('td_apikey',q.get('td').trim());
+    try{history.replaceState(null,'',location.pathname+location.search);}catch(e){}}}
 const KEY='aurum_terminal_state';
 
 /* ------------------------------- STATE ------------------------------------ */
@@ -796,6 +802,7 @@ function bind(){
 
 /* ------------------------------ BOOT -------------------------------------- */
 (async function boot(){
+  await importKeysFromHash();
   APIKEY=(await Storage.get('td_apikey'))||''; if(APIKEY)$('#tdKey').value=APIKEY;
   initPrices(); await restore(); bind(); renderTfs(); fitCanvas(); renderAll(); renderClock();
   setInterval(tickEngine, CONFIG.tickMs);
