@@ -212,7 +212,7 @@ button{font-family:var(--mono);cursor:pointer;color:inherit}select{font-family:v
 .gx-lvl .v{font-weight:700;font-variant-numeric:tabular-nums}
 .gx-lvl .d{font-size:9px;color:var(--txt3);width:54px;text-align:right}
 .gx-cw .nm{color:var(--red)} .gx-pw .nm{color:var(--green)} .gx-fl .nm{color:var(--amber)}
-#gexChart{width:100%;height:96px;display:block;margin-top:8px}
+#gexChart{width:100%;height:150px;display:block;margin-top:8px}
 .gx-note{font-size:9.5px;color:var(--txt3);line-height:1.5;margin-top:8px}
 
 .ev{display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);font-size:11px}
@@ -399,8 +399,10 @@ const CONFIG = {
 // Proxy CORS per Yahoo (Yahoo non invia header CORS). Fallback multipli.
 const PROXIES=[
   u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+  u=>`https://api.codetabs.com/v1/proxy/?quest=${u}`,
   u=>`https://corsproxy.org/?url=${encodeURIComponent(u)}`,
   u=>`https://api.allorigins.win/get?url=${encodeURIComponent(u)}`, // {contents}
+  u=>`https://thingproxy.freeboard.io/fetch/${u}`,
 ];
 // NB: simbolo lasciato grezzo (GC=F, ^GSPC, DX-Y.NYB): è il proxy a codificare l'intero URL.
 const yahooURL=(sym)=>`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=3mo`;
@@ -923,23 +925,27 @@ async function loadGamma(sym){
       <div class="gx-lvl"><span class="nm">Net GEX</span><span class="v ${pos?'up':'dn'}">${(netGEX/1e6).toFixed(1)}M</span><span class="d">${und} ${f(S,2)}</span></div>
       <canvas id="gexChart"></canvas>
       <div class="gx-note">GEX per strike da opzioni reali ${und} (scad. ${new Date(exp).toLocaleDateString('it-IT')}), livelli riportati in scala ${sym}. Sopra il Call Wall e sotto il Put Wall la volatilità tende ad aumentare; il Gamma Flip separa il regime stabile da quello instabile.</div>`;
-    drawGexChart(list,flip,DATA[sym].price/factor);
+    drawGexChart(list,flip,DATA[sym].price/factor,callWall.K,putWall.K);
   }catch(e){ body.innerHTML='<div class="loading">Opzioni non disponibili ora (proxy occupato o mercato chiuso). Riprova.</div>'; }
 }
-function drawGexChart(list,flip,spot){const cv=$('#gexChart');if(!cv)return;const ctx=cv.getContext('2d'),dpr=window.devicePixelRatio||1,r=cv.getBoundingClientRect();
-  cv.width=r.width*dpr;cv.height=r.height*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);const W=r.width,H=r.height,pad=4;ctx.clearRect(0,0,W,H);
-  // limita a strike vicini allo spot
-  const near=list.filter(x=>Math.abs(x.K/spot-1)<0.12); const use=near.length>4?near:list;
-  const maxv=Math.max(...use.map(x=>Math.abs(x.gex)),1); const bw=Math.max(2,W/use.length*0.7);
-  const x=i=>pad+i/(use.length-1||1)*(W-pad*2); const y0=H/2;
-  use.forEach((s,i)=>{ const h=Math.abs(s.gex)/maxv*(H/2-4); ctx.fillStyle=s.gex>=0?'rgba(35,209,139,.8)':'rgba(255,77,94,.8)';
-    ctx.fillRect(x(i)-bw/2, s.gex>=0?y0-h:y0, bw, h);
-    if(s.K===flip){ ctx.strokeStyle='#ffb547';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(x(i),0);ctx.lineTo(x(i),H);ctx.stroke(); } });
-  ctx.strokeStyle='rgba(150,170,205,.25)';ctx.beginPath();ctx.moveTo(pad,y0);ctx.lineTo(W-pad,y0);ctx.stroke();
-  // spot marker
-  let si=0,best=1e9; use.forEach((s,i)=>{const dd=Math.abs(s.K-spot);if(dd<best){best=dd;si=i;}});
-  ctx.fillStyle='#e8eefb';ctx.beginPath();ctx.arc(x(si),y0,2.5,0,7);ctx.fill();
-  ctx.font='8px JetBrains Mono';ctx.fillStyle='#5f7193';ctx.textAlign='left';ctx.fillText('● spot',pad,9);ctx.fillStyle='#ffb547';ctx.fillText('| flip',pad+38,9);}
+function drawGexChart(list,flip,spot,cw,pw){const cv=$('#gexChart');if(!cv)return;const ctx=cv.getContext('2d'),dpr=window.devicePixelRatio||1,r=cv.getBoundingClientRect();
+  cv.width=r.width*dpr;cv.height=r.height*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);const W=r.width,H=r.height,padT=12,padB=16,padX=4;ctx.clearRect(0,0,W,H);
+  const near=list.filter(x=>Math.abs(x.K/spot-1)<0.12); const use=(near.length>4?near:list).sort((a,b)=>a.K-b.K);
+  if(!use.length)return;
+  const maxv=Math.max(...use.map(x=>Math.abs(x.gex)),1); const bw=Math.max(2,(W-padX*2)/use.length*0.74);
+  const x=i=>padX+i/(use.length-1||1)*(W-padX*2); const y0=padT+(H-padT-padB)/2; const half=(H-padT-padB)/2-2;
+  // barre GEX per strike (verde=positivo sopra, rosso=negativo sotto)
+  use.forEach((s,i)=>{ const h=Math.abs(s.gex)/maxv*half; ctx.fillStyle=s.gex>=0?'rgba(35,209,139,.85)':'rgba(255,77,94,.85)';
+    ctx.fillRect(x(i)-bw/2, s.gex>=0?y0-h:y0, bw, h); });
+  ctx.strokeStyle='rgba(150,170,205,.25)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(padX,y0);ctx.lineTo(W-padX,y0);ctx.stroke();
+  const idxOf=K=>{let bi=0,bd=1e9;use.forEach((s,i)=>{const d=Math.abs(s.K-K);if(d<bd){bd=d;bi=i;}});return bi;};
+  const vline=(K,col,lbl,top)=>{const xi=x(idxOf(K));ctx.strokeStyle=col;ctx.lineWidth=1.5;ctx.setLineDash(col==='#e8eefb'?[]:[4,2]);ctx.beginPath();ctx.moveTo(xi,padT);ctx.lineTo(xi,H-padB);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle=col;ctx.font='bold 8px JetBrains Mono';ctx.textAlign='center';ctx.fillText(lbl,xi,top?9:H-5);};
+  if(cw!=null)vline(cw,'#ff4d5e','CW',true); if(pw!=null)vline(pw,'#23d18b','PW',true);
+  if(flip!=null)vline(flip,'#ffb547','FLIP',false); vline(spot,'#e8eefb','SPOT',false);
+  // assi strike (min/max)
+  ctx.fillStyle='#5f7193';ctx.font='8px JetBrains Mono';ctx.textAlign='left';ctx.fillText(use[0].K,padX,H-5);
+  ctx.textAlign='right';ctx.fillText(use.at(-1).K,W-padX,H-5);}
 
 function selectSymbol(sym){ STATE.symbol=sym; renderDetail(); renderAdvisor(); renderHeat(); loadDivergence(sym); loadGamma(sym); }
 
