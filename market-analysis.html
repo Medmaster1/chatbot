@@ -434,6 +434,7 @@ async function getJSON(url,ms=22000){const ctrl=new AbortController();const to=s
 
 /* STATE */
 const DATA={};
+const GAMMA={};   // GAMMA[sym]={cw,pw,flip} livelli in scala prezzo asset
 const STATE={symbol:'XAUUSD',legendOff:{},cot:'088691',status:'init',lastUpdate:null};
 let APIKEY='';            // Twelve Data API key (fonte primaria, opzionale)
 let AGSIKEY='';           // AGSI/GIE API key per riserve gas UE
@@ -694,16 +695,27 @@ function renderDetail(){const s=STATE.symbol,c=CONFIG.assets[s],D=DATA[s];if(!D)
   const rl=$('#ratingLabel');rl.textContent=R.label;rl.style.color=R.score>0.15?'var(--green)':R.score<-0.15?'var(--red)':'var(--amber)';
   $('#indGrid').innerHTML=R.inds.map(i=>`<div class="ind"><span class="n">${i.n}</span><span><span class="vv">${i.v}</span><span class="sig ${i.sig}">${i.sig==='buy'?'BUY':i.sig==='sell'?'SELL':'NEU'}</span></span></div>`).join('');
   $('#summ').innerHTML=`<div class="b"><div class="n up">${R.buy}</div><div class="l">Buy</div></div><div class="b"><div class="n mut">${R.neu}</div><div class="l">Neutral</div></div><div class="b"><div class="n dn">${R.sell}</div><div class="l">Sell</div></div>`;}
-function drawLine(canvas,series,color,fill){const ctx=canvas.getContext('2d'),dpr=window.devicePixelRatio||1,r=canvas.getBoundingClientRect();
+function drawLine(canvas,series,color,fill,levels){const ctx=canvas.getContext('2d'),dpr=window.devicePixelRatio||1,r=canvas.getBoundingClientRect();
   canvas.width=r.width*dpr;canvas.height=r.height*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);const W=r.width,H=r.height,pad=6,padR=54;ctx.clearRect(0,0,W,H);
-  if(!series||series.length<2)return;const min=Math.min(...series),max=Math.max(...series),rng=(max-min)||1;
+  if(!series||series.length<2)return;let min=Math.min(...series),max=Math.max(...series);
+  // espandi la scala per includere i livelli gamma vicini (entro ±6% dal range)
+  const span=(max-min)||1; (levels||[]).forEach(L=>{ if(L.v>min-span*1.2&&L.v<max+span*1.2){ min=Math.min(min,L.v); max=Math.max(max,L.v);} });
+  const rng=(max-min)||1;
   const x=i=>pad+i/(series.length-1)*(W-pad-padR),y=v=>pad+(1-(v-min)/rng)*(H-pad*2);ctx.font='9px JetBrains Mono';ctx.textBaseline='middle';
   for(let i=0;i<=4;i++){const p=min+rng*i/4,yy=y(p);ctx.strokeStyle='rgba(150,170,205,.06)';ctx.beginPath();ctx.moveTo(pad,yy);ctx.lineTo(W-padR,yy);ctx.stroke();ctx.fillStyle='#5f7193';ctx.textAlign='left';ctx.fillText(f(p,2),W-padR+5,yy);}
   if(fill){const g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,color.replace('rgb','rgba').replace(')',',.22)'));g.addColorStop(1,color.replace('rgb','rgba').replace(')',',0)'));
     ctx.beginPath();series.forEach((v,i)=>i?ctx.lineTo(x(i),y(v)):ctx.moveTo(x(i),y(v)));ctx.lineTo(x(series.length-1),H-pad);ctx.lineTo(x(0),H-pad);ctx.closePath();ctx.fillStyle=g;ctx.fill();}
-  ctx.strokeStyle=color;ctx.lineWidth=1.6;ctx.beginPath();series.forEach((v,i)=>i?ctx.lineTo(x(i),y(v)):ctx.moveTo(x(i),y(v)));ctx.stroke();}
+  ctx.strokeStyle=color;ctx.lineWidth=1.6;ctx.beginPath();series.forEach((v,i)=>i?ctx.lineTo(x(i),y(v)):ctx.moveTo(x(i),y(v)));ctx.stroke();
+  // linee gamma orizzontali con etichetta
+  (levels||[]).forEach(L=>{ if(L.v<=min||L.v>=max)return; const yy=y(L.v); ctx.strokeStyle=L.color;ctx.lineWidth=1;ctx.setLineDash([5,3]);
+    ctx.beginPath();ctx.moveTo(pad,yy);ctx.lineTo(W-padR,yy);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle=L.color;ctx.textAlign='left';ctx.font='bold 8.5px JetBrains Mono';ctx.fillText(L.label,pad+3,yy-5); });}
+function gammaLevels(sym){ const g=GAMMA[sym]; if(!g)return null;
+  return [ {v:g.cw,label:'Call Wall '+f(g.cw,dg(sym)),color:'#ff4d5e'},
+           {v:g.flip,label:'Gamma Flip '+f(g.flip,dg(sym)),color:'#ffb547'},
+           {v:g.pw,label:'Put Wall '+f(g.pw,dg(sym)),color:'#23d18b'} ]; }
 function drawDetailChart(){const D=DATA[STATE.symbol];if(!D)return;const series=(D.daily||[]).slice(-CONFIG.histDays);const up=series.at(-1)>=series[0];
-  drawLine($('#detailChart'),series,up?'rgb(35,209,139)':'rgb(255,77,94)',true);}
+  drawLine($('#detailChart'),series,up?'rgb(35,209,139)':'rgb(255,77,94)',true,gammaLevels(STATE.symbol));}
 
 const COMP=['XAUUSD','XAGUSD','US500','BTCUSD','DXY'];
 function drawComp(){const cv=$('#compChart'),ctx=cv.getContext('2d'),dpr=window.devicePixelRatio||1,r=cv.getBoundingClientRect();
@@ -898,6 +910,7 @@ async function loadGamma(sym){
     for(const x of list){ const before=cum; cum+=x.gex; if(prev!==null && ((before<0&&cum>=0)||(before>0&&cum<=0))) flip=x.K; prev=cum; }
     if(flip==null) flip = list.reduce((m,x)=>Math.abs(x.gex)>Math.abs(m.gex)?x:m).K; // fallback: strike di max |gex|
     const factor=(DATA[sym]&&DATA[sym].price&&S)?DATA[sym].price/S:1; const d=dg(sym);
+    GAMMA[sym]={cw:callWall.K*factor,pw:putWall.K*factor,flip:flip*factor,net:netGEX}; if(sym===STATE.symbol)drawDetailChart();
     const lvl=K=>f(K*factor,d); const dist=K=>{const v=(K*factor/DATA[sym].price-1)*100;return (v>=0?'+':'')+v.toFixed(2)+'%';};
     const pos=netGEX>=0;
     body.innerHTML=`
