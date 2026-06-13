@@ -384,11 +384,11 @@ const CONFIG = {
   startBalance: 100000,        // saldo iniziale conto demo (USD)
   // Strumenti del desk. y=simbolo Yahoo (fallback) · td=simbolo Twelve Data (primario con key)
   instruments: {
-    XAUUSD: { name:'Spot Gold',    base:2345.00, vol:0.55, drift:0.04,  digits:2, contract:100,  spread:0.25, tradable:true,  y:'GC=F',     td:'XAU/USD' },
-    XAGUSD: { name:'Spot Silver',  base:29.50,   vol:0.022,drift:0.05,  digits:3, contract:5000, spread:0.018,tradable:true,  y:'SI=F',     td:'XAG/USD' },
-    DXY:    { name:'US Dollar Idx',base:104.50,  vol:0.06, drift:-0.02, digits:2, contract:0,    spread:0.02, tradable:false, y:'DX-Y.NYB', td:'DXY' },
-    XPTUSD: { name:'Spot Platinum',base:995.0,   vol:0.45, drift:0.01,  digits:2, contract:100,  spread:0.6,  tradable:true,  y:'PL=F',     td:'XPT/USD' },
-    XPDUSD: { name:'Spot Palladium',base:1010.0, vol:0.9,  drift:-0.01, digits:2, contract:100,  spread:1.2,  tradable:true,  y:'PA=F',     td:'XPD/USD' },
+    XAUUSD: { name:'Spot Gold',    base:2345.00, vol:0.55, drift:0.04,  digits:2, contract:100,  spread:0.25, tradable:true,  feed:'cg', cg:'pax-gold',       y:'GC=F',     td:'XAU/USD' },
+    XAGUSD: { name:'Spot Silver',  base:29.50,   vol:0.022,drift:0.05,  digits:3, contract:5000, spread:0.018,tradable:true,  feed:'cg', cg:'kinesis-silver', y:'SI=F' },
+    DXY:    { name:'US Dollar Idx',base:104.50,  vol:0.06, drift:-0.02, digits:2, contract:0,    spread:0.02, tradable:false, feed:'fx', y:'DX-Y.NYB' },
+    XPTUSD: { name:'Spot Platinum',base:995.0,   vol:0.45, drift:0.01,  digits:2, contract:100,  spread:0.6,  tradable:true,  feed:'yh', y:'PL=F' },
+    XPDUSD: { name:'Spot Palladium',base:1010.0, vol:0.9,  drift:-0.01, digits:2, contract:100,  spread:1.2,  tradable:true,  feed:'yh', y:'PA=F' },
   },
   // Strumento sintetico calcolato (ratio) mostrato in watchlist/tape
   ratioPair: ['XAUUSD','XAGUSD'],
@@ -479,12 +479,23 @@ function parseYahooCandles(j){const r=j.chart.result[0];const t=r.timestamp||[];
     out.push({t:t[i]*1000,o:o??c,h:h??c,l:l??c,c,v:q.volume?.[i]||0});}
   const price=(r.meta&&r.meta.regularMarketPrice)||out.at(-1)?.c;return {candles:out,price};}
 async function fetchRealOne(sym){const a=CONFIG.instruments[sym];
-  // Twelve Data (primario con key) → candele giornaliere OHLC
-  if(APIKEY&&a.td){ try{ const j=await getJSON(tdSeriesURL(a.td,APIKEY),14000);
+  // Twelve Data (oro, con key) → candele giornaliere OHLC
+  if(APIKEY&&a.td&&TDLIM.take(0)){ try{ const j=await getJSON(tdSeriesURL(a.td,APIKEY),14000);
     if(j&&j.status!=='error'&&Array.isArray(j.values)){ const v=j.values.slice().reverse();
       const candles=v.map(x=>({t:Date.parse(x.datetime),o:+x.open,h:+x.high,l:+x.low,c:+x.close,v:+x.volume||0})).filter(k=>isFinite(k.c));
       if(candles.length>10) return {candles,price:candles.at(-1).c,src:'TD'}; } }catch(e){} }
-  // Yahoo (fallback) via proxy CORS
+  // CoinGecko OHLC (CORS nativo) → oro/argento
+  if(a.feed==='cg'){ try{ const j=await getJSON(`https://api.coingecko.com/api/v3/coins/${a.cg}/ohlc?vs_currency=usd&days=90`,15000);
+    const candles=(j||[]).map(x=>({t:x[0],o:x[1],h:x[2],l:x[3],c:x[4],v:0})).filter(k=>isFinite(k.c));
+    if(candles.length>5) return {candles,price:candles.at(-1).c,src:'CG'}; }catch(e){} }
+  // Frankfurter/BCE (CORS nativo) → DXY calcolato, candele sintetiche dalle chiusure
+  if(a.feed==='fx'){ try{ const end=new Date(),start=new Date(Date.now()-160*864e5);const ymd=d=>d.toISOString().slice(0,10);
+    const j=await getJSON(`https://api.frankfurter.dev/v1/${ymd(start)}..${ymd(end)}?base=USD&symbols=EUR,JPY,GBP,CAD,SEK,CHF`,15000);
+    const ds=Object.keys(j.rates||{}).sort();
+    const dxy=d=>{const r=j.rates[d];const EU=1/r.EUR,GB=1/r.GBP;return 50.14348112*Math.pow(EU,-0.576)*Math.pow(r.JPY,0.136)*Math.pow(GB,-0.119)*Math.pow(r.CAD,0.091)*Math.pow(r.SEK,0.042)*Math.pow(r.CHF,0.036);};
+    const cl=ds.map(dxy).filter(isFinite);const candles=cl.map((c,i)=>{const o=i?cl[i-1]:c;return{t:Date.parse(ds[i]),o,h:Math.max(o,c),l:Math.min(o,c),c,v:0};});
+    if(candles.length>5) return {candles,price:candles.at(-1).c,src:'FX'}; }catch(e){} }
+  // Yahoo (proxy CORS) → platino/palladio (e fallback generale)
   const j=await fetchViaProxies(yahooURL(a.y,'1d','6mo')); const r=parseYahooCandles(j);
   if(!r.candles.length) throw new Error('no data'); return {...r,src:'YH'};
 }
@@ -499,8 +510,8 @@ async function fetchRealAll(){
     ok++;}catch(e){}}}
   await Promise.all(Array.from({length:3},worker));
   REAL_OK=ok>0;
-  const liveSrc=px[STATE.symbol]?.realSrc;
-  const el=$('#connTxt'); if(el){ el.textContent = ok===0?'SIM (no rete)': (liveSrc==='TD'?'REALE · Twelve Data':'REALE · Yahoo')+` (${ok}/${SYMS.length})`; }
+  const srcName={TD:'Twelve Data',CG:'CoinGecko',FX:'BCE',YH:'Yahoo'}[px[STATE.symbol]?.realSrc]||'multi-fonte';
+  const el=$('#connTxt'); if(el){ el.textContent = ok===0?'SIM (no rete)': `REALE · ${srcName} (${ok}/${SYMS.length})`; }
   renderAll();
 }
 
