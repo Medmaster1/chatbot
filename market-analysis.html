@@ -202,6 +202,16 @@ button{font-family:var(--mono);cursor:pointer;color:inherit}select{font-family:v
 .jrnl .btns{display:flex;gap:6px;margin-top:6px}
 .jrnl button{flex:1;background:var(--panel2);border:1px solid var(--line2);color:var(--txt);padding:7px;border-radius:7px;font-size:10px;font-weight:700}
 .jrnl button.gold{background:var(--gold-d);border-color:var(--gold2);color:var(--gold)}
+/* alert center */
+.al-snd{font-size:9px;color:var(--txt3);display:flex;align-items:center;gap:4px;font-weight:400;letter-spacing:0;text-transform:none}
+.al-form{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:9px}
+.al-form select,.al-form input{background:var(--bg);border:1px solid var(--line2);color:var(--txt);padding:6px 7px;border-radius:6px;font-family:var(--mono);font-size:10.5px}
+.al-form .add{grid-column:span 2;background:var(--gold-d);border:1px solid var(--gold2);color:var(--gold);padding:7px;border-radius:6px;font-size:10.5px;font-weight:700;cursor:pointer}
+.al-item{display:flex;align-items:center;gap:8px;font-size:10.5px;padding:6px 0;border-bottom:1px solid var(--line)}
+.al-item .ic{font-size:13px}.al-item .tx{flex:1;color:var(--txt2)}
+.al-item.fired{opacity:.6}.al-item.fired .tx{color:var(--amber)}
+.al-item .x{background:var(--red-d);border:1px solid rgba(255,77,94,.35);color:var(--red);border-radius:5px;padding:2px 7px;font-size:9px;font-weight:700;cursor:pointer}
+.al-empty{font-size:10px;color:var(--txt3);padding:6px 0}
 /* gamma levels */
 #gexTicker{width:64px;background:var(--bg);border:1px solid var(--line2);color:var(--gold);padding:3px 6px;border-radius:5px;font-family:var(--mono);font-size:10px;text-transform:uppercase;margin-right:6px}
 #gexTicker:focus{outline:none;border-color:var(--gold2)}
@@ -255,6 +265,11 @@ button{font-family:var(--mono);cursor:pointer;color:inherit}select{font-family:v
       <span class="ok" id="faOk"></span>
       <input id="faKey" type="password" placeholder="FlashAlpha gamma key (opz.)" autocomplete="off" />
       <button id="faSave">GEX</button>
+    </div>
+    <div class="apikey" title="URL del tuo Cloudflare Worker CORS (vedi cloudflare-worker.js). Rende indici/opzioni affidabili.">
+      <span class="ok" id="proxyOk"></span>
+      <input id="proxyUrl" type="text" placeholder="CORS proxy URL (opz.)" autocomplete="off" />
+      <button id="proxySave">Proxy</button>
     </div>
     <div class="badge" id="dataBadge"><span class="led"></span><span id="dataStatus">connessione…</span></div>
     <div class="regime"><span class="lbl">Regime</span><span class="val" id="regime">--</span></div>
@@ -322,6 +337,13 @@ button{font-family:var(--mono);cursor:pointer;color:inherit}select{font-family:v
       <div class="panel">
         <div class="ph">🧭 Trading Advisor<span class="sp"></span><span class="tag" id="advSym">quando operare / quando no</span></div>
         <div class="pb" id="advBody"><div class="loading">analisi condizioni…</div></div>
+      </div>
+
+      <!-- ALERT CENTER -->
+      <div class="panel">
+        <div class="ph">🔔 Alert<span class="sp"></span>
+          <label class="al-snd" title="Suono all'allerta"><input type="checkbox" id="alSound" checked/> suono</label></div>
+        <div class="pb" id="alBody"></div>
       </div>
 
       <!-- COT REPORT -->
@@ -408,6 +430,7 @@ const CONFIG = {
   ],
 };
 // Proxy CORS per Yahoo (Yahoo non invia header CORS). Fallback multipli.
+let PROXY_URL='';   // Cloudflare Worker dell'utente (prioritario, affidabile)
 const PROXIES=[
   u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
   u=>`https://api.codetabs.com/v1/proxy/?quest=${u}`,
@@ -415,6 +438,8 @@ const PROXIES=[
   u=>`https://api.allorigins.win/get?url=${encodeURIComponent(u)}`, // {contents}
   u=>`https://thingproxy.freeboard.io/fetch/${u}`,
 ];
+// Se l'utente ha un proxy proprio (Cloudflare Worker), lo mette davanti a tutti
+function proxyList(){ return PROXY_URL ? [u=>`${PROXY_URL.replace(/\/$/,'')}/?url=${encodeURIComponent(u)}`, ...PROXIES] : PROXIES; }
 // NB: simbolo lasciato grezzo (GC=F, ^GSPC, DX-Y.NYB): è il proxy a codificare l'intero URL.
 const yahooURL=(sym)=>`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=3mo`;
 const cotURL=(code)=>`https://publicreporting.cftc.gov/resource/6dca-aqww.json?cftc_contract_market_code=${code}&$order=report_date_as_yyyy_mm_dd%20DESC&$limit=16`;
@@ -432,6 +457,7 @@ async function importKeysFromHash(){const h=location.hash?location.hash.slice(1)
   if(q.get('td')){await Storage.set('td_apikey',q.get('td').trim());ch=true;}
   if(q.get('agsi')){await Storage.set('agsi_apikey',q.get('agsi').trim());ch=true;}
   if(q.get('fa')){await Storage.set('fa_apikey',q.get('fa').trim());ch=true;}
+  if(q.get('proxy')){await Storage.set('cors_proxy',q.get('proxy').trim());ch=true;}
   if(ch){try{history.replaceState(null,'',location.pathname+location.search);}catch(e){}}}
 
 /* utils */
@@ -479,7 +505,7 @@ async function fetchTD(sym){
 /* ---- FETCH Yahoo (via proxy con fallback) ---- */
 async function fetchViaProxies(targetUrl){
   // prova ogni proxy, con 2 tentativi ciascuno (i proxy gratuiti danno 522/500 sporadici)
-  for(const p of PROXIES){
+  for(const p of proxyList()){
     for(let attempt=0;attempt<2;attempt++){
       try{ const j=await getJSON(p(targetUrl));
         if(j&&typeof j.contents==='string'){ return JSON.parse(j.contents); } // allorigins /get
@@ -734,8 +760,43 @@ function gammaLevels(sym){ const g=GAMMA[sym]; if(!g)return null;
   return [ {v:g.cw,label:'Call Wall '+f(g.cw,dg(sym)),color:'#ff4d5e'},
            {v:g.flip,label:'Gamma Flip '+f(g.flip,dg(sym)),color:'#ffb547'},
            {v:g.pw,label:'Put Wall '+f(g.pw,dg(sym)),color:'#23d18b'} ]; }
-function drawDetailChart(){const D=DATA[STATE.symbol];if(!D)return;const series=(D.daily||[]).slice(-CONFIG.histDays);const up=series.at(-1)>=series[0];
-  drawLine($('#detailChart'),series,up?'rgb(35,209,139)':'rgb(255,77,94)',true,gammaLevels(STATE.symbol));}
+// OHLC reale per il grafico a candele (CoinGecko/Yahoo) o sintetico dalle chiusure (FX)
+async function fetchOHLC(sym){ const a=CONFIG.assets[sym]; if(DATA[sym]&&DATA[sym].ohlc&&DATA[sym].ohlc.length>3)return;
+  try{
+    if(a.feed==='cg'){ const j=await getJSON(`https://api.coingecko.com/api/v3/coins/${a.cg}/ohlc?vs_currency=usd&days=90`,15000);
+      const o=(j||[]).map(x=>({t:x[0],o:x[1],h:x[2],l:x[3],c:x[4]})).filter(k=>isFinite(k.c)); if(o.length)DATA[sym].ohlc=o; return; }
+    if(a.feed==='fx'){ const d=DATA[sym].daily||[]; DATA[sym].ohlc=d.map((c,i)=>{const o=i?d[i-1]:c;return{t:Date.now()-(d.length-i)*864e5,o,h:Math.max(o,c),l:Math.min(o,c),c};}); return; }
+    const j=await fetchViaProxies(yahooURL(a.y)); const r=j.chart.result[0]; const t=r.timestamp||[]; const q=(r.indicators&&r.indicators.quote&&r.indicators.quote[0])||{};
+    const out=[]; for(let i=0;i<t.length;i++){ const c=q.close?.[i]; if(c==null)continue; out.push({t:t[i]*1000,o:q.open?.[i]??c,h:q.high?.[i]??c,l:q.low?.[i]??c,c}); }
+    if(out.length)DATA[sym].ohlc=out;
+  }catch(e){}
+}
+let detailCross=null;
+function drawDetailChart(){const cv=$('#detailChart');const D=DATA[STATE.symbol];if(!cv||!D)return;
+  const ctx=cv.getContext('2d'),dpr=window.devicePixelRatio||1,r=cv.getBoundingClientRect();
+  cv.width=r.width*dpr;cv.height=r.height*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);
+  const W=r.width,H=r.height,padT=6,padB=4,padR=54,padL=4;ctx.clearRect(0,0,W,H);const d=dg(STATE.symbol);
+  let candles=(D.ohlc&&D.ohlc.length>3)?D.ohlc.slice(-70):null;
+  if(!candles){const a=(D.daily||[]).slice(-70);if(a.length<2)return;candles=a.map((c,i)=>{const o=i?a[i-1]:c;return{o,h:Math.max(o,c),l:Math.min(o,c),c};});}
+  const n=candles.length;let hi=-1e9,lo=1e9;candles.forEach(c=>{hi=Math.max(hi,c.h);lo=Math.min(lo,c.l);});
+  const gl=gammaLevels(STATE.symbol)||[];const lastC=candles.at(-1).c;
+  gl.forEach(L=>{if(L.v>lastC*0.9&&L.v<lastC*1.1){hi=Math.max(hi,L.v);lo=Math.min(lo,L.v);}});
+  const pad=(hi-lo)*0.06||1;hi+=pad;lo-=pad;const rng=hi-lo;const plotW=W-padL-padR;
+  const x=i=>padL+i/(n-1||1)*plotW,y=v=>padT+(1-(v-lo)/rng)*(H-padT-padB);
+  ctx.font='9px JetBrains Mono';ctx.textBaseline='middle';
+  for(let i=0;i<=4;i++){const p=lo+rng*i/4,yy=y(p);ctx.strokeStyle='rgba(150,170,205,.06)';ctx.beginPath();ctx.moveTo(padL,yy);ctx.lineTo(W-padR,yy);ctx.stroke();ctx.fillStyle='#5f7193';ctx.textAlign='left';ctx.fillText(f(p,d),W-padR+4,yy);}
+  const closes=candles.map(c=>c.c);
+  const drawEma=(p,col)=>{if(closes.length<p)return;const e=ema(closes,p);ctx.strokeStyle=col;ctx.lineWidth=1;ctx.beginPath();e.forEach((v,i)=>i?ctx.lineTo(x(i),y(v)):ctx.moveTo(x(i),y(v)));ctx.stroke();};
+  drawEma(20,'rgba(231,181,74,.55)');drawEma(50,'rgba(72,160,255,.5)');
+  const cw=Math.max(1.5,plotW/n*0.62);
+  candles.forEach((c,i)=>{const up=c.c>=c.o,col=up?'#23d18b':'#ff4d5e';ctx.strokeStyle=col;ctx.fillStyle=col;ctx.lineWidth=1;const xc=x(i);
+    ctx.beginPath();ctx.moveTo(xc,y(c.h));ctx.lineTo(xc,y(c.l));ctx.stroke();const yo=y(c.o),yc=y(c.c);ctx.fillRect(xc-cw/2,Math.min(yo,yc),cw,Math.max(1,Math.abs(yc-yo)));});
+  gl.forEach(L=>{if(L.v<=lo||L.v>=hi)return;const yy=y(L.v);ctx.strokeStyle=L.color;ctx.lineWidth=1;ctx.setLineDash([5,3]);ctx.beginPath();ctx.moveTo(padL,yy);ctx.lineTo(W-padR,yy);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle=L.color;ctx.textAlign='left';ctx.font='bold 8px JetBrains Mono';ctx.fillText(L.label,padL+3,yy-4);});
+  const yl=y(lastC);ctx.fillStyle='#e7b54a';ctx.fillRect(W-padR,yl-7,padR,14);ctx.fillStyle='#000';ctx.font='bold 9px JetBrains Mono';ctx.textAlign='left';ctx.fillText(f(lastC,d),W-padR+4,yl);
+  if(detailCross!=null){const i=Math.round((detailCross-padL)/plotW*(n-1));if(i>=0&&i<n){const c=candles[i],xc=x(i);
+    ctx.strokeStyle='rgba(205,217,238,.28)';ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(xc,padT);ctx.lineTo(xc,H-padB);ctx.stroke();ctx.setLineDash([]);
+    const tip=`O ${f(c.o,d)}  H ${f(c.h,d)}  L ${f(c.l,d)}  C ${f(c.c,d)}`;ctx.font='9px JetBrains Mono';const tw=ctx.measureText(tip).width+10;let tx=xc+6;if(tx+tw>W-padR)tx=xc-6-tw;
+    ctx.fillStyle='rgba(13,21,38,.95)';ctx.fillRect(tx,padT+2,tw,15);ctx.fillStyle=c.c>=c.o?'#23d18b':'#ff4d5e';ctx.textAlign='left';ctx.fillText(tip,tx+5,padT+10);}}}
 
 const COMP=['XAUUSD','XAGUSD','US500','BTCUSD','DXY'];
 function drawComp(){const cv=$('#compChart'),ctx=cv.getContext('2d'),dpr=window.devicePixelRatio||1,r=cv.getBoundingClientRect();
@@ -904,7 +965,7 @@ function buildJournal(sym,items,score,dir){
 
 /* ====================== GAMMA LEVELS (GEX da opzioni) ==================== */
 async function proxyJSON(url){ // fetch generico via proxy CORS (per endpoint non-chart)
-  for(const p of PROXIES){ try{ const j=await getJSON(p(url),14000);
+  for(const p of proxyList()){ try{ const j=await getJSON(p(url),14000);
     if(j&&typeof j.contents==='string') return JSON.parse(j.contents);
     if(j&&typeof j==='object') return j; }catch(e){} }
   throw new Error('proxy ko');
@@ -1008,14 +1069,56 @@ function drawGexChart(list,flip,spot,cw,pw){const cv=$('#gexChart');if(!cv)retur
   ctx.fillStyle='#5f7193';ctx.font='8px JetBrains Mono';ctx.textAlign='left';ctx.fillText(use[0].K,padX,H-5);
   ctx.textAlign='right';ctx.fillText(use.at(-1).K,W-padX,H-5);}
 
-function selectSymbol(sym){ STATE.symbol=sym; renderDetail(); renderAdvisor(); renderHeat(); loadDivergence(sym); loadGamma(sym); }
+function selectSymbol(sym){ STATE.symbol=sym; renderDetail(); renderAdvisor(); renderHeat(); loadDivergence(sym); loadGamma(sym); fetchOHLC(sym).then(()=>{if(sym===STATE.symbol)drawDetailChart();}); }
 
-function renderAll(){renderKPI();renderHeat();renderAcPerf();renderMovers();renderCorr();renderFG();renderRegime();renderDetail();renderAdvisor();drawComp();updateBadge();}
+/* ====================== ALERT CENTER ==================== */
+let ALERTS=[]; let _ac;
+function beep(){ if(!$('#alSound')||!$('#alSound').checked)return; try{_ac=_ac||new (window.AudioContext||window.webkitAudioContext)();const o=_ac.createOscillator(),g=_ac.createGain();o.connect(g);g.connect(_ac.destination);o.type='sine';o.frequency.value=880;g.gain.setValueAtTime(0.0001,_ac.currentTime);g.gain.exponentialRampToValueAtTime(0.25,_ac.currentTime+0.01);g.gain.exponentialRampToValueAtTime(0.0001,_ac.currentTime+0.35);o.start();o.stop(_ac.currentTime+0.37);}catch(e){} }
+function notify(title,body){ try{ if(window.Notification){ if(Notification.permission==='granted')new Notification(title,{body}); } }catch(e){} }
+const AL_TYPES={pa:'Prezzo ≥',pb:'Prezzo ≤',pct:'|Var.gg| ≥ %',rob:'RSI ipercomprato',ros:'RSI ipervenduto',gf:'Cross Gamma Flip',cw:'Tocco Call Wall',pw:'Tocco Put Wall'};
+function alertDesc(a){ const v=a.val; switch(a.type){
+  case'pa':return `${a.sym} prezzo ≥ ${v}`; case'pb':return `${a.sym} prezzo ≤ ${v}`; case'pct':return `${a.sym} |var.gg| ≥ ${v}%`;
+  case'rob':return `${a.sym} RSI ipercomprato (>70)`; case'ros':return `${a.sym} RSI ipervenduto (<30)`;
+  case'gf':return `${a.sym} cross Gamma Flip`; case'cw':return `${a.sym} tocco Call Wall`; case'pw':return `${a.sym} tocco Put Wall`; default:return a.type; } }
+function fireAlert(a,msg){ a.fired=true; a.firedAt=Date.now(); notify('AURUM Alert · '+a.sym,msg); beep(); toast('🔔 '+msg); }
+function evaluateAlerts(){ let ch=false;
+  ALERTS.forEach(a=>{ const D=DATA[a.sym]; if(!D||D.price==null)return; const px=D.price; let cond=false,msg='';
+    if(a.type==='pa'){cond=px>=a.val;msg=`${a.sym} a ${f(px,dg(a.sym))} (≥ ${a.val})`;}
+    else if(a.type==='pb'){cond=px<=a.val;msg=`${a.sym} a ${f(px,dg(a.sym))} (≤ ${a.val})`;}
+    else if(a.type==='pct'){const c=chgN(a.sym,1);cond=Math.abs(c)>=a.val;msg=`${a.sym} var. ${c.toFixed(2)}% oggi`;}
+    else if(a.type==='rob'){const rv=rsi(D.daily||[]).at(-1);cond=rv!=null&&rv>70;msg=`${a.sym} RSI ${rv?rv.toFixed(0):''} ipercomprato`;}
+    else if(a.type==='ros'){const rv=rsi(D.daily||[]).at(-1);cond=rv!=null&&rv<30;msg=`${a.sym} RSI ${rv?rv.toFixed(0):''} ipervenduto`;}
+    else if(a.type==='gf'){const g=GAMMA[a.sym];if(g){const side=px>=g.flip?1:-1;if(a._side!=null&&side!==a._side){fireAlert(a,`${a.sym} ha attraversato il Gamma Flip ${f(g.flip,dg(a.sym))}`);ch=true;}a._side=side;}return;}
+    else if(a.type==='cw'){const g=GAMMA[a.sym];if(g){cond=px>=g.cw;msg=`${a.sym} ha toccato la Call Wall ${f(g.cw,dg(a.sym))}`;}}
+    else if(a.type==='pw'){const g=GAMMA[a.sym];if(g){cond=px<=g.pw;msg=`${a.sym} ha toccato la Put Wall ${f(g.pw,dg(a.sym))}`;}}
+    if(cond&&a.armed){fireAlert(a,msg);a.armed=false;ch=true;} else if(!cond&&!a.armed){a.armed=true;ch=true;}
+  });
+  if(ch){persistAlerts();renderAlerts();}
+}
+async function persistAlerts(){ await Storage.set('alerts',ALERTS.map(a=>({sym:a.sym,type:a.type,val:a.val,armed:a.armed,fired:a.fired}))); }
+function renderAlerts(){ const b=$('#alBody'); if(!b)return;
+  const opts=SY.map(s=>`<option value="${s}">${s}</option>`).join('');
+  const types=Object.entries(AL_TYPES).map(([k,v])=>`<option value="${k}">${v}</option>`).join('');
+  const list=ALERTS.length?ALERTS.map((a,i)=>`<div class="al-item ${a.fired?'fired':''}"><span class="ic">${a.fired?'✅':'🔔'}</span><span class="tx">${alertDesc(a)}</span><button class="x" data-del="${i}">✕</button></div>`).join(''):'<div class="al-empty">Nessun alert. Crea il primo qui sopra.</div>';
+  b.innerHTML=`<div class="al-form">
+      <select id="alSym">${opts}</select>
+      <select id="alType">${types}</select>
+      <input id="alVal" type="number" step="any" placeholder="valore" />
+      <button class="add" id="alAdd">+ Aggiungi alert</button>
+    </div>${list}`;
+  $('#alAdd').onclick=async()=>{ const sym=$('#alSym').value,type=$('#alType').value,val=parseFloat($('#alVal').value);
+    if((type==='pa'||type==='pb'||type==='pct')&&isNaN(val)){toast('Inserisci un valore');return;}
+    try{if(window.Notification&&Notification.permission==='default')Notification.requestPermission();}catch(e){}
+    ALERTS.push({sym,type,val:isNaN(val)?null:val,armed:true,fired:false}); await persistAlerts(); renderAlerts(); toast('Alert creato'); };
+  $$('#alBody [data-del]').forEach(x=>x.onclick=async()=>{ ALERTS.splice(+x.dataset.del,1); await persistAlerts(); renderAlerts(); });
+}
+function renderAll(){renderKPI();renderHeat();renderAcPerf();renderMovers();renderCorr();renderFG();renderRegime();renderDetail();renderAdvisor();drawComp();updateBadge();evaluateAlerts();}
 
 /* boot */
 function initCotSel(){$('#cotSel').innerHTML=CONFIG.cot.map(c=>`<option value="${c.code}">${c.label}</option>`).join('');$('#cotSel').value=STATE.cot;$('#cotSel').onchange=e=>{STATE.cot=e.target.value;loadCOT(STATE.cot);};}
 function setKeyDot(){const ok=$('#keyOk');if(ok)ok.classList.toggle('on',!!APIKEY);
   const fo=$('#faOk');if(fo)fo.classList.toggle('on',!!FA_KEY);
+  const po=$('#proxyOk');if(po)po.classList.toggle('on',!!PROXY_URL);
   $('#dataBadge').title=APIKEY?'Fonte primaria: Twelve Data · fallback Yahoo':'Fonte: Yahoo Finance (proxy). Aggiungi una key Twelve Data per dati più affidabili.';}
 function bind(){
   $('#btnRefresh').onclick=async()=>{COT_CACHE={};await fetchAll();renderAll();loadCOT(STATE.cot);loadDivergence(STATE.symbol);loadGamma(STATE.symbol);loadGas();toast('Dati aggiornati');};
@@ -1028,16 +1131,22 @@ function bind(){
   $('#faSave').onclick=async()=>{ FA_KEY=$('#faKey').value.trim(); await Storage.set('fa_apikey',FA_KEY); setKeyDot();
     toast(FA_KEY?'FlashAlpha key salvata · gamma reale (CORS)':'FlashAlpha key rimossa'); loadGamma(STATE.symbol); };
   $('#faKey').addEventListener('keydown',e=>{ if(e.key==='Enter')$('#faSave').click(); });
+  $('#proxySave').onclick=async()=>{ PROXY_URL=$('#proxyUrl').value.trim(); await Storage.set('cors_proxy',PROXY_URL); setKeyDot();
+    toast(PROXY_URL?'Proxy CORS salvato · indici/opzioni più affidabili':'Proxy rimosso'); await fetchAll(); renderAll(); loadGamma(STATE.symbol); };
+  $('#proxyUrl').addEventListener('keydown',e=>{ if(e.key==='Enter')$('#proxySave').click(); });
   $('#gexTicker').addEventListener('keydown',e=>{ if(e.key==='Enter')loadGamma(STATE.symbol); });
+  const dc=$('#detailChart'); if(dc){ dc.addEventListener('mousemove',e=>{const r=dc.getBoundingClientRect();detailCross=e.clientX-r.left;drawDetailChart();}); dc.addEventListener('mouseleave',()=>{detailCross=null;drawDetailChart();}); }
   window.addEventListener('resize',()=>{drawDetailChart();drawComp();});}
 (async function boot(){
   await importKeysFromHash();
   APIKEY=(await Storage.get('td_apikey'))||''; if(APIKEY)$('#tdKey').value=APIKEY;
   AGSIKEY=(await Storage.get('agsi_apikey'))||''; if(AGSIKEY)$('#agsiKey').value=AGSIKEY;
   FA_KEY=(await Storage.get('fa_apikey'))||''; if(FA_KEY)$('#faKey').value=FA_KEY;
-  SY.forEach(ensureSim);bind();setKeyDot();initCotSel();renderCal();renderClock();renderAll();
+  PROXY_URL=(await Storage.get('cors_proxy'))||''; if(PROXY_URL)$('#proxyUrl').value=PROXY_URL;
+  ALERTS=((await Storage.get('alerts'))||[]).map(a=>({...a,armed:a.armed!==false}));
+  SY.forEach(ensureSim);bind();setKeyDot();initCotSel();renderCal();renderClock();renderAlerts();renderAll();
   setInterval(renderClock,1000);
-  await fetchAll();renderAll();loadCOT(STATE.cot);loadGas();loadDivergence(STATE.symbol);loadGamma(STATE.symbol);
+  await fetchAll();renderAll();loadCOT(STATE.cot);loadGas();loadDivergence(STATE.symbol);loadGamma(STATE.symbol);fetchOHLC(STATE.symbol).then(()=>drawDetailChart());
   setInterval(async()=>{await fetchAll();renderAll();},CONFIG.refreshMs);
   setInterval(loadGas, 1800000);  // riserve gas: refresh ogni 30 min (dato giornaliero)
 })();
