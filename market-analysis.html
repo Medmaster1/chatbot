@@ -203,6 +203,10 @@ button{font-family:var(--mono);cursor:pointer;color:inherit}select{font-family:v
 .jrnl button{flex:1;background:var(--panel2);border:1px solid var(--line2);color:var(--txt);padding:7px;border-radius:7px;font-size:10px;font-weight:700}
 .jrnl button.gold{background:var(--gold-d);border-color:var(--gold2);color:var(--gold)}
 /* gamma levels */
+#gexTicker{width:64px;background:var(--bg);border:1px solid var(--line2);color:var(--gold);padding:3px 6px;border-radius:5px;font-family:var(--mono);font-size:10px;text-transform:uppercase;margin-right:6px}
+#gexTicker:focus{outline:none;border-color:var(--gold2)}
+.gx-src{font-size:8px;font-weight:800;padding:1px 5px;border-radius:4px;margin-left:6px}
+.gx-src.FA{background:rgba(231,181,74,.18);color:var(--gold)}.gx-src.YH{background:rgba(72,160,255,.16);color:var(--blue)}
 .gx-regime{display:flex;align-items:center;gap:9px;padding:9px;border-radius:8px;border:1px solid var(--line2);margin-bottom:9px}
 .gx-regime .ic{font-size:20px}.gx-regime .t{font-size:12px;font-weight:800}.gx-regime .s{font-size:9.5px;color:var(--txt2)}
 .gx-regime.pos{background:var(--green-d);border-color:var(--green)}.gx-regime.pos .t{color:var(--green)}
@@ -247,6 +251,11 @@ button{font-family:var(--mono);cursor:pointer;color:inherit}select{font-family:v
       <input id="agsiKey" type="password" placeholder="AGSI gas key (opz.)" autocomplete="off" />
       <button id="agsiSave">Gas</button>
     </div>
+    <div class="apikey" title="FlashAlpha API key per gamma/GEX reali (flashalpha.com/pricing).">
+      <span class="ok" id="faOk"></span>
+      <input id="faKey" type="password" placeholder="FlashAlpha gamma key (opz.)" autocomplete="off" />
+      <button id="faSave">GEX</button>
+    </div>
     <div class="badge" id="dataBadge"><span class="led"></span><span id="dataStatus">connessione…</span></div>
     <div class="regime"><span class="lbl">Regime</span><span class="val" id="regime">--</span></div>
     <div class="clock" id="clock">--:--:-- <b>CET</b></div>
@@ -290,7 +299,9 @@ button{font-family:var(--mono);cursor:pointer;color:inherit}select{font-family:v
 
       <!-- GAMMA LEVELS (GEX) -->
       <div class="panel">
-        <div class="ph">📐 Gamma Levels · GEX<span class="sp"></span><span class="tag" id="gexSym">opzioni</span></div>
+        <div class="ph">📐 Gamma Levels · GEX<span class="sp"></span>
+          <input id="gexTicker" placeholder="ticker" title="Ticker opzioni (FlashAlpha): es. AAPL, TSLA, SPY…" />
+          <span class="tag" id="gexSym">opzioni</span></div>
         <div class="pb" id="gexBody"><div class="loading">calcolo livelli gamma…</div></div>
       </div>
 
@@ -420,6 +431,7 @@ async function importKeysFromHash(){const h=location.hash?location.hash.slice(1)
   const q=new URLSearchParams(h);let ch=false;
   if(q.get('td')){await Storage.set('td_apikey',q.get('td').trim());ch=true;}
   if(q.get('agsi')){await Storage.set('agsi_apikey',q.get('agsi').trim());ch=true;}
+  if(q.get('fa')){await Storage.set('fa_apikey',q.get('fa').trim());ch=true;}
   if(ch){try{history.replaceState(null,'',location.pathname+location.search);}catch(e){}}}
 
 /* utils */
@@ -437,9 +449,15 @@ async function getJSON(url,ms=22000){const ctrl=new AbortController();const to=s
 /* STATE */
 const DATA={};
 const GAMMA={};   // GAMMA[sym]={cw,pw,flip} livelli in scala prezzo asset
+const FA_BLOCKED=new Set();   // ticker non serviti dal piano FlashAlpha (evita spreco quota)
 const STATE={symbol:'XAUUSD',legendOff:{},cot:'088691',status:'init',lastUpdate:null};
 let APIKEY='';            // Twelve Data API key (fonte primaria, opzionale)
 let AGSIKEY='';           // AGSI/GIE API key per riserve gas UE
+let FA_KEY='';            // FlashAlpha API key (gamma/GEX reali, CORS-native)
+// FlashAlpha: CORS abilitato, header X-Api-Key. Free=5 req/giorno, ETF/index richiedono Basic.
+async function faGet(path){const ctrl=new AbortController();const to=setTimeout(()=>ctrl.abort(),14000);
+  try{const r=await fetch('https://lab.flashalpha.com/v1'+path,{headers:{'X-Api-Key':FA_KEY},signal:ctrl.signal});return await r.json();}
+  catch(e){return {status:'ERROR',message:'rete/limite FlashAlpha'};}finally{clearTimeout(to);}}
 // Rate-limiter Twelve Data: free = 8 req/min. Token bucket ~7/min, con riserva.
 const TD=(()=>{let tok=7,last=Date.now();function refill(){const n=Date.now();const a=Math.floor((n-last)/8700);if(a>0){tok=Math.min(7,tok+a);last=n;}}
   return{take(reserve=0){refill();if(tok>reserve){tok--;return true;}return false;}};})();
@@ -892,8 +910,51 @@ async function proxyJSON(url){ // fetch generico via proxy CORS (per endpoint no
   throw new Error('proxy ko');
 }
 function bsGamma(S,K,T,sig){ if(!(T>0)||!(sig>0)||!(S>0))return 0; const d1=(Math.log(S/K)+0.5*sig*sig*T)/(sig*Math.sqrt(T)); const nd1=Math.exp(-d1*d1/2)/Math.sqrt(2*Math.PI); return nd1/(S*sig*Math.sqrt(T)); }
+// Dispatcher gamma: FlashAlpha (CORS-native, reale) se c'è la key, altrimenti Yahoo+proxy
 async function loadGamma(sym){
-  const body=$('#gexBody'); const und=CONFIG.assets[sym].opt; $('#gexSym').textContent= und?('opzioni '+und):'n/d';
+  const tk=($('#gexTicker')&&$('#gexTicker').value.trim().toUpperCase())||'';
+  if(FA_KEY){ const ok=await loadGammaFA(sym,tk); if(ok)return; if(tk)return; /* ticker manuale: non forzare Yahoo */ }
+  return loadGammaYahoo(sym);
+}
+// FlashAlpha: /exposure/levels/{ticker} → gamma flip, call/put wall, max gamma, magnet
+async function loadGammaFA(sym,tkOverride){
+  const ticker=(tkOverride||CONFIG.assets[sym].opt||'').toUpperCase(); if(!ticker)return false;
+  if(FA_BLOCKED.has(ticker)) return false;   // già noto come non servito dal piano → usa fallback
+  const body=$('#gexBody'); $('#gexSym').innerHTML=ticker+' <span class="gx-src FA">FlashAlpha</span>';
+  body.innerHTML='<div class="loading">FlashAlpha · '+ticker+'…</div>';
+  const j=await faGet('/exposure/levels/'+encodeURIComponent(ticker));
+  if(!j||j.status==='ERROR'||!j.levels){
+    if(j&&j.error==='tier_restricted') FA_BLOCKED.add(ticker);   // ETF/index: serve piano superiore
+    body.innerHTML='<div class="loading">FlashAlpha ('+ticker+'): '+((j&&j.message)||'non disponibile')+'</div>'; return false; }
+  const L=j.levels, S=j.underlying_price||0; if(!S)return false;
+  const refSym=tkOverride?sym:sym; const assetPx=DATA[refSym]?DATA[refSym].price:S; const factor=(assetPx&&S)?assetPx/S:1; const d=dg(sym);
+  const cw=L.call_wall, pw=L.put_wall, flip=L.gamma_flip, mp=L.max_positive_gamma, mn=L.max_negative_gamma, mag=L.zero_dte_magnet;
+  if(cw!=null&&pw!=null&&flip!=null){ GAMMA[sym]={cw:cw*factor,pw:pw*factor,flip:flip*factor}; if(sym===STATE.symbol)drawDetailChart(); }
+  const pos = S>=flip; const lvl=K=>K==null?'—':f(K*factor,d); const dist=K=>K==null?'':(()=>{const v=(K*factor/(assetPx||1)-1)*100;return (v>=0?'+':'')+v.toFixed(2)+'%';})();
+  body.innerHTML=`
+    <div class="gx-regime ${pos?'pos':'neg'}"><div class="ic">${pos?'🧲':'⚡'}</div>
+      <div><div class="t">${pos?'GAMMA POSITIVO':'GAMMA NEGATIVO'}</div>
+      <div class="s">${pos?'prezzo sopra il Gamma Flip: dealer stabilizzano (pinning).':'prezzo sotto il Gamma Flip: dealer amplificano (trend/vol).'}</div></div></div>
+    <div class="gx-lvl gx-cw"><span class="nm">Call Wall <small>resistenza</small></span><span class="v">${lvl(cw)}</span><span class="d">${dist(cw)}</span></div>
+    <div class="gx-lvl gx-fl"><span class="nm">Gamma Flip <small>zero-gamma</small></span><span class="v">${lvl(flip)}</span><span class="d">${dist(flip)}</span></div>
+    <div class="gx-lvl gx-pw"><span class="nm">Put Wall <small>supporto</small></span><span class="v">${lvl(pw)}</span><span class="d">${dist(pw)}</span></div>
+    <div class="gx-lvl"><span class="nm">Max +Gamma</span><span class="v up">${lvl(mp)}</span><span class="d">${dist(mp)}</span></div>
+    <div class="gx-lvl"><span class="nm">Max −Gamma</span><span class="v dn">${lvl(mn)}</span><span class="d">${dist(mn)}</span></div>
+    ${mag!=null?`<div class="gx-lvl"><span class="nm">0DTE Magnet</span><span class="v gd">${lvl(mag)}</span><span class="d">${dist(mag)}</span></div>`:''}
+    <canvas id="gexChart"></canvas>
+    <div class="gx-note">Dati <b class="gd">FlashAlpha</b> (GEX reale) per ${ticker}${factor!==1?`, riportati in scala ${sym}`:''}. Sopra/sotto il Gamma Flip cambia il regime; Call/Put Wall sono i muri di gamma (resistenza/supporto).</div>`;
+  drawGexLadder([{v:cw*factor,c:'#ff4d5e',t:'CW'},{v:mp*factor,c:'#23d18b',t:'+γ'},{v:assetPx,c:'#e8eefb',t:'SPOT'},{v:flip*factor,c:'#ffb547',t:'FLIP'},{v:mn*factor,c:'#ff8a5c',t:'−γ'},{v:pw*factor,c:'#23d18b',t:'PW'}].filter(x=>x.v),d);
+  return true;
+}
+function drawGexLadder(items,d){const cv=$('#gexChart');if(!cv)return;const ctx=cv.getContext('2d'),dpr=window.devicePixelRatio||1,r=cv.getBoundingClientRect();
+  cv.width=r.width*dpr;cv.height=r.height*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);const W=r.width,H=r.height,padT=8,padB=8,padR=70;ctx.clearRect(0,0,W,H);
+  const vs=items.map(i=>i.v);let min=Math.min(...vs),max=Math.max(...vs);const sp=(max-min)||1;min-=sp*0.08;max+=sp*0.08;const rng=max-min;
+  const y=v=>padT+(1-(v-min)/rng)*(H-padT-padB);
+  items.forEach(it=>{const yy=y(it.v);ctx.strokeStyle=it.c;ctx.lineWidth=it.t==='SPOT'?2:1.4;ctx.setLineDash(it.t==='SPOT'?[]:[6,3]);
+    ctx.beginPath();ctx.moveTo(4,yy);ctx.lineTo(W-padR,yy);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle=it.c;ctx.font='bold 9px JetBrains Mono';ctx.textAlign='left';ctx.fillText(it.t+' '+f(it.v,d),W-padR+4,yy);});}
+async function loadGammaYahoo(sym){
+  const body=$('#gexBody'); const und=CONFIG.assets[sym].opt; $('#gexSym').innerHTML= und?(und+' <span class="gx-src YH">Yahoo</span>'):'n/d';
   if(!und){ body.innerHTML='<div class="loading">Gamma levels non disponibili per questo strumento (servono opzioni listate: oro/argento/indici).</div>'; return; }
   body.innerHTML='<div class="loading">calcolo livelli gamma da opzioni '+und+'…</div>';
   try{
@@ -954,6 +1015,7 @@ function renderAll(){renderKPI();renderHeat();renderAcPerf();renderMovers();rend
 /* boot */
 function initCotSel(){$('#cotSel').innerHTML=CONFIG.cot.map(c=>`<option value="${c.code}">${c.label}</option>`).join('');$('#cotSel').value=STATE.cot;$('#cotSel').onchange=e=>{STATE.cot=e.target.value;loadCOT(STATE.cot);};}
 function setKeyDot(){const ok=$('#keyOk');if(ok)ok.classList.toggle('on',!!APIKEY);
+  const fo=$('#faOk');if(fo)fo.classList.toggle('on',!!FA_KEY);
   $('#dataBadge').title=APIKEY?'Fonte primaria: Twelve Data · fallback Yahoo':'Fonte: Yahoo Finance (proxy). Aggiungi una key Twelve Data per dati più affidabili.';}
 function bind(){
   $('#btnRefresh').onclick=async()=>{COT_CACHE={};await fetchAll();renderAll();loadCOT(STATE.cot);loadDivergence(STATE.symbol);loadGamma(STATE.symbol);loadGas();toast('Dati aggiornati');};
@@ -963,11 +1025,16 @@ function bind(){
   $('#agsiSave').onclick=async()=>{ AGSIKEY=$('#agsiKey').value.trim(); await Storage.set('agsi_apikey',AGSIKEY);
     toast(AGSIKEY?'AGSI key salvata · riserve gas attive':'AGSI key rimossa'); loadGas(); };
   $('#agsiKey').addEventListener('keydown',e=>{ if(e.key==='Enter')$('#agsiSave').click(); });
+  $('#faSave').onclick=async()=>{ FA_KEY=$('#faKey').value.trim(); await Storage.set('fa_apikey',FA_KEY); setKeyDot();
+    toast(FA_KEY?'FlashAlpha key salvata · gamma reale (CORS)':'FlashAlpha key rimossa'); loadGamma(STATE.symbol); };
+  $('#faKey').addEventListener('keydown',e=>{ if(e.key==='Enter')$('#faSave').click(); });
+  $('#gexTicker').addEventListener('keydown',e=>{ if(e.key==='Enter')loadGamma(STATE.symbol); });
   window.addEventListener('resize',()=>{drawDetailChart();drawComp();});}
 (async function boot(){
   await importKeysFromHash();
   APIKEY=(await Storage.get('td_apikey'))||''; if(APIKEY)$('#tdKey').value=APIKEY;
   AGSIKEY=(await Storage.get('agsi_apikey'))||''; if(AGSIKEY)$('#agsiKey').value=AGSIKEY;
+  FA_KEY=(await Storage.get('fa_apikey'))||''; if(FA_KEY)$('#faKey').value=FA_KEY;
   SY.forEach(ensureSim);bind();setKeyDot();initCotSel();renderCal();renderClock();renderAll();
   setInterval(renderClock,1000);
   await fetchAll();renderAll();loadCOT(STATE.cot);loadGas();loadDivergence(STATE.symbol);loadGamma(STATE.symbol);
