@@ -212,6 +212,15 @@ button{font-family:var(--mono);cursor:pointer;color:inherit}select{font-family:v
 .al-item.fired{opacity:.6}.al-item.fired .tx{color:var(--amber)}
 .al-item .x{background:var(--red-d);border:1px solid rgba(255,77,94,.35);color:var(--red);border-radius:5px;padding:2px 7px;font-size:9px;font-weight:700;cursor:pointer}
 .al-empty{font-size:10px;color:var(--txt3);padding:6px 0}
+.tg-box{margin-top:10px;border-top:1px solid var(--line);padding-top:8px}
+.tg-h{font-size:10px;font-weight:700;color:var(--blue);display:flex;align-items:center;gap:7px;margin-bottom:6px}
+.tg-st{font-size:8.5px;font-weight:700;padding:1px 6px;border-radius:4px;background:rgba(150,170,205,.12);color:var(--txt3)}
+.tg-st.on{background:var(--green-d);color:var(--green)}
+.tg-form{display:flex;flex-wrap:wrap;gap:5px}
+.tg-form input{flex:1;min-width:90px;background:var(--bg);border:1px solid var(--line2);color:var(--txt);padding:6px 7px;border-radius:6px;font-family:var(--mono);font-size:10px}
+.tg-form button{background:var(--panel2);border:1px solid var(--line2);color:var(--txt2);padding:6px 8px;border-radius:6px;font-size:9.5px;font-weight:700;cursor:pointer}
+.tg-form button:hover{border-color:var(--blue);color:#fff}
+.tg-note{font-size:9px;color:var(--txt3);line-height:1.5;margin-top:6px}
 /* gamma levels */
 #gexTicker{width:64px;background:var(--bg);border:1px solid var(--line2);color:var(--gold);padding:3px 6px;border-radius:5px;font-family:var(--mono);font-size:10px;text-transform:uppercase;margin-right:6px}
 #gexTicker:focus{outline:none;border-color:var(--gold2)}
@@ -343,7 +352,7 @@ button{font-family:var(--mono);cursor:pointer;color:inherit}select{font-family:v
       <div class="panel">
         <div class="ph">🔔 Alert<span class="sp"></span>
           <label class="al-snd" title="Suono all'allerta"><input type="checkbox" id="alSound" checked/> suono</label></div>
-        <div class="pb" id="alBody"></div>
+        <div class="pb"><div id="alBody"></div><div id="tgBox" class="tg-box"></div></div>
       </div>
 
       <!-- COT REPORT -->
@@ -458,6 +467,8 @@ async function importKeysFromHash(){const h=location.hash?location.hash.slice(1)
   if(q.get('agsi')){await Storage.set('agsi_apikey',q.get('agsi').trim());ch=true;}
   if(q.get('fa')){await Storage.set('fa_apikey',q.get('fa').trim());ch=true;}
   if(q.get('proxy')){await Storage.set('cors_proxy',q.get('proxy').trim());ch=true;}
+  if(q.get('tgtoken')){await Storage.set('tg_token',q.get('tgtoken').trim());ch=true;}
+  if(q.get('tgchat')){await Storage.set('tg_chat',q.get('tgchat').trim());ch=true;}
   if(ch){try{history.replaceState(null,'',location.pathname+location.search);}catch(e){}}}
 
 /* utils */
@@ -1080,7 +1091,32 @@ function alertDesc(a){ const v=a.val; switch(a.type){
   case'pa':return `${a.sym} prezzo ≥ ${v}`; case'pb':return `${a.sym} prezzo ≤ ${v}`; case'pct':return `${a.sym} |var.gg| ≥ ${v}%`;
   case'rob':return `${a.sym} RSI ipercomprato (>70)`; case'ros':return `${a.sym} RSI ipervenduto (<30)`;
   case'gf':return `${a.sym} cross Gamma Flip`; case'cw':return `${a.sym} tocco Call Wall`; case'pw':return `${a.sym} tocco Put Wall`; default:return a.type; } }
-function fireAlert(a,msg){ a.fired=true; a.firedAt=Date.now(); notify('AURUM Alert · '+a.sym,msg); beep(); toast('🔔 '+msg); }
+/* --- Telegram --- */
+const TG={token:'',chat:''};
+async function tgSend(text){ if(!TG.token||!TG.chat)return false;
+  try{ const r=await fetch(`https://api.telegram.org/bot${TG.token}/sendMessage`,{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({chat_id:TG.chat,text,parse_mode:'HTML',disable_web_page_preview:true})}); const j=await r.json(); return !!j.ok; }catch(e){return false;} }
+async function tgDetect(){ if(!TG.token){toast('Inserisci prima il bot token');return;}
+  try{ const r=await fetch(`https://api.telegram.org/bot${TG.token}/getUpdates`); const j=await r.json();
+    const u=(j.result||[]).reverse().find(x=>x.message&&x.message.chat);
+    if(u){ TG.chat=String(u.message.chat.id); await Storage.set('tg_chat',TG.chat); renderTelegram(); toast('chat_id rilevato: '+TG.chat); }
+    else toast('Nessun messaggio: scrivi prima al bot, poi riprova'); }catch(e){toast('Errore: token non valido?');} }
+function renderTelegram(){ const b=$('#tgBox'); if(!b)return; const on=TG.token&&TG.chat;
+  b.innerHTML=`<div class="tg-h">📨 Telegram <span class="tg-st ${on?'on':''}">${on?'attivo':'non configurato'}</span></div>
+    <div class="tg-form">
+      <input id="tgToken" type="password" placeholder="Bot token (@BotFather)" value="${TG.token||''}"/>
+      <input id="tgChat" placeholder="chat_id" value="${TG.chat||''}"/>
+      <button id="tgSave">Salva</button><button id="tgDetect" title="Scrivi prima al bot">Rileva chat</button><button id="tgTest">Test</button>
+    </div>
+    <div class="tg-note">Crea un bot con <b>@BotFather</b> → incolla il token → scrivi un messaggio al bot → premi <b>Rileva chat</b>. Gli alert verranno inviati anche su Telegram.</div>`;
+  $('#tgSave').onclick=async()=>{ TG.token=$('#tgToken').value.trim(); TG.chat=$('#tgChat').value.trim();
+    await Storage.set('tg_token',TG.token); await Storage.set('tg_chat',TG.chat); renderTelegram(); toast('Telegram salvato'); };
+  $('#tgDetect').onclick=tgDetect;
+  $('#tgTest').onclick=async()=>{ TG.token=$('#tgToken').value.trim(); TG.chat=$('#tgChat').value.trim(); await Storage.set('tg_token',TG.token); await Storage.set('tg_chat',TG.chat);
+    toast('Invio test…'); const ok=await tgSend('✅ <b>AURUM</b> · test alert Telegram'); toast(ok?'Messaggio Telegram inviato ✓':'Invio fallito (token/chat_id?)'); renderTelegram(); };
+}
+function fireAlert(a,msg){ a.fired=true; a.firedAt=Date.now(); notify('AURUM Alert · '+a.sym,msg); beep(); toast('🔔 '+msg);
+  if(TG.token&&TG.chat) tgSend(`🔔 <b>AURUM Alert · ${a.sym}</b>\n${msg}`); }
 function evaluateAlerts(){ let ch=false;
   ALERTS.forEach(a=>{ const D=DATA[a.sym]; if(!D||D.price==null)return; const px=D.price; let cond=false,msg='';
     if(a.type==='pa'){cond=px>=a.val;msg=`${a.sym} a ${f(px,dg(a.sym))} (≥ ${a.val})`;}
@@ -1144,7 +1180,8 @@ function bind(){
   FA_KEY=(await Storage.get('fa_apikey'))||''; if(FA_KEY)$('#faKey').value=FA_KEY;
   PROXY_URL=(await Storage.get('cors_proxy'))||''; if(PROXY_URL)$('#proxyUrl').value=PROXY_URL;
   ALERTS=((await Storage.get('alerts'))||[]).map(a=>({...a,armed:a.armed!==false}));
-  SY.forEach(ensureSim);bind();setKeyDot();initCotSel();renderCal();renderClock();renderAlerts();renderAll();
+  TG.token=(await Storage.get('tg_token'))||''; TG.chat=(await Storage.get('tg_chat'))||'';
+  SY.forEach(ensureSim);bind();setKeyDot();initCotSel();renderCal();renderClock();renderAlerts();renderTelegram();renderAll();
   setInterval(renderClock,1000);
   await fetchAll();renderAll();loadCOT(STATE.cot);loadGas();loadDivergence(STATE.symbol);loadGamma(STATE.symbol);fetchOHLC(STATE.symbol).then(()=>drawDetailChart());
   setInterval(async()=>{await fetchAll();renderAll();},CONFIG.refreshMs);
