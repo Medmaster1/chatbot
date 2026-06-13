@@ -384,8 +384,8 @@ const CONFIG = {
   startBalance: 100000,        // saldo iniziale conto demo (USD)
   // Strumenti del desk. y=simbolo Yahoo (fallback) · td=simbolo Twelve Data (primario con key)
   instruments: {
-    XAUUSD: { name:'Spot Gold',    base:2345.00, vol:0.55, drift:0.04,  digits:2, contract:100,  spread:0.25, tradable:true,  feed:'cg', cg:'pax-gold',       y:'GC=F',     td:'XAU/USD' },
-    XAGUSD: { name:'Spot Silver',  base:29.50,   vol:0.022,drift:0.05,  digits:3, contract:5000, spread:0.018,tradable:true,  feed:'cg', cg:'kinesis-silver', y:'SI=F' },
+    XAUUSD: { name:'Spot Gold',    base:2345.00, vol:0.55, drift:0.04,  digits:2, contract:100,  spread:0.25, tradable:true,  feed:'cg', cg:'pax-gold',       y:'GC=F',     td:'XAU/USD', opt:'GLD' },
+    XAGUSD: { name:'Spot Silver',  base:29.50,   vol:0.022,drift:0.05,  digits:3, contract:5000, spread:0.018,tradable:true,  feed:'cg', cg:'kinesis-silver', y:'SI=F', opt:'SLV' },
     DXY:    { name:'US Dollar Idx',base:104.50,  vol:0.06, drift:-0.02, digits:2, contract:0,    spread:0.02, tradable:false, feed:'fx', y:'DX-Y.NYB' },
     XPTUSD: { name:'Spot Platinum',base:995.0,   vol:0.45, drift:0.01,  digits:2, contract:100,  spread:0.6,  tradable:true,  feed:'yh', y:'PL=F' },
     XPDUSD: { name:'Spot Palladium',base:1010.0, vol:0.9,  drift:-0.01, digits:2, contract:100,  spread:1.2,  tradable:true,  feed:'yh', y:'PA=F' },
@@ -608,7 +608,7 @@ function renderWatchlist(){
       <td class="chg ${up?'up':'dn'}">${up?'+':''}${f(pct,2)}%</td></tr>`);
   });
   tb.innerHTML=rows.join('');
-  $$('#watchlist tr').forEach(tr=>tr.onclick=()=>{ STATE.symbol=tr.dataset.sym; renderAll(); loadDivPanel(STATE.symbol); });
+  $$('#watchlist tr').forEach(tr=>tr.onclick=()=>{ STATE.symbol=tr.dataset.sym; renderAll(); loadDivPanel(STATE.symbol); loadGammaT(STATE.symbol); });
 }
 function renderRatio(){
   const [a,b]=CONFIG.ratioPair; const r=px[a].last/px[b].last;
@@ -710,6 +710,8 @@ function drawChart(){
   const view=all.slice(-80); const n=view.length;
   let hi=-1e9,lo=1e9; view.forEach(c=>{ hi=Math.max(hi,c.h); lo=Math.min(lo,c.l); });
   const last=px[sym].last; hi=Math.max(hi,last); lo=Math.min(lo,last);
+  // includi i livelli gamma vicini nella scala
+  const gl=GAMMAT[sym]; if(gl){ [gl.cw,gl.pw,gl.flip].forEach(v=>{ if(v>last*0.9&&v<last*1.1){ hi=Math.max(hi,v); lo=Math.min(lo,v);} }); }
   const pad=(hi-lo)*0.08||1; hi+=pad; lo-=pad;
   const plotW=W-padR-padL, plotH=H-padB-padT;
   const x=i=>padL+ i/(n)*plotW;
@@ -738,6 +740,11 @@ function drawChart(){
   ctx.beginPath(); ctx.moveTo(padL,yl); ctx.lineTo(W-padR,yl); ctx.stroke(); ctx.setLineDash([]);
   ctx.fillStyle='#e7b54a'; ctx.fillRect(W-padR, yl-8, padR, 16);
   ctx.fillStyle='#000'; ctx.textAlign='left'; ctx.font='bold 9px JetBrains Mono'; ctx.fillText(f(last,d), W-padR+5, yl);
+  // ---- GAMMA LEVELS overlay (Call Wall / Put Wall / Gamma Flip) ----
+  if(gl){ const lvls=[{v:gl.cw,c:'#ff4d5e',t:'CW '+f(gl.cw,d)},{v:gl.flip,c:'#ffb547',t:'FLIP '+f(gl.flip,d)},{v:gl.pw,c:'#23d18b',t:'PW '+f(gl.pw,d)}];
+    lvls.forEach(L=>{ if(L.v<=lo||L.v>=hi)return; const yy=y(L.v); ctx.strokeStyle=L.c;ctx.lineWidth=1;ctx.setLineDash([6,3]);
+      ctx.beginPath();ctx.moveTo(padL,yy);ctx.lineTo(W-padR,yy);ctx.stroke();ctx.setLineDash([]);
+      ctx.fillStyle=L.c;ctx.textAlign='left';ctx.font='bold 8px JetBrains Mono';ctx.fillText(L.t,padL+3,yy-4); }); }
   // crosshair
   if(crosshair){ const {mx,my}=crosshair;
     ctx.strokeStyle='rgba(205,217,238,.25)'; ctx.setLineDash([3,3]);
@@ -838,6 +845,24 @@ async function fetchIntradayT(sym,tf,reserve){const a=CONFIG.instruments[sym];
     if(j&&j.status!=='error'&&Array.isArray(j.values)){const c=j.values.slice().reverse().map(v=>+v.close).filter(isFinite);if(c.length>40)return c;}}catch(e){}}
   try{const j=await fetchViaProxies(yahooURL(a.y,'60m','1mo'));const r=j.chart.result[0];const c=((r.indicators&&r.indicators.quote&&r.indicators.quote[0].close)||[]).filter(x=>x!=null);return tf==='H4'?_agg(c,4):c;}catch(e){return null;}}
 const DIVST={}; const DIVALERTED={};   // DIVST[sym]={h4:'bull'|'bear'|'none',h4series}
+/* ---- GAMMA LEVELS (GEX da opzioni, overlay sul grafico) ---- */
+const GAMMAT={};   // GAMMAT[sym]={cw,pw,flip} in scala prezzo strumento
+async function proxyJSON(url){ for(const p of PROXIES){ try{ const j=await getJSON(p(url),14000);
+  if(j&&typeof j.contents==='string')return JSON.parse(j.contents); if(j&&typeof j==='object')return j; }catch(e){} } throw new Error('proxy ko'); }
+function bsGamma(S,K,T,sig){ if(!(T>0)||!(sig>0)||!(S>0))return 0; const d1=(Math.log(S/K)+0.5*sig*sig*T)/(sig*Math.sqrt(T)); const nd1=Math.exp(-d1*d1/2)/Math.sqrt(2*Math.PI); return nd1/(S*sig*Math.sqrt(T)); }
+async function loadGammaT(sym){ const a=CONFIG.instruments[sym]; if(!a.opt)return;
+  try{ const j=await proxyJSON('https://query1.finance.yahoo.com/v7/finance/options/'+a.opt);
+    const res=j.optionChain&&j.optionChain.result&&j.optionChain.result[0]; if(!res)return;
+    const S=res.quote.regularMarketPrice,o=res.options[0],exp=o.expirationDate*1000,T=Math.max(1/365,(exp-Date.now())/(365*864e5));
+    const st={};const addO=(arr,c)=>arr.forEach(x=>{const K=x.strike,OI=x.openInterest||0,IV=x.impliedVolatility||0;if(!K||!OI)return;const g=bsGamma(S,K,T,IV);const gex=g*OI*100*S*S*0.01*(c?1:-1);const r=st[K]||(st[K]={K,callOI:0,putOI:0,gex:0});if(c)r.callOI+=OI;else r.putOI+=OI;r.gex+=gex;});
+    addO(o.calls,true);addO(o.puts,false);const list=Object.values(st).sort((x,y)=>x.K-y.K);if(list.length<3)return;
+    const cw=list.reduce((m,x)=>x.callOI>m.callOI?x:m),pw=list.reduce((m,x)=>x.putOI>m.putOI?x:m);
+    let cum=0,flip=null,prev=null;for(const x of list){const b=cum;cum+=x.gex;if(prev!==null&&((b<0&&cum>=0)||(b>0&&cum<=0)))flip=x.K;prev=cum;}
+    if(flip==null)flip=list.reduce((m,x)=>Math.abs(x.gex)>Math.abs(m.gex)?x:m).K;
+    const factor=(px[sym]&&px[sym].real&&S)?px[sym].real/S:(px[sym]?px[sym].last/S:1);
+    GAMMAT[sym]={cw:cw.K*factor,pw:pw.K*factor,flip:flip*factor}; if(sym===STATE.symbol)drawChart();
+  }catch(e){}
+}
 const DIVW={'MACD·H4':3,'MACD·H1':2,'RSI·H4':1.5,'RSI·H1':1};
 async function scanDivergences(){
   // H4 di tutti gli strumenti negoziabili → alert MACD-H4 + badge watchlist
@@ -850,6 +875,7 @@ async function scanDivergences(){
   }
   renderWatchlist();
   loadDivPanel(STATE.symbol);
+  SYMS.forEach(s=>{ if(CONFIG.instruments[s].opt) loadGammaT(s); }); // gamma levels (oro/argento)
 }
 function fireDivAlert(sym,dir){
   const el=$('#divAlert'); el.className='divalert show '+dir;
