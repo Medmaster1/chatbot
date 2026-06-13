@@ -202,6 +202,18 @@ button{font-family:var(--mono);cursor:pointer;color:inherit}select{font-family:v
 .jrnl .btns{display:flex;gap:6px;margin-top:6px}
 .jrnl button{flex:1;background:var(--panel2);border:1px solid var(--line2);color:var(--txt);padding:7px;border-radius:7px;font-size:10px;font-weight:700}
 .jrnl button.gold{background:var(--gold-d);border-color:var(--gold2);color:var(--gold)}
+/* gamma levels */
+.gx-regime{display:flex;align-items:center;gap:9px;padding:9px;border-radius:8px;border:1px solid var(--line2);margin-bottom:9px}
+.gx-regime .ic{font-size:20px}.gx-regime .t{font-size:12px;font-weight:800}.gx-regime .s{font-size:9.5px;color:var(--txt2)}
+.gx-regime.pos{background:var(--green-d);border-color:var(--green)}.gx-regime.pos .t{color:var(--green)}
+.gx-regime.neg{background:var(--red-d);border-color:var(--red)}.gx-regime.neg .t{color:var(--red)}
+.gx-lvl{display:flex;align-items:center;justify-content:space-between;font-size:10.5px;padding:5px 0;border-bottom:1px solid var(--line)}
+.gx-lvl .nm{font-weight:700}.gx-lvl .nm small{color:var(--txt3);font-weight:400;margin-left:5px}
+.gx-lvl .v{font-weight:700;font-variant-numeric:tabular-nums}
+.gx-lvl .d{font-size:9px;color:var(--txt3);width:54px;text-align:right}
+.gx-cw .nm{color:var(--red)} .gx-pw .nm{color:var(--green)} .gx-fl .nm{color:var(--amber)}
+#gexChart{width:100%;height:96px;display:block;margin-top:8px}
+.gx-note{font-size:9.5px;color:var(--txt3);line-height:1.5;margin-top:8px}
 
 .ev{display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);font-size:11px}
 .ev:last-child{border:none}
@@ -274,6 +286,12 @@ button{font-family:var(--mono);cursor:pointer;color:inherit}select{font-family:v
       <div class="panel">
         <div class="ph">🪤 Divergenze MACD/RSI · H4·H1<span class="sp"></span><span class="tag" id="divSym">peso max: MACD H4</span></div>
         <div class="pb" id="divBody"><div class="loading">analisi divergenze (serve intraday)…</div></div>
+      </div>
+
+      <!-- GAMMA LEVELS (GEX) -->
+      <div class="panel">
+        <div class="ph">📐 Gamma Levels · GEX<span class="sp"></span><span class="tag" id="gexSym">opzioni</span></div>
+        <div class="pb" id="gexBody"><div class="loading">calcolo livelli gamma…</div></div>
       </div>
 
       <div class="panel">
@@ -357,10 +375,10 @@ const CONFIG = {
   // feed = fonte primaria: cg (CoinGecko), fx (Frankfurter/BCE), yh (Yahoo proxy)
   // td = simbolo Twelve Data (usato come primario SOLO dove il piano free lo copre: oro/forex major/BTC)
   assets:{
-    XAUUSD:{name:'Gold',cls:'Metalli',feed:'cg',cg:'pax-gold',y:'GC=F',td:'XAU/USD',digits:2,color:'#e7b54a'},
-    XAGUSD:{name:'Silver',cls:'Metalli',feed:'cg',cg:'kinesis-silver',y:'SI=F',digits:3,color:'#cfd8e3'},
-    US500:{name:'S&P 500',cls:'Indici',feed:'yh',y:'^GSPC',digits:2,color:'#48a0ff'},
-    US100:{name:'Nasdaq 100',cls:'Indici',feed:'yh',y:'^NDX',digits:2,color:'#7fb2ff'},
+    XAUUSD:{name:'Gold',cls:'Metalli',feed:'cg',cg:'pax-gold',y:'GC=F',td:'XAU/USD',opt:'GLD',digits:2,color:'#e7b54a'},
+    XAGUSD:{name:'Silver',cls:'Metalli',feed:'cg',cg:'kinesis-silver',y:'SI=F',opt:'SLV',digits:3,color:'#cfd8e3'},
+    US500:{name:'S&P 500',cls:'Indici',feed:'yh',y:'^GSPC',opt:'SPY',digits:2,color:'#48a0ff'},
+    US100:{name:'Nasdaq 100',cls:'Indici',feed:'yh',y:'^NDX',opt:'QQQ',digits:2,color:'#7fb2ff'},
     GER40:{name:'DAX',cls:'Indici',feed:'yh',y:'^GDAXI',digits:2,color:'#9bc4ff'},
     WTIUSD:{name:'Crude Oil',cls:'Materie',feed:'yh',y:'CL=F',digits:2,color:'#ff8a5c'},
     NATGAS:{name:'Natural Gas',cls:'Materie',feed:'yh',y:'NG=F',digits:3,color:'#5fc9e8'},
@@ -852,7 +870,65 @@ function buildJournal(sym,items,score,dir){
   return L.join('\n');
 }
 
-function selectSymbol(sym){ STATE.symbol=sym; renderDetail(); renderAdvisor(); renderHeat(); loadDivergence(sym); }
+/* ====================== GAMMA LEVELS (GEX da opzioni) ==================== */
+async function proxyJSON(url){ // fetch generico via proxy CORS (per endpoint non-chart)
+  for(const p of PROXIES){ try{ const j=await getJSON(p(url),14000);
+    if(j&&typeof j.contents==='string') return JSON.parse(j.contents);
+    if(j&&typeof j==='object') return j; }catch(e){} }
+  throw new Error('proxy ko');
+}
+function bsGamma(S,K,T,sig){ if(!(T>0)||!(sig>0)||!(S>0))return 0; const d1=(Math.log(S/K)+0.5*sig*sig*T)/(sig*Math.sqrt(T)); const nd1=Math.exp(-d1*d1/2)/Math.sqrt(2*Math.PI); return nd1/(S*sig*Math.sqrt(T)); }
+async function loadGamma(sym){
+  const body=$('#gexBody'); const und=CONFIG.assets[sym].opt; $('#gexSym').textContent= und?('opzioni '+und):'n/d';
+  if(!und){ body.innerHTML='<div class="loading">Gamma levels non disponibili per questo strumento (servono opzioni listate: oro/argento/indici).</div>'; return; }
+  body.innerHTML='<div class="loading">calcolo livelli gamma da opzioni '+und+'…</div>';
+  try{
+    const j=await proxyJSON('https://query1.finance.yahoo.com/v7/finance/options/'+und);
+    const res=j.optionChain&&j.optionChain.result&&j.optionChain.result[0]; if(!res) throw new Error('no chain');
+    const S=res.quote.regularMarketPrice; const o=res.options[0]; const exp=o.expirationDate*1000;
+    const T=Math.max(1/365,(exp-Date.now())/(365*864e5));
+    const strikes={};
+    const add=(arr,isCall)=>arr.forEach(x=>{ const K=x.strike, OI=x.openInterest||0, IV=x.impliedVolatility||0; if(!K||!OI)return;
+      const g=bsGamma(S,K,T,IV); const gex=g*OI*100*S*S*0.01*(isCall?1:-1);
+      const r=strikes[K]||(strikes[K]={K,callOI:0,putOI:0,gex:0}); if(isCall)r.callOI+=OI; else r.putOI+=OI; r.gex+=gex; });
+    add(o.calls,true); add(o.puts,false);
+    const list=Object.values(strikes).sort((a,b)=>a.K-b.K); if(list.length<3) throw new Error('pochi strike');
+    const callWall=list.reduce((m,x)=>x.callOI>m.callOI?x:m); const putWall=list.reduce((m,x)=>x.putOI>m.putOI?x:m);
+    let cum=0,flip=null,prev=null; const netGEX=list.reduce((s,x)=>s+x.gex,0);
+    for(const x of list){ const before=cum; cum+=x.gex; if(prev!==null && ((before<0&&cum>=0)||(before>0&&cum<=0))) flip=x.K; prev=cum; }
+    if(flip==null) flip = list.reduce((m,x)=>Math.abs(x.gex)>Math.abs(m.gex)?x:m).K; // fallback: strike di max |gex|
+    const factor=(DATA[sym]&&DATA[sym].price&&S)?DATA[sym].price/S:1; const d=dg(sym);
+    const lvl=K=>f(K*factor,d); const dist=K=>{const v=(K*factor/DATA[sym].price-1)*100;return (v>=0?'+':'')+v.toFixed(2)+'%';};
+    const pos=netGEX>=0;
+    body.innerHTML=`
+      <div class="gx-regime ${pos?'pos':'neg'}"><div class="ic">${pos?'🧲':'⚡'}</div>
+        <div><div class="t">${pos?'GAMMA POSITIVO':'GAMMA NEGATIVO'}</div>
+        <div class="s">${pos?'dealer stabilizzano: range/pinning, volatilità compressa.':'dealer amplificano: trend e volatilità più probabili.'}</div></div></div>
+      <div class="gx-lvl gx-cw"><span class="nm">Call Wall <small>resistenza</small></span><span class="v">${lvl(callWall.K)}</span><span class="d">${dist(callWall.K)}</span></div>
+      <div class="gx-lvl gx-fl"><span class="nm">Gamma Flip <small>zero-gamma</small></span><span class="v">${lvl(flip)}</span><span class="d">${dist(flip)}</span></div>
+      <div class="gx-lvl gx-pw"><span class="nm">Put Wall <small>supporto</small></span><span class="v">${lvl(putWall.K)}</span><span class="d">${dist(putWall.K)}</span></div>
+      <div class="gx-lvl"><span class="nm">Net GEX</span><span class="v ${pos?'up':'dn'}">${(netGEX/1e6).toFixed(1)}M</span><span class="d">${und} ${f(S,2)}</span></div>
+      <canvas id="gexChart"></canvas>
+      <div class="gx-note">GEX per strike da opzioni reali ${und} (scad. ${new Date(exp).toLocaleDateString('it-IT')}), livelli riportati in scala ${sym}. Sopra il Call Wall e sotto il Put Wall la volatilità tende ad aumentare; il Gamma Flip separa il regime stabile da quello instabile.</div>`;
+    drawGexChart(list,flip,DATA[sym].price/factor);
+  }catch(e){ body.innerHTML='<div class="loading">Opzioni non disponibili ora (proxy occupato o mercato chiuso). Riprova.</div>'; }
+}
+function drawGexChart(list,flip,spot){const cv=$('#gexChart');if(!cv)return;const ctx=cv.getContext('2d'),dpr=window.devicePixelRatio||1,r=cv.getBoundingClientRect();
+  cv.width=r.width*dpr;cv.height=r.height*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);const W=r.width,H=r.height,pad=4;ctx.clearRect(0,0,W,H);
+  // limita a strike vicini allo spot
+  const near=list.filter(x=>Math.abs(x.K/spot-1)<0.12); const use=near.length>4?near:list;
+  const maxv=Math.max(...use.map(x=>Math.abs(x.gex)),1); const bw=Math.max(2,W/use.length*0.7);
+  const x=i=>pad+i/(use.length-1||1)*(W-pad*2); const y0=H/2;
+  use.forEach((s,i)=>{ const h=Math.abs(s.gex)/maxv*(H/2-4); ctx.fillStyle=s.gex>=0?'rgba(35,209,139,.8)':'rgba(255,77,94,.8)';
+    ctx.fillRect(x(i)-bw/2, s.gex>=0?y0-h:y0, bw, h);
+    if(s.K===flip){ ctx.strokeStyle='#ffb547';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(x(i),0);ctx.lineTo(x(i),H);ctx.stroke(); } });
+  ctx.strokeStyle='rgba(150,170,205,.25)';ctx.beginPath();ctx.moveTo(pad,y0);ctx.lineTo(W-pad,y0);ctx.stroke();
+  // spot marker
+  let si=0,best=1e9; use.forEach((s,i)=>{const dd=Math.abs(s.K-spot);if(dd<best){best=dd;si=i;}});
+  ctx.fillStyle='#e8eefb';ctx.beginPath();ctx.arc(x(si),y0,2.5,0,7);ctx.fill();
+  ctx.font='8px JetBrains Mono';ctx.fillStyle='#5f7193';ctx.textAlign='left';ctx.fillText('● spot',pad,9);ctx.fillStyle='#ffb547';ctx.fillText('| flip',pad+38,9);}
+
+function selectSymbol(sym){ STATE.symbol=sym; renderDetail(); renderAdvisor(); renderHeat(); loadDivergence(sym); loadGamma(sym); }
 
 function renderAll(){renderKPI();renderHeat();renderAcPerf();renderMovers();renderCorr();renderFG();renderRegime();renderDetail();renderAdvisor();drawComp();updateBadge();}
 
@@ -861,7 +937,7 @@ function initCotSel(){$('#cotSel').innerHTML=CONFIG.cot.map(c=>`<option value="$
 function setKeyDot(){const ok=$('#keyOk');if(ok)ok.classList.toggle('on',!!APIKEY);
   $('#dataBadge').title=APIKEY?'Fonte primaria: Twelve Data · fallback Yahoo':'Fonte: Yahoo Finance (proxy). Aggiungi una key Twelve Data per dati più affidabili.';}
 function bind(){
-  $('#btnRefresh').onclick=async()=>{COT_CACHE={};await fetchAll();renderAll();loadCOT(STATE.cot);loadDivergence(STATE.symbol);loadGas();toast('Dati aggiornati');};
+  $('#btnRefresh').onclick=async()=>{COT_CACHE={};await fetchAll();renderAll();loadCOT(STATE.cot);loadDivergence(STATE.symbol);loadGamma(STATE.symbol);loadGas();toast('Dati aggiornati');};
   $('#tdSave').onclick=async()=>{ APIKEY=$('#tdKey').value.trim(); await Storage.set('td_apikey',APIKEY); setKeyDot();
     toast(APIKEY?'API key salvata · Twelve Data primario':'API key rimossa · uso Yahoo'); await fetchAll(); renderAll(); loadDivergence(STATE.symbol); };
   $('#tdKey').addEventListener('keydown',e=>{ if(e.key==='Enter')$('#tdSave').click(); });
@@ -875,7 +951,7 @@ function bind(){
   AGSIKEY=(await Storage.get('agsi_apikey'))||''; if(AGSIKEY)$('#agsiKey').value=AGSIKEY;
   SY.forEach(ensureSim);bind();setKeyDot();initCotSel();renderCal();renderClock();renderAll();
   setInterval(renderClock,1000);
-  await fetchAll();renderAll();loadCOT(STATE.cot);loadGas();loadDivergence(STATE.symbol);
+  await fetchAll();renderAll();loadCOT(STATE.cot);loadGas();loadDivergence(STATE.symbol);loadGamma(STATE.symbol);
   setInterval(async()=>{await fetchAll();renderAll();},CONFIG.refreshMs);
   setInterval(loadGas, 1800000);  // riserve gas: refresh ogni 30 min (dato giornaliero)
 })();
