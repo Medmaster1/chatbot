@@ -22,6 +22,7 @@ const ALLOW = [
   'publicreporting.cftc.gov',
   'agsi.gie.eu',
   'lab.flashalpha.com',
+  'nfs.faireconomy.media',
 ];
 
 export default {
