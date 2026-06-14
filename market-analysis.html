@@ -945,9 +945,10 @@ async function loadDivergence(sym){
   body.innerHTML=`<div class="dv-tot ${dir}"><div class="ic">${ic}</div><div><div class="t">${tt}</div><div class="s">${sub}</div></div></div>
     ${rowsHtml}
     <div class="jrnl"><textarea id="jrnlText" readonly>${buildJournal(sym,items,score,dir)}</textarea>
-      <div class="btns"><button class="gold" id="jrnlCopy">📋 Copia</button><button id="jrnlSave">💾 Salva nel diario</button></div></div>`;
+      <div class="btns"><button class="gold" id="jrnlCopy">📋 Copia</button><button id="jrnlSave">💾 Diario</button><button id="jrnlTg">📨 Telegram</button></div></div>`;
   $('#jrnlCopy').onclick=async()=>{try{await navigator.clipboard.writeText($('#jrnlText').value);toast('Nota copiata');}catch(e){$('#jrnlText').select();document.execCommand('copy');toast('Nota copiata');}};
   $('#jrnlSave').onclick=async()=>{const log=(await Storage.get('trade_journal'))||[];log.unshift({ts:Date.now(),sym,score,dir,text:$('#jrnlText').value});await Storage.set('trade_journal',log.slice(0,100));toast('Salvato nel diario ('+Math.min(log.length,100)+')');};
+  $('#jrnlTg').onclick=async()=>{ if(!TG.token||!TG.chat){toast('Configura prima Telegram (pannello Alert)');return;} toast('Invio giornale…'); const ok=await tgSend('📓 <b>Giornale di trading · '+sym+'</b>\n<pre>'+$('#jrnlText').value.replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))+'</pre>'); toast(ok?'Giornale inviato su Telegram ✓':'Invio fallito'); };
 }
 function buildJournal(sym,items,score,dir){
   const D=DATA[sym]; const price=D?f(D.price,dg(sym)):'--';
@@ -1092,10 +1093,36 @@ function alertDesc(a){ const v=a.val; switch(a.type){
   case'rob':return `${a.sym} RSI ipercomprato (>70)`; case'ros':return `${a.sym} RSI ipervenduto (<30)`;
   case'gf':return `${a.sym} cross Gamma Flip`; case'cw':return `${a.sym} tocco Call Wall`; case'pw':return `${a.sym} tocco Put Wall`; default:return a.type; } }
 /* --- Telegram --- */
-const TG={token:'',chat:''};
-async function tgSend(text){ if(!TG.token||!TG.chat)return false;
-  try{ const r=await fetch(`https://api.telegram.org/bot${TG.token}/sendMessage`,{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({chat_id:TG.chat,text,parse_mode:'HTML',disable_web_page_preview:true})}); const j=await r.json(); return !!j.ok; }catch(e){return false;} }
+const TG={token:'',chat:'',daily:false,dailyTime:'08:00',dailyLast:''};
+async function tgSend(text,html=true){ if(!TG.token||!TG.chat)return false;
+  try{ const body={chat_id:TG.chat,text,disable_web_page_preview:true}; if(html)body.parse_mode='HTML';
+    const r=await fetch(`https://api.telegram.org/bot${TG.token}/sendMessage`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); const j=await r.json(); return !!j.ok; }catch(e){return false;} }
+// Riepilogo giornaliero: bias, regime, gamma, COT (+ gas se AGSI)
+async function buildDailySummary(){
+  const date=new Date().toLocaleString('it-IT',{dateStyle:'medium',timeStyle:'short'});
+  const reg=$('#regime')?.textContent||'—'; const fg=fearGreed();
+  const L=[`📊 <b>AURUM · Riepilogo</b> — ${date}`,`Regime: <b>${reg}</b> · Fear&amp;Greed ${fg}/100`,'','<b>Bias (rating tecnico):</b>'];
+  ['XAUUSD','XAGUSD','US500','US100','BTCUSD','DXY'].forEach(s=>{ const R=rating(s),D=DATA[s];
+    L.push(`• ${s}: <b>${R?R.label:'—'}</b> — ${D?f(D.price,dg(s)):'--'} (${D&&D.change>=0?'+':''}${D?f(D.change,2):'0'}%)`); });
+  const sorted=SY.map(s=>({s,c:DATA[s]?.change||0})).sort((a,b)=>b.c-a.c);
+  L.push('',`<b>Movers:</b> ▲ ${sorted[0].s} +${sorted[0].c.toFixed(2)}% · ▼ ${sorted.at(-1).s} ${sorted.at(-1).c.toFixed(2)}%`);
+  const g=GAMMA[STATE.symbol]; if(g){const d=dg(STATE.symbol);L.push('',`<b>Gamma ${STATE.symbol}:</b> Flip ${f(g.flip,d)} · CW ${f(g.cw,d)} · PW ${f(g.pw,d)}`);}
+  try{ const [gj,sj]=await Promise.all([getJSON(cotURL('088691')),getJSON(cotURL('084691'))]);
+    const net=r=>({d:r[0].report_date_as_yyyy_mm_dd?.slice(0,10),spec:(+r[0].noncomm_positions_long_all)-(+r[0].noncomm_positions_short_all)});
+    const G=net(gj),S=net(sj); L.push('',`<b>COT</b> (${G.d}): Gold spec ${G.spec>=0?'+':''}${Math.round(G.spec).toLocaleString('en-US')} · Silver spec ${S.spec>=0?'+':''}${Math.round(S.spec).toLocaleString('en-US')}`);
+  }catch(e){}
+  if(AGSIKEY){ try{ const r=await fetch('https://agsi.gie.eu/api?continent=eu&size=1',{headers:{'x-key':AGSIKEY}}); const j=await r.json();
+    if(j.data&&j.data[0]){const d=j.data[0];const w=+d.withdrawal>+d.injection;L.push('',`<b>Gas UE:</b> ${(+d.full).toFixed(1)}% · ${w?'svuotamento':'riempimento'}`);} }catch(e){} }
+  L.push('','<i>Strumento educativo · non è un consiglio d\'investimento.</i>');
+  return L.join('\n');
+}
+async function sendDailySummary(manual){ if(!TG.token||!TG.chat){ if(manual)toast('Configura prima Telegram'); return; }
+  if(manual)toast('Invio riepilogo…'); const ok=await tgSend(await buildDailySummary()); if(manual)toast(ok?'Riepilogo inviato ✓':'Invio fallito'); return ok; }
+// scheduler: invio automatico una volta al giorno all'orario impostato (CET)
+async function checkDailySummary(){ if(!TG.daily||!TG.token||!TG.chat)return;
+  const cet=cetNow(); const hhmm=String(cet.getHours()).padStart(2,'0')+':'+String(cet.getMinutes()).padStart(2,'0');
+  const today=cet.toISOString().slice(0,10);
+  if(hhmm>= (TG.dailyTime||'08:00') && TG.dailyLast!==today){ TG.dailyLast=today; await Storage.set('tg_daily_last',today); sendDailySummary(false); } }
 async function tgDetect(){ if(!TG.token){toast('Inserisci prima il bot token');return;}
   try{ const r=await fetch(`https://api.telegram.org/bot${TG.token}/getUpdates`); const j=await r.json();
     const u=(j.result||[]).reverse().find(x=>x.message&&x.message.chat);
@@ -1108,12 +1135,22 @@ function renderTelegram(){ const b=$('#tgBox'); if(!b)return; const on=TG.token&
       <input id="tgChat" placeholder="chat_id" value="${TG.chat||''}"/>
       <button id="tgSave">Salva</button><button id="tgDetect" title="Scrivi prima al bot">Rileva chat</button><button id="tgTest">Test</button>
     </div>
-    <div class="tg-note">Crea un bot con <b>@BotFather</b> → incolla il token → scrivi un messaggio al bot → premi <b>Rileva chat</b>. Gli alert verranno inviati anche su Telegram.</div>`;
+    <div class="tg-form" style="margin-top:5px">
+      <button id="tgSummary" class="add" style="flex:1;background:rgba(72,160,255,.14);border-color:var(--blue);color:var(--blue)">📊 Invia riepilogo ora</button>
+    </div>
+    <div class="tg-form" style="margin-top:5px;align-items:center">
+      <label class="al-snd" style="flex:1"><input type="checkbox" id="tgDaily" ${TG.daily?'checked':''}/> riepilogo giornaliero alle</label>
+      <input id="tgTime" type="time" value="${TG.dailyTime||'08:00'}" style="flex:0 0 88px"/>
+    </div>
+    <div class="tg-note">Crea un bot con <b>@BotFather</b> → incolla il token → scrivi al bot → <b>Rileva chat</b>. Riceverai alert, il <b>riepilogo giornaliero</b> (bias, regime, gamma, COT, gas) e il <b>giornale di trading</b>.</div>`;
   $('#tgSave').onclick=async()=>{ TG.token=$('#tgToken').value.trim(); TG.chat=$('#tgChat').value.trim();
     await Storage.set('tg_token',TG.token); await Storage.set('tg_chat',TG.chat); renderTelegram(); toast('Telegram salvato'); };
   $('#tgDetect').onclick=tgDetect;
   $('#tgTest').onclick=async()=>{ TG.token=$('#tgToken').value.trim(); TG.chat=$('#tgChat').value.trim(); await Storage.set('tg_token',TG.token); await Storage.set('tg_chat',TG.chat);
     toast('Invio test…'); const ok=await tgSend('✅ <b>AURUM</b> · test alert Telegram'); toast(ok?'Messaggio Telegram inviato ✓':'Invio fallito (token/chat_id?)'); renderTelegram(); };
+  $('#tgSummary').onclick=()=>sendDailySummary(true);
+  $('#tgDaily').onchange=async e=>{ TG.daily=e.target.checked; await Storage.set('tg_daily',TG.daily); toast(TG.daily?'Riepilogo giornaliero attivo':'Riepilogo giornaliero disattivato'); };
+  $('#tgTime').onchange=async e=>{ TG.dailyTime=e.target.value||'08:00'; await Storage.set('tg_daily_time',TG.dailyTime); };
 }
 function fireAlert(a,msg){ a.fired=true; a.firedAt=Date.now(); notify('AURUM Alert · '+a.sym,msg); beep(); toast('🔔 '+msg);
   if(TG.token&&TG.chat) tgSend(`🔔 <b>AURUM Alert · ${a.sym}</b>\n${msg}`); }
@@ -1181,11 +1218,13 @@ function bind(){
   PROXY_URL=(await Storage.get('cors_proxy'))||''; if(PROXY_URL)$('#proxyUrl').value=PROXY_URL;
   ALERTS=((await Storage.get('alerts'))||[]).map(a=>({...a,armed:a.armed!==false}));
   TG.token=(await Storage.get('tg_token'))||''; TG.chat=(await Storage.get('tg_chat'))||'';
+  TG.daily=!!(await Storage.get('tg_daily')); TG.dailyTime=(await Storage.get('tg_daily_time'))||'08:00'; TG.dailyLast=(await Storage.get('tg_daily_last'))||'';
   SY.forEach(ensureSim);bind();setKeyDot();initCotSel();renderCal();renderClock();renderAlerts();renderTelegram();renderAll();
   setInterval(renderClock,1000);
   await fetchAll();renderAll();loadCOT(STATE.cot);loadGas();loadDivergence(STATE.symbol);loadGamma(STATE.symbol);fetchOHLC(STATE.symbol).then(()=>drawDetailChart());
   setInterval(async()=>{await fetchAll();renderAll();},CONFIG.refreshMs);
   setInterval(loadGas, 1800000);  // riserve gas: refresh ogni 30 min (dato giornaliero)
+  setInterval(checkDailySummary, 60000); checkDailySummary();  // riepilogo Telegram giornaliero
 })();
 </script>
 </body>
