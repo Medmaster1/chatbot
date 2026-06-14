@@ -221,6 +221,23 @@ button{font-family:var(--mono);cursor:pointer;color:inherit}select{font-family:v
 .tg-form button{background:var(--panel2);border:1px solid var(--line2);color:var(--txt2);padding:6px 8px;border-radius:6px;font-size:9.5px;font-weight:700;cursor:pointer}
 .tg-form button:hover{border-color:var(--blue);color:#fff}
 .tg-note{font-size:9px;color:var(--txt3);line-height:1.5;margin-top:6px}
+/* risk guardian + calcolatori */
+.rg-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-bottom:10px}
+.rg-grid .fld label{display:block;font-size:8.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px}
+.rg-grid input,.rg-grid select{width:100%;background:var(--bg);border:1px solid var(--line2);color:#fff;padding:6px 7px;border-radius:6px;font-family:var(--mono);font-size:11px}
+.rg-grid input:focus,.rg-grid select:focus{outline:none;border-color:var(--gold2)}
+.rg-status{display:flex;align-items:center;gap:10px;padding:10px;border-radius:9px;border:1px solid var(--line2);margin-bottom:9px}
+.rg-status .ic{font-size:24px}.rg-status .t{font-size:13px;font-weight:800}.rg-status .s{font-size:9.5px;color:var(--txt2)}
+.rg-status.safe{background:var(--green-d);border-color:var(--green)}.rg-status.safe .t{color:var(--green)}
+.rg-status.warn{background:rgba(255,181,71,.12);border-color:var(--amber)}.rg-status.warn .t{color:var(--amber)}
+.rg-status.danger{background:var(--red-d);border-color:var(--red)}.rg-status.danger .t{color:var(--red)}
+.rg-out{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:6px}
+.rg-c{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.rg-c .k{font-size:8.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px}
+.rg-c .v{font-size:15px;font-weight:800;color:#fff;margin-top:2px;font-variant-numeric:tabular-nums}
+.rg-bar{height:7px;border-radius:5px;background:var(--panel3);overflow:hidden;margin-top:5px}.rg-bar>span{display:block;height:100%;border-radius:5px}
+.rg-h{font-size:9px;text-transform:uppercase;letter-spacing:.7px;color:var(--gold2);font-weight:700;margin:10px 0 6px;border-top:1px solid var(--line);padding-top:9px}
+.rg-row{display:flex;justify-content:space-between;font-size:10.5px;padding:4px 0;border-bottom:1px dashed var(--line)}.rg-row .k{color:var(--txt3)}.rg-row .v{font-weight:700}
 /* gamma levels */
 #gexTicker{width:64px;background:var(--bg);border:1px solid var(--line2);color:var(--gold);padding:3px 6px;border-radius:5px;font-family:var(--mono);font-size:10px;text-transform:uppercase;margin-right:6px}
 #gexTicker:focus{outline:none;border-color:var(--gold2)}
@@ -296,7 +313,9 @@ button{font-family:var(--mono);cursor:pointer;color:inherit}select{font-family:v
       </div>
 
       <div class="panel">
-        <div class="ph">◷ Analisi tecnica<span class="sp"></span><span class="tag" id="dTag">indicatori su storico reale</span></div>
+        <div class="ph">◷ Analisi tecnica<span class="sp"></span>
+          <label class="al-snd" title="Mostra livelli di liquidità (PDH/PDL, PWH/PWL, swing)"><input type="checkbox" id="liqToggle" checked/> liquidità</label>
+          <span class="tag" id="dTag" style="margin-left:6px">storico reale</span></div>
         <div class="pb">
           <div class="detail-top"><span class="s" id="dSym">--</span><span class="nm" id="dName"></span><span class="p" id="dPrice"></span></div>
           <canvas id="detailChart"></canvas>
@@ -332,6 +351,12 @@ button{font-family:var(--mono);cursor:pointer;color:inherit}select{font-family:v
       <div class="panel">
         <div class="ph">⇄ Performance comparata<span class="sp"></span><span class="tag">rebased a 100 · storico reale</span></div>
         <div class="pb"><canvas id="compChart"></canvas><div class="legend" id="legend"></div></div>
+      </div>
+
+      <!-- RISK GUARDIAN + CALCOLATORI -->
+      <div class="panel">
+        <div class="ph">🛡 Risk Guardian · Prop<span class="sp"></span><span class="tag">rispetta le regole del conto</span></div>
+        <div class="pb" id="rgBody"></div>
       </div>
     </div>
 
@@ -390,8 +415,11 @@ button{font-family:var(--mono);cursor:pointer;color:inherit}select{font-family:v
       </div>
 
       <div class="panel">
-        <div class="ph">🗓 Calendario economico<span class="sp"></span><span class="tag">indicativo</span></div>
-        <div class="pb" id="calendar"></div>
+        <div class="ph">🗓 Calendario economico<span class="sp"></span>
+          <label class="al-snd" title="Alert prima delle news ad alto impatto"><input type="checkbox" id="newsAlert"/> alert</label>
+          <input id="newsMin" type="number" value="30" title="minuti prima" style="width:42px;background:var(--bg);border:1px solid var(--line2);color:var(--txt);border-radius:5px;padding:3px 5px;font-family:var(--mono);font-size:10px;margin-left:5px"/>
+          <span class="tag" style="margin-left:4px">min</span></div>
+        <div class="pb" id="calendar"><div class="loading">caricamento calendario…</div></div>
       </div>
     </div>
   </div>
@@ -477,6 +505,7 @@ const SY=Object.keys(CONFIG.assets);
 const dg=s=>CONFIG.assets[s].digits;
 const f=(n,d=2)=>(n==null||isNaN(n))?'--':Number(n).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
 const fInt=n=>(n==null||isNaN(n))?'--':Number(Math.round(n)).toLocaleString('en-US');
+const fUsd=n=>(n==null||isNaN(n))?'--':(n<0?'-$':'$')+Number(Math.abs(n)).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 const gauss=()=>{let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)};
 const lerpColor=t=>{const c1=[255,77,94],c2=[231,181,74],c3=[35,209,139];let a,b,tt;if(t<.5){a=c1;b=c2;tt=t/.5}else{a=c2;b=c3;tt=(t-.5)/.5}return`rgb(${a.map((v,i)=>Math.round(v+(b[i]-v)*tt)).join(',')})`;};
@@ -790,7 +819,7 @@ function drawDetailChart(){const cv=$('#detailChart');const D=DATA[STATE.symbol]
   let candles=(D.ohlc&&D.ohlc.length>3)?D.ohlc.slice(-70):null;
   if(!candles){const a=(D.daily||[]).slice(-70);if(a.length<2)return;candles=a.map((c,i)=>{const o=i?a[i-1]:c;return{o,h:Math.max(o,c),l:Math.min(o,c),c};});}
   const n=candles.length;let hi=-1e9,lo=1e9;candles.forEach(c=>{hi=Math.max(hi,c.h);lo=Math.min(lo,c.l);});
-  const gl=gammaLevels(STATE.symbol)||[];const lastC=candles.at(-1).c;
+  const gl=[...(gammaLevels(STATE.symbol)||[]),...liqActive()];const lastC=candles.at(-1).c;
   gl.forEach(L=>{if(L.v>lastC*0.9&&L.v<lastC*1.1){hi=Math.max(hi,L.v);lo=Math.min(lo,L.v);}});
   const pad=(hi-lo)*0.06||1;hi+=pad;lo-=pad;const rng=hi-lo;const plotW=W-padL-padR;
   const x=i=>padL+i/(n-1||1)*plotW,y=v=>padT+(1-(v-lo)/rng)*(H-padT-padB);
@@ -848,8 +877,89 @@ function drawCOTChart(recs){const cv=$('#cotChart');if(!cv)return;const ctx=cv.g
   plot(comm,'#48a0ff');plot(spec,'#e7b54a');ctx.font='8px JetBrains Mono';ctx.fillStyle='#e7b54a';ctx.textAlign='left';ctx.fillText('● spec',pad,9);ctx.fillStyle='#48a0ff';ctx.fillText('● comm',pad+44,9);}
 
 /* calendar / clock / toast */
-const CAL=[{t:'Gio 14:30',fl:'🇺🇸',ti:'Initial Jobless Claims',d:'settimanale',imp:'med'},{t:'Ven 14:30',fl:'🇺🇸',ti:'Non-Farm Payrolls',d:'occupazione',imp:'high'},{t:'Mar 11:00',fl:'🇪🇺',ti:'ECB Rate Decision',d:'tassi BCE',imp:'high'},{t:'Mer 14:30',fl:'🇺🇸',ti:'CPI Inflation',d:'inflazione',imp:'high'},{t:'Mer 20:00',fl:'🇺🇸',ti:'FOMC Statement',d:'Fed',imp:'high'},{t:'Ven 21:30',fl:'🇺🇸',ti:'COT Report',d:'CFTC',imp:'med'}];
-function renderCal(){$('#calendar').innerHTML=CAL.map(e=>`<div class="ev"><span class="tm">${e.t}</span><span class="flag">${e.fl}</span><span class="ti"><b>${e.ti}</b><small>${e.d}</small></span><span class="imp ${e.imp}">${e.imp.toUpperCase()}</span></div>`).join('');}
+/* Calendario economico REALE (faireconomy) + alert news */
+let CALENDAR=[]; const NEWS_ALERTED={};
+const flagOf=c=>({USD:'🇺🇸',EUR:'🇪🇺',GBP:'🇬🇧',JPY:'🇯🇵',CAD:'🇨🇦',AUD:'🇦🇺',NZD:'🇳🇿',CHF:'🇨🇭',CNY:'🇨🇳'}[c]||'🏳');
+async function loadCalendar(){ try{ const j=await proxyJSON('https://nfs.faireconomy.media/ff_calendar_thisweek.json');
+    if(Array.isArray(j)){ CALENDAR=j.map(e=>({title:e.title,cur:e.country,date:new Date(e.date),impact:(e.impact||'').toLowerCase(),forecast:e.forecast,previous:e.previous})).filter(e=>!isNaN(e.date)); }
+    renderCal(); }catch(e){ $('#calendar').innerHTML='<div class="loading">Calendario non disponibile (proxy occupato). Riprova.</div>'; } }
+function renderCal(){ if(!CALENDAR.length){$('#calendar').innerHTML='<div class="loading">caricamento calendario…</div>';return;}
+  const now=Date.now(); const up=CALENDAR.filter(e=>e.impact==='high'||e.impact==='medium').filter(e=>e.date.getTime()>now-2*3600e3).sort((a,b)=>a.date-b.date).slice(0,10);
+  if(!up.length){$('#calendar').innerHTML='<div class="loading">Nessun evento rilevante imminente.</div>';return;}
+  $('#calendar').innerHTML=up.map(e=>{ const t=e.date.toLocaleString('it-IT',{weekday:'short',hour:'2-digit',minute:'2-digit',timeZone:'Europe/Rome'}); const soon=e.date.getTime()>now&&e.date.getTime()-now<3600e3;
+    return `<div class="ev"${soon?' style="background:rgba(255,181,71,.07)"':''}><span class="tm">${t}</span><span class="flag">${flagOf(e.cur)}</span><span class="ti"><b>${e.title}</b><small>${e.cur}${e.forecast?' · prev '+(e.previous||'—'):''}</small></span><span class="imp ${e.impact==='high'?'high':'med'}">${e.impact.toUpperCase()}</span></div>`; }).join(''); }
+function checkNews(){ if(!$('#newsAlert')||!$('#newsAlert').checked||!CALENDAR.length)return; const min=parseFloat($('#newsMin').value)||30; const now=Date.now();
+  CALENDAR.filter(e=>e.impact==='high').forEach(e=>{ const dt=e.date.getTime()-now; const id=e.title+e.date.getTime();
+    if(dt>0&&dt<=min*60000&&!NEWS_ALERTED[id]){ NEWS_ALERTED[id]=1; const m=`${e.title} (${e.cur}) tra ${Math.round(dt/60000)} min`; notify('⚠️ News imminente',m); beep(); toast('⚠️ '+m); if(TG.token&&TG.chat)tgSend(`⚠️ <b>News ${e.cur} ad alto impatto</b>\n${e.title} tra ~${Math.round(dt/60000)} min`); } }); }
+
+/* Livelli di liquidità / istituzionali (PDH/PDL, PWH/PWL, swing pools) */
+function liqLevels(sym){ const D=DATA[sym]; const o=D&&D.ohlc; if(!o||o.length<6)return [];
+  const out=[]; const pd=o[o.length-2]; const px=o.at(-1).c;
+  if(pd){out.push({v:pd.h,label:'PDH',color:'#48a0ff'});out.push({v:pd.l,label:'PDL',color:'#48a0ff'});}
+  const wk=o.slice(-6,-1); if(wk.length){out.push({v:Math.max(...wk.map(c=>c.h)),label:'PWH',color:'#9b7bff'});out.push({v:Math.min(...wk.map(c=>c.l)),label:'PWL',color:'#9b7bff'});}
+  const hs=[],ls=[]; for(let i=2;i<o.length-2;i++){ if(o[i].h>=o[i-1].h&&o[i].h>=o[i-2].h&&o[i].h>=o[i+1].h&&o[i].h>=o[i+2].h)hs.push(o[i].h); if(o[i].l<=o[i-1].l&&o[i].l<=o[i-2].l&&o[i].l<=o[i+1].l&&o[i].l<=o[i+2].l)ls.push(o[i].l); }
+  const ab=hs.filter(v=>v>px).sort((a,b)=>a-b)[0]; if(ab)out.push({v:ab,label:'liq↑',color:'#8294b4'});
+  const be=ls.filter(v=>v<px).sort((a,b)=>b-a)[0]; if(be)out.push({v:be,label:'liq↓',color:'#8294b4'});
+  return out; }
+function liqActive(){ return ($('#liqToggle')&&$('#liqToggle').checked)?liqLevels(STATE.symbol):[]; }
+
+/* Risk Guardian (prop) + calcolatore posizione */
+const RG={cap:100000,dl:5,dd:10,tgt:8,pnl:0,risk:1};
+function renderRG(){ const b=$('#rgBody'); if(!b)return;
+  b.innerHTML=`<div class="rg-grid">
+    <div class="fld"><label>Capitale $</label><input id="rgCap" type="number" value="${RG.cap}"/></div>
+    <div class="fld"><label>Daily loss %</label><input id="rgDl" type="number" step="0.1" value="${RG.dl}"/></div>
+    <div class="fld"><label>Max DD %</label><input id="rgDd" type="number" step="0.1" value="${RG.dd}"/></div>
+    <div class="fld"><label>Target %</label><input id="rgTgt" type="number" step="0.1" value="${RG.tgt}"/></div>
+    <div class="fld"><label>P&amp;L oggi $</label><input id="rgPnl" type="number" value="${RG.pnl}"/></div>
+    <div class="fld"><label>Rischio/trade %</label><input id="rgRisk" type="number" step="0.1" value="${RG.risk}"/></div>
+  </div>
+  <div id="rgStatus"></div>
+  <div class="rg-h">Calcolatore posizione · ${STATE.symbol}</div>
+  <div class="rg-grid">
+    <div class="fld"><label>Entry</label><input id="rgEntry" type="number" step="any"/></div>
+    <div class="fld"><label>Stop loss</label><input id="rgSl" type="number" step="any"/></div>
+    <div class="fld"><label>Take profit</label><input id="rgTp" type="number" step="any"/></div>
+  </div>
+  <div id="rgCalc"></div>`;
+  ['rgCap','rgDl','rgDd','rgTgt','rgPnl','rgRisk','rgEntry','rgSl','rgTp'].forEach(id=>{const el=$('#'+id);if(el)el.oninput=computeRG;});
+  if($('#rgEntry')&&!$('#rgEntry').value&&DATA[STATE.symbol]&&DATA[STATE.symbol].price)$('#rgEntry').value=(+DATA[STATE.symbol].price).toFixed(dg(STATE.symbol));
+  computeRG();
+}
+let _rgAlerted=false;
+function computeRG(){ const v=id=>parseFloat($('#'+id)?.value);
+  RG.cap=v('rgCap')||0;RG.dl=v('rgDl')||0;RG.dd=v('rgDd')||0;RG.tgt=v('rgTgt')||0;RG.pnl=v('rgPnl')||0;RG.risk=v('rgRisk')||0;
+  Storage.set('rg_cfg',{cap:RG.cap,dl:RG.dl,dd:RG.dd,tgt:RG.tgt,risk:RG.risk});
+  const dailyBudget=RG.cap*RG.dl/100, ddBudget=RG.cap*RG.dd/100, lossToday=Math.max(0,-RG.pnl);
+  const remaining=Math.max(0,dailyBudget-lossToday), riskPerTrade=RG.cap*RG.risk/100, tradesLeft=riskPerTrade>0?Math.floor(remaining/riskPerTrade):0;
+  const usedPct=dailyBudget>0?clamp(lossToday/dailyBudget*100,0,100):0;
+  let lvl='safe',ic='🟢',t='ENTRO I LIMITI',s=`Hai ancora ${tradesLeft} trade al rischio impostato.`;
+  if(usedPct>=100){lvl='danger';ic='⛔';t='LIMITE GIORNALIERO RAGGIUNTO';s='Stop trading per oggi: proteggi il conto.';}
+  else if(usedPct>=70){lvl='warn';ic='⚠️';t='ATTENZIONE';s='Vicino al limite giornaliero, riduci la size.';}
+  if(lvl==='danger'&&!_rgAlerted){_rgAlerted=true;notify('🛡 Risk Guardian','Limite giornaliero raggiunto: stop trading');if(TG.token&&TG.chat)tgSend('🛡 <b>Risk Guardian</b>\nLimite di perdita giornaliero raggiunto — stop trading.');} if(lvl!=='danger')_rgAlerted=false;
+  const col=lvl==='danger'?'var(--red)':lvl==='warn'?'var(--amber)':'var(--green)';
+  $('#rgStatus').innerHTML=`<div class="rg-status ${lvl}"><div class="ic">${ic}</div><div><div class="t">${t}</div><div class="s">${s}</div></div></div>
+    <div class="rg-out">
+      <div class="rg-c"><div class="k">Budget perdita oggi</div><div class="v">${fUsd(remaining)}</div><div class="rg-bar"><span style="width:${usedPct}%;background:${col}"></span></div></div>
+      <div class="rg-c"><div class="k">Rischio max / trade</div><div class="v gd">${fUsd(riskPerTrade)}</div><div class="k" style="margin-top:4px">trade rimasti: <b>${tradesLeft}</b></div></div>
+    </div>
+    <div class="rg-row"><span class="k">Buffer max drawdown</span><span class="v">${fUsd(ddBudget)}</span></div>
+    <div class="rg-row"><span class="k">Target profitto</span><span class="v up">${fUsd(RG.cap*RG.tgt/100)}</span></div>`;
+  computeCalc();
+}
+function computeCalc(){ const v=id=>parseFloat($('#'+id)?.value); const sym=STATE.symbol;
+  const entry=v('rgEntry'),sl=v('rgSl'),tp=v('rgTp'); const riskMoney=RG.cap*RG.risk/100; const out=$('#rgCalc'); if(!out)return;
+  if(!entry||!sl||entry===sl){out.innerHTML='<div class="rg-row"><span class="k">Inserisci entry e stop per calcolare size e R:R</span></div>';return;}
+  const dist=Math.abs(entry-sl),dir=entry>sl?1:-1,units=dist>0?riskMoney/dist:0;
+  const rr=tp?Math.abs(tp-entry)/dist:null,reward=tp?riskMoney*rr:null;
+  out.innerHTML=`<div class="rg-out">
+    <div class="rg-c"><div class="k">Size (unità)</div><div class="v gd">${f(units,2)}</div></div>
+    <div class="rg-c"><div class="k">Rischio</div><div class="v dn">${fUsd(riskMoney)}</div></div></div>
+    <div class="rg-row"><span class="k">Distanza stop</span><span class="v">${f(dist,dg(sym))}</span></div>
+    <div class="rg-row"><span class="k">Direzione</span><span class="v ${dir>0?'up':'dn'}">${dir>0?'LONG':'SHORT'}</span></div>
+    ${tp?`<div class="rg-row"><span class="k">R : R</span><span class="v ${rr>=1?'up':'dn'}">1 : ${f(rr,2)}</span></div><div class="rg-row"><span class="k">Reward atteso</span><span class="v up">${fUsd(reward)}</span></div>`:''}
+    <div class="rg-row" style="border:none"><span class="k" style="font-size:8.5px">Size generica (P&L = movimento prezzo × unità). Adatta al contract size del tuo broker.</span></div>`;
+}
 function renderClock(){const cet=cetNow();const p=x=>String(x).padStart(2,'0');$('#clock').innerHTML=`${p(cet.getHours())}:${p(cet.getMinutes())}:${p(cet.getSeconds())} <b>CET</b>`;}
 let tT;function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(tT);tT=setTimeout(()=>t.classList.remove('show'),2200);}
 
@@ -1209,6 +1319,7 @@ function bind(){
   $('#proxyUrl').addEventListener('keydown',e=>{ if(e.key==='Enter')$('#proxySave').click(); });
   $('#gexTicker').addEventListener('keydown',e=>{ if(e.key==='Enter')loadGamma(STATE.symbol); });
   const dc=$('#detailChart'); if(dc){ dc.addEventListener('mousemove',e=>{const r=dc.getBoundingClientRect();detailCross=e.clientX-r.left;drawDetailChart();}); dc.addEventListener('mouseleave',()=>{detailCross=null;drawDetailChart();}); }
+  if($('#liqToggle'))$('#liqToggle').onchange=drawDetailChart;
   window.addEventListener('resize',()=>{drawDetailChart();drawComp();});}
 (async function boot(){
   await importKeysFromHash();
@@ -1219,9 +1330,13 @@ function bind(){
   ALERTS=((await Storage.get('alerts'))||[]).map(a=>({...a,armed:a.armed!==false}));
   TG.token=(await Storage.get('tg_token'))||''; TG.chat=(await Storage.get('tg_chat'))||'';
   TG.daily=!!(await Storage.get('tg_daily')); TG.dailyTime=(await Storage.get('tg_daily_time'))||'08:00'; TG.dailyLast=(await Storage.get('tg_daily_last'))||'';
-  SY.forEach(ensureSim);bind();setKeyDot();initCotSel();renderCal();renderClock();renderAlerts();renderTelegram();renderAll();
+  const rc=await Storage.get('rg_cfg'); if(rc)Object.assign(RG,rc);
+  SY.forEach(ensureSim);bind();setKeyDot();initCotSel();renderCal();renderClock();renderAlerts();renderTelegram();renderRG();renderAll();
   setInterval(renderClock,1000);
   await fetchAll();renderAll();loadCOT(STATE.cot);loadGas();loadDivergence(STATE.symbol);loadGamma(STATE.symbol);fetchOHLC(STATE.symbol).then(()=>drawDetailChart());
+  loadCalendar();                                    // calendario economico reale
+  setInterval(loadCalendar, 3600000);                // refresh ogni ora
+  setInterval(()=>{checkNews();renderCal();}, 60000); // alert news + aggiorna lista
   setInterval(async()=>{await fetchAll();renderAll();},CONFIG.refreshMs);
   setInterval(loadGas, 1800000);  // riserve gas: refresh ogni 30 min (dato giornaliero)
   setInterval(checkDailySummary, 60000); checkDailySummary();  // riepilogo Telegram giornaliero
