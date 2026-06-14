@@ -57,6 +57,14 @@ button{font-family:var(--mono);cursor:pointer;color:inherit}select{font-family:v
 .btn{background:var(--panel2);border:1px solid var(--line2);padding:8px 13px;border-radius:9px;font-size:11px;font-weight:600;transition:.12s}
 .btn:hover{border-color:var(--gold2);color:#fff}
 
+.intel-panel{margin-bottom:14px;padding:2px;background:linear-gradient(90deg,rgba(231,181,74,.12),rgba(72,160,255,.08));border-color:var(--gold2)}
+.intel{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:var(--line)}
+@media(max-width:1100px){.intel{grid-template-columns:repeat(4,1fr)}}
+@media(max-width:560px){.intel{grid-template-columns:repeat(2,1fr)}}
+.intel-c{background:linear-gradient(180deg,var(--panel),var(--bg2));padding:9px 12px}
+.intel-c .k{font-size:8.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.6px}
+.intel-c .v{font-size:15px;font-weight:800;color:#fff;margin:2px 0;font-variant-numeric:tabular-nums;line-height:1.1}
+.intel-c .s{font-size:9px;color:var(--txt3);line-height:1.3}
 .kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:14px}
 @media(max-width:1100px){.kpis{grid-template-columns:repeat(2,1fr)}}
 .kpi{background:linear-gradient(180deg,var(--panel),var(--bg2));border:1px solid var(--line2);border-radius:11px;padding:12px 14px;position:relative;overflow:hidden;box-shadow:var(--shadow)}
@@ -311,6 +319,9 @@ button{font-family:var(--mono);cursor:pointer;color:inherit}select{font-family:v
     <div class="clock" id="clock">--:--:-- <b>CET</b></div>
     <button class="btn" id="btnRefresh">↻ Aggiorna</button>
   </div>
+
+  <!-- INTEL SUMMARY -->
+  <div class="panel intel-panel"><div class="intel" id="intelBody"></div></div>
 
   <div class="kpis" id="kpis"></div>
 
@@ -881,6 +892,7 @@ function renderCOT(rows){const all=rows.map(r=>({date:r.report_date_as_yyyy_mm_d
   const recs=all.slice(-16); const cur=recs.at(-1),prev=recs.length>1?recs.at(-2):cur;
   const cN=cur.cl-cur.cs,cD=cN-(prev.cl-prev.cs),sN=cur.nl-cur.ns,sD=sN-(prev.nl-prev.ns);
   const ciComm=cotIndex(all.map(d=>d.cl-d.cs)), ciSpec=cotIndex(all.map(d=>d.nl-d.ns));
+  COTIDX[STATE.cot]={comm:ciComm,spec:ciSpec}; renderIntel&&renderIntel();
   const ex=v=>v>=80?'<span class="cot-x bull">ESTREMO LONG</span>':v<=20?'<span class="cot-x bear">ESTREMO SHORT</span>':'';
   $('#cotDate').textContent='report '+cur.date+' · '+all.length+'w';
   $('#cotBody').innerHTML=`<div class="cot-cards">
@@ -905,7 +917,7 @@ let CALENDAR=[]; const NEWS_ALERTED={};
 const flagOf=c=>({USD:'🇺🇸',EUR:'🇪🇺',GBP:'🇬🇧',JPY:'🇯🇵',CAD:'🇨🇦',AUD:'🇦🇺',NZD:'🇳🇿',CHF:'🇨🇭',CNY:'🇨🇳'}[c]||'🏳');
 async function loadCalendar(){ try{ const j=await proxyJSON('https://nfs.faireconomy.media/ff_calendar_thisweek.json');
     if(Array.isArray(j)){ CALENDAR=j.map(e=>({title:e.title,cur:e.country,date:new Date(e.date),impact:(e.impact||'').toLowerCase(),forecast:e.forecast,previous:e.previous})).filter(e=>!isNaN(e.date)); }
-    renderCal(); }catch(e){ $('#calendar').innerHTML='<div class="loading">Calendario non disponibile (proxy occupato). Riprova.</div>'; } }
+    renderCal(); renderIntel(); }catch(e){ $('#calendar').innerHTML='<div class="loading">Calendario non disponibile (proxy occupato). Riprova.</div>'; } }
 function renderCal(){ if(!CALENDAR.length){$('#calendar').innerHTML='<div class="loading">caricamento calendario…</div>';return;}
   const now=Date.now(); const up=CALENDAR.filter(e=>e.impact==='high'||e.impact==='medium').filter(e=>e.date.getTime()>now-2*3600e3).sort((a,b)=>a.date-b.date).slice(0,10);
   if(!up.length){$('#calendar').innerHTML='<div class="loading">Nessun evento rilevante imminente.</div>';return;}
@@ -1150,7 +1162,7 @@ async function loadGammaFA(sym,tkOverride){
   const L=j.levels, S=j.underlying_price||0; if(!S)return false;
   const refSym=tkOverride?sym:sym; const assetPx=DATA[refSym]?DATA[refSym].price:S; const factor=(assetPx&&S)?assetPx/S:1; const d=dg(sym);
   const cw=L.call_wall, pw=L.put_wall, flip=L.gamma_flip, mp=L.max_positive_gamma, mn=L.max_negative_gamma, mag=L.zero_dte_magnet;
-  if(cw!=null&&pw!=null&&flip!=null){ GAMMA[sym]={cw:cw*factor,pw:pw*factor,flip:flip*factor}; if(sym===STATE.symbol)drawDetailChart(); }
+  if(cw!=null&&pw!=null&&flip!=null){ GAMMA[sym]={cw:cw*factor,pw:pw*factor,flip:flip*factor}; if(sym===STATE.symbol){drawDetailChart();renderIntel();} }
   const pos = S>=flip; const lvl=K=>K==null?'—':f(K*factor,d); const dist=K=>K==null?'':(()=>{const v=(K*factor/(assetPx||1)-1)*100;return (v>=0?'+':'')+v.toFixed(2)+'%';})();
   body.innerHTML=`
     <div class="gx-regime ${pos?'pos':'neg'}"><div class="ic">${pos?'🧲':'⚡'}</div>
@@ -1194,7 +1206,7 @@ async function loadGammaYahoo(sym){
     for(const x of list){ const before=cum; cum+=x.gex; if(prev!==null && ((before<0&&cum>=0)||(before>0&&cum<=0))) flip=x.K; prev=cum; }
     if(flip==null) flip = list.reduce((m,x)=>Math.abs(x.gex)>Math.abs(m.gex)?x:m).K; // fallback: strike di max |gex|
     const factor=(DATA[sym]&&DATA[sym].price&&S)?DATA[sym].price/S:1; const d=dg(sym);
-    GAMMA[sym]={cw:callWall.K*factor,pw:putWall.K*factor,flip:flip*factor,net:netGEX}; if(sym===STATE.symbol)drawDetailChart();
+    GAMMA[sym]={cw:callWall.K*factor,pw:putWall.K*factor,flip:flip*factor,net:netGEX}; if(sym===STATE.symbol){drawDetailChart();renderIntel();}
     const lvl=K=>f(K*factor,d); const dist=K=>{const v=(K*factor/DATA[sym].price-1)*100;return (v>=0?'+':'')+v.toFixed(2)+'%';};
     const pos=netGEX>=0;
     body.innerHTML=`
@@ -1229,7 +1241,7 @@ function drawGexChart(list,flip,spot,cw,pw){const cv=$('#gexChart');if(!cv)retur
   ctx.fillStyle='#5f7193';ctx.font='8px JetBrains Mono';ctx.textAlign='left';ctx.fillText(use[0].K,padX,H-5);
   ctx.textAlign='right';ctx.fillText(use.at(-1).K,W-padX,H-5);}
 
-function selectSymbol(sym){ STATE.symbol=sym; renderDetail(); renderAdvisor(); renderHeat(); loadDivergence(sym); loadGamma(sym); fetchOHLC(sym).then(()=>{if(sym===STATE.symbol)drawDetailChart();}); }
+function selectSymbol(sym){ STATE.symbol=sym; renderDetail(); renderAdvisor(); renderHeat(); renderIntel(); loadDivergence(sym); loadGamma(sym); fetchOHLC(sym).then(()=>{if(sym===STATE.symbol)drawDetailChart();}); }
 
 /* ====================== ALERT CENTER ==================== */
 let ALERTS=[]; let _ac;
@@ -1268,7 +1280,7 @@ async function sendDailySummary(manual){ if(!TG.token||!TG.chat){ if(manual)toas
   if(manual)toast('Invio riepilogo…'); const ok=await tgSend(await buildDailySummary()); if(manual)toast(ok?'Riepilogo inviato ✓':'Invio fallito'); return ok; }
 // Crypto Fear & Greed (alternative.me) — sentiment retail crypto
 async function loadCryptoFG(){ try{ const j=await getJSON('https://api.alternative.me/fng/?limit=1',12000); const d=j&&j.data&&j.data[0]; if(d){ CRYPTO_FG={v:+d.value,c:d.value_classification};
-  const e=$('#cryptoFG'); if(e){const v=CRYPTO_FG.v;e.textContent=`${v} · ${CRYPTO_FG.c}`;e.className='v '+(v<25?'dn':v>75?'up':'gd');} } }catch(e){} }
+  const e=$('#cryptoFG'); if(e){const v=CRYPTO_FG.v;e.textContent=`${v} · ${CRYPTO_FG.c}`;e.className='v '+(v<25?'dn':v>75?'up':'gd');} renderIntel(); } }catch(e){} }
 let CRYPTO_FG=null;
 // Briefing settimanale: performance, COT index estremi, regime, calendario settimana
 async function buildWeeklySummary(){
@@ -1356,7 +1368,30 @@ function renderAlerts(){ const b=$('#alBody'); if(!b)return;
     ALERTS.push({sym,type,val:isNaN(val)?null:val,armed:true,fired:false}); await persistAlerts(); renderAlerts(); toast('Alert creato'); };
   $$('#alBody [data-del]').forEach(x=>x.onclick=async()=>{ ALERTS.splice(+x.dataset.del,1); await persistAlerts(); renderAlerts(); });
 }
-function renderAll(){renderKPI();renderHeat();renderAcPerf();renderMovers();renderCorr();renderFG();renderRegime();renderDetail();renderAdvisor();drawComp();updateBadge();evaluateAlerts();}
+/* ===== Pannello INTEL (riepilogo unico in cima) ===== */
+const COT_BY_SYM={XAUUSD:'088691',XAGUSD:'084691',COPPER:'085692',WTIUSD:'067651',EURUSD:'099741',DXY:'098662'};
+const COTIDX={};
+async function loadCotIdx(code){ if(code in COTIDX)return; COTIDX[code]=null;
+  try{ const rows=await getJSON(cotURL(code)); const all=rows.map(r=>({c:(+r.comm_positions_long_all)-(+r.comm_positions_short_all),s:(+r.noncomm_positions_long_all)-(+r.noncomm_positions_short_all)})).reverse();
+    COTIDX[code]={comm:cotIndex(all.map(d=>d.c)),spec:cotIndex(all.map(d=>d.s))}; renderIntel(); }catch(e){ delete COTIDX[code]; } }
+function nextNews(){ const now=Date.now(); return CALENDAR.filter(e=>(e.impact==='high'||e.impact==='medium')&&e.date.getTime()>now).sort((a,b)=>a.date-b.date)[0]; }
+function newsCountdown(e){ const dt=e.date.getTime()-Date.now(); if(dt<=0)return 'ora'; const h=Math.floor(dt/3600e3),m=Math.floor(dt%3600e3/60e3); return (h>=24?Math.floor(h/24)+'g ':'')+(h%24>0?(h%24)+'h ':'')+(h<24?m+'m':''); }
+function renderIntel(){ const el=$('#intelBody'); if(!el)return; const sym=STATE.symbol,D=DATA[sym],R=rating(sym);
+  const bias=R?R.label:'—', biasCol=R?(R.score>0.15?'up':R.score<-0.15?'dn':'gd'):'mut';
+  const code=COT_BY_SYM[sym]; let cotTxt='n/d',cotCol='mut',cotS='no future COT';
+  if(code){ const ci=COTIDX[code]; if(ci){cotTxt=ci.comm+' / '+ci.spec;cotCol=ci.comm>=80?'up':ci.comm<=20?'dn':'gd';cotS=ci.comm>=80?'comm ESTREMO long':ci.comm<=20?'comm ESTREMO short':'commercials / specs';} else {cotTxt='…';cotS='caricamento';loadCotIdx(code);} }
+  const g=GAMMA[sym]; let gamTxt='n/d',gamCol='mut',gamS='dati opzioni'; if(g&&D){const pos=D.price>=g.flip;gamTxt=pos?'POS':'NEG';gamCol=pos?'up':'dn';gamS='flip '+f(g.flip,dg(sym));}
+  const fg=fearGreed(); const nn=nextNews(); const reg=$('#regime')?.textContent||'—';
+  el.innerHTML=`
+   <div class="intel-c"><div class="k">Asset</div><div class="v">${sym}</div><div class="s">${D?f(D.price,dg(sym)):'--'} · <span class="${D&&D.change>=0?'up':'dn'}">${D&&D.change>=0?'+':''}${D?f(D.change,2):'0'}%</span></div></div>
+   <div class="intel-c"><div class="k">Bias tecnico</div><div class="v ${biasCol}">${bias}</div><div class="s">${R?'score '+(R.score>=0?'+':'')+R.score.toFixed(2):'storico…'}</div></div>
+   <div class="intel-c"><div class="k">COT Index</div><div class="v ${cotCol}">${cotTxt}</div><div class="s">${cotS}</div></div>
+   <div class="intel-c"><div class="k">Gamma</div><div class="v ${gamCol}">${gamTxt}</div><div class="s">${gamS}</div></div>
+   <div class="intel-c"><div class="k">Sentiment</div><div class="v">${fg}</div><div class="s">${CRYPTO_FG?'cripto '+CRYPTO_FG.v+' '+CRYPTO_FG.c:'F&G composito'}</div></div>
+   <div class="intel-c"><div class="k">Prossima news</div><div class="v" style="font-size:12px">${nn?(flagOf(nn.cur)+' '+nn.cur):'—'}</div><div class="s">${nn?(nn.title.slice(0,24)+' · '+newsCountdown(nn)):'nessuna'}</div></div>
+   <div class="intel-c"><div class="k">Regime</div><div class="v" style="font-size:13px">${reg}</div><div class="s">risk on/off</div></div>`;
+}
+function renderAll(){renderKPI();renderHeat();renderAcPerf();renderMovers();renderCorr();renderFG();renderRegime();renderDetail();renderAdvisor();renderIntel();drawComp();updateBadge();evaluateAlerts();}
 
 /* boot */
 function initCotSel(){$('#cotSel').innerHTML=CONFIG.cot.map(c=>`<option value="${c.code}">${c.label}</option>`).join('');$('#cotSel').value=STATE.cot;$('#cotSel').onchange=e=>{STATE.cot=e.target.value;loadCOT(STATE.cot);};}
