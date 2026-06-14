@@ -173,6 +173,15 @@ button{font-family:var(--mono);cursor:pointer;color:inherit}select{font-family:v
 #cotChart{width:100%;height:120px;display:block;margin-top:4px}
 .cot-note{font-size:9.5px;color:var(--txt3);line-height:1.5;margin-top:8px}
 .cot-oi{display:flex;justify-content:space-between;font-size:10px;color:var(--txt2);margin-top:6px;padding-top:6px;border-top:1px solid var(--line)}
+.cot-idx{margin:9px 0}
+.cot-idx .ci{margin-bottom:7px}
+.cot-idx .cl{font-size:9.5px;color:var(--txt2);margin-bottom:3px;display:flex;align-items:center;gap:6px}
+.cot-idx .cl small{color:var(--txt3)}
+.cot-idx .bar{position:relative;height:13px;border-radius:5px;background:var(--panel3);overflow:hidden}
+.cot-idx .bar>span{display:block;height:100%;border-radius:5px}
+.cot-idx .bar>b{position:absolute;right:5px;top:0;line-height:13px;font-size:9px;color:#fff}
+.cot-x{font-size:8px;font-weight:800;padding:1px 5px;border-radius:4px}
+.cot-x.bull{background:var(--green-d);color:var(--green)}.cot-x.bear{background:var(--red-d);color:var(--red)}
 /* Gas storage */
 .gas-top{display:flex;align-items:center;gap:12px;margin-bottom:8px}
 .gas-big{font-size:30px;font-weight:800;color:#fff;line-height:1}
@@ -314,8 +323,9 @@ button{font-family:var(--mono);cursor:pointer;color:inherit}select{font-family:v
 
       <div class="panel">
         <div class="ph">◷ Analisi tecnica<span class="sp"></span>
-          <label class="al-snd" title="Mostra livelli di liquidità (PDH/PDL, PWH/PWL, swing)"><input type="checkbox" id="liqToggle" checked/> liquidità</label>
-          <span class="tag" id="dTag" style="margin-left:6px">storico reale</span></div>
+          <label class="al-snd" title="Livelli di liquidità (PDH/PDL, PWH/PWL, swing)"><input type="checkbox" id="liqToggle" checked/> liq</label>
+          <label class="al-snd" title="Smart Money Concepts: BOS/CHoCH, Order Block, FVG"><input type="checkbox" id="smcToggle" checked/> SMC</label>
+          <span class="tag" id="smcInfo" style="margin-left:6px"></span></div>
         <div class="pb">
           <div class="detail-top"><span class="s" id="dSym">--</span><span class="nm" id="dName"></span><span class="p" id="dPrice"></span></div>
           <canvas id="detailChart"></canvas>
@@ -395,7 +405,8 @@ button{font-family:var(--mono);cursor:pointer;color:inherit}select{font-family:v
           <div class="fg"><div class="num" id="fgNum">--</div><div class="lbl" id="fgLbl">--</div>
             <div class="fg-bar"><div class="pin" id="fgPin" style="left:50%"></div></div>
             <div style="display:flex;justify-content:space-between;width:100%;font-size:8.5px;color:var(--txt3);margin-top:4px"><span>EXTREME FEAR</span><span>GREED</span></div></div>
-          <div style="font-size:10px;color:var(--txt3);margin-top:10px;line-height:1.5" id="fgNote"></div>
+          <div class="rg-row" style="margin-top:8px"><span class="k">Crypto Fear &amp; Greed <small style="color:var(--txt3)">(retail)</small></span><span class="v" id="cryptoFG">—</span></div>
+          <div style="font-size:10px;color:var(--txt3);margin-top:8px;line-height:1.5" id="fgNote"></div>
         </div>
       </div>
 
@@ -479,7 +490,7 @@ const PROXIES=[
 function proxyList(){ return PROXY_URL ? [u=>`${PROXY_URL.replace(/\/$/,'')}/?url=${encodeURIComponent(u)}`, ...PROXIES] : PROXIES; }
 // NB: simbolo lasciato grezzo (GC=F, ^GSPC, DX-Y.NYB): è il proxy a codificare l'intero URL.
 const yahooURL=(sym)=>`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=3mo`;
-const cotURL=(code)=>`https://publicreporting.cftc.gov/resource/6dca-aqww.json?cftc_contract_market_code=${code}&$order=report_date_as_yyyy_mm_dd%20DESC&$limit=16`;
+const cotURL=(code)=>`https://publicreporting.cftc.gov/resource/6dca-aqww.json?cftc_contract_market_code=${code}&$order=report_date_as_yyyy_mm_dd%20DESC&$limit=160`;
 
 /* storage: window.storage (artifact) → localStorage (browser, persistente) → RAM */
 const Storage=(()=>{let m={};const ws=(typeof window!=='undefined'&&window.storage&&typeof window.storage.getItem==='function');
@@ -825,6 +836,11 @@ function drawDetailChart(){const cv=$('#detailChart');const D=DATA[STATE.symbol]
   const x=i=>padL+i/(n-1||1)*plotW,y=v=>padT+(1-(v-lo)/rng)*(H-padT-padB);
   ctx.font='9px JetBrains Mono';ctx.textBaseline='middle';
   for(let i=0;i<=4;i++){const p=lo+rng*i/4,yy=y(p);ctx.strokeStyle='rgba(150,170,205,.06)';ctx.beginPath();ctx.moveTo(padL,yy);ctx.lineTo(W-padR,yy);ctx.stroke();ctx.fillStyle='#5f7193';ctx.textAlign='left';ctx.fillText(f(p,d),W-padR+4,yy);}
+  // ---- Smart Money Concepts (zone dietro le candele) ----
+  const smc=($('#smcToggle')&&$('#smcToggle').checked)?smcCompute(candles):null;
+  if(smc){ const zone=(z,col)=>{const ya=y(Math.min(z.hi,hi)),yb=y(Math.max(z.lo,lo));ctx.fillStyle=col;ctx.fillRect(x(z.start),Math.min(ya,yb),W-padR-x(z.start),Math.abs(yb-ya));};
+    smc.fvg.forEach(z=>zone(z,z.bull?'rgba(35,209,139,.10)':'rgba(255,77,94,.10)'));
+    if(smc.ob){ zone(smc.ob,smc.ob.bull?'rgba(72,160,255,.18)':'rgba(255,181,71,.18)'); ctx.fillStyle=smc.ob.bull?'#48a0ff':'#ffb547';ctx.font='bold 7.5px JetBrains Mono';ctx.textAlign='left';ctx.fillText('OB',x(smc.ob.start)+2,y(smc.ob.bull?smc.ob.hi:smc.ob.lo)-3);} }
   const closes=candles.map(c=>c.c);
   const drawEma=(p,col)=>{if(closes.length<p)return;const e=ema(closes,p);ctx.strokeStyle=col;ctx.lineWidth=1;ctx.beginPath();e.forEach((v,i)=>i?ctx.lineTo(x(i),y(v)):ctx.moveTo(x(i),y(v)));ctx.stroke();};
   drawEma(20,'rgba(231,181,74,.55)');drawEma(50,'rgba(72,160,255,.5)');
@@ -832,6 +848,8 @@ function drawDetailChart(){const cv=$('#detailChart');const D=DATA[STATE.symbol]
   candles.forEach((c,i)=>{const up=c.c>=c.o,col=up?'#23d18b':'#ff4d5e';ctx.strokeStyle=col;ctx.fillStyle=col;ctx.lineWidth=1;const xc=x(i);
     ctx.beginPath();ctx.moveTo(xc,y(c.h));ctx.lineTo(xc,y(c.l));ctx.stroke();const yo=y(c.o),yc=y(c.c);ctx.fillRect(xc-cw/2,Math.min(yo,yc),cw,Math.max(1,Math.abs(yc-yo)));});
   gl.forEach(L=>{if(L.v<=lo||L.v>=hi)return;const yy=y(L.v);ctx.strokeStyle=L.color;ctx.lineWidth=1;ctx.setLineDash([5,3]);ctx.beginPath();ctx.moveTo(padL,yy);ctx.lineTo(W-padR,yy);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle=L.color;ctx.textAlign='left';ctx.font='bold 8px JetBrains Mono';ctx.fillText(L.label,padL+3,yy-4);});
+  if(smc&&smc.brk){const k=smc.brk,yy=y(k.level);ctx.strokeStyle=k.dir==='up'?'#23d18b':'#ff4d5e';ctx.lineWidth=1.2;ctx.setLineDash([2,2]);ctx.beginPath();ctx.moveTo(x(Math.max(0,k.idx-6)),yy);ctx.lineTo(W-padR,yy);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle=k.dir==='up'?'#23d18b':'#ff4d5e';ctx.font='bold 8px JetBrains Mono';ctx.textAlign='right';ctx.fillText(k.type,W-padR-2,yy-4);}
+  if($('#smcInfo'))$('#smcInfo').textContent=smc?('SMC '+({up:'▲ rialz.',down:'▼ ribass.',range:'range'}[smc.trend])+(smc.brk?' · '+smc.brk.type:'')):'';
   const yl=y(lastC);ctx.fillStyle='#e7b54a';ctx.fillRect(W-padR,yl-7,padR,14);ctx.fillStyle='#000';ctx.font='bold 9px JetBrains Mono';ctx.textAlign='left';ctx.fillText(f(lastC,d),W-padR+4,yl);
   if(detailCross!=null){const i=Math.round((detailCross-padL)/plotW*(n-1));if(i>=0&&i<n){const c=candles[i],xc=x(i);
     ctx.strokeStyle='rgba(205,217,238,.28)';ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(xc,padT);ctx.lineTo(xc,H-padB);ctx.stroke();ctx.setLineDash([]);
@@ -858,15 +876,20 @@ let COT_CACHE={};
 async function loadCOT(code){$('#cotBody').innerHTML='<div class="loading">caricamento COT…</div>';
   try{let rows=COT_CACHE[code];if(!rows){rows=await getJSON(cotURL(code));COT_CACHE[code]=rows;}if(!rows||!rows.length)throw 0;renderCOT(rows);}
   catch(e){$('#cotBody').innerHTML='<div class="loading">COT non disponibile ora. Riprova.</div>';}}
-function renderCOT(rows){const recs=rows.map(r=>({date:r.report_date_as_yyyy_mm_dd?.slice(0,10),cl:+r.comm_positions_long_all,cs:+r.comm_positions_short_all,nl:+r.noncomm_positions_long_all,ns:+r.noncomm_positions_short_all,oi:+r.open_interest_all})).reverse();
-  const cur=recs.at(-1),prev=recs.length>1?recs.at(-2):cur;
+function cotIndex(series){ const w=series.slice(-156); if(w.length<10)return 50; const min=Math.min(...w),max=Math.max(...w),cur=w.at(-1); return max>min?Math.round((cur-min)/(max-min)*100):50; }
+function renderCOT(rows){const all=rows.map(r=>({date:r.report_date_as_yyyy_mm_dd?.slice(0,10),cl:+r.comm_positions_long_all,cs:+r.comm_positions_short_all,nl:+r.noncomm_positions_long_all,ns:+r.noncomm_positions_short_all,oi:+r.open_interest_all})).reverse();
+  const recs=all.slice(-16); const cur=recs.at(-1),prev=recs.length>1?recs.at(-2):cur;
   const cN=cur.cl-cur.cs,cD=cN-(prev.cl-prev.cs),sN=cur.nl-cur.ns,sD=sN-(prev.nl-prev.ns);
-  $('#cotDate').textContent='report '+cur.date;
+  const ciComm=cotIndex(all.map(d=>d.cl-d.cs)), ciSpec=cotIndex(all.map(d=>d.nl-d.ns));
+  const ex=v=>v>=80?'<span class="cot-x bull">ESTREMO LONG</span>':v<=20?'<span class="cot-x bear">ESTREMO SHORT</span>':'';
+  $('#cotDate').textContent='report '+cur.date+' · '+all.length+'w';
   $('#cotBody').innerHTML=`<div class="cot-cards">
     <div class="cot-c comm"><div class="t">Commercials (hedgers)</div><div class="net ${cN>=0?'up':'dn'}">${cN>=0?'+':''}${fInt(cN)}</div><div class="d ${cD>=0?'up':'dn'}">${cD>=0?'▲ +':'▼ '}${fInt(Math.abs(cD))} sett.</div><div class="ls">L ${fInt(cur.cl)} · S ${fInt(cur.cs)}</div></div>
     <div class="cot-c spec"><div class="t">Large Specs (non-comm)</div><div class="net ${sN>=0?'up':'dn'}">${sN>=0?'+':''}${fInt(sN)}</div><div class="d ${sD>=0?'up':'dn'}">${sD>=0?'▲ +':'▼ '}${fInt(Math.abs(sD))} sett.</div><div class="ls">L ${fInt(cur.nl)} · S ${fInt(cur.ns)}</div></div></div>
+    <div class="cot-idx"><div class="ci"><div class="cl">COT Index Commercials <small>(3y)</small> ${ex(ciComm)}</div><div class="bar"><span style="width:${ciComm}%;background:${ciComm>=80?'var(--green)':ciComm<=20?'var(--red)':'var(--blue)'}"></span><b>${ciComm}</b></div></div>
+      <div class="ci"><div class="cl">COT Index Large Specs <small>(3y)</small> ${ex(ciSpec)}</div><div class="bar"><span style="width:${ciSpec}%;background:${ciSpec>=80?'var(--green)':ciSpec<=20?'var(--red)':'var(--gold)'}"></span><b>${ciSpec}</b></div></div></div>
     <canvas id="cotChart"></canvas><div class="cot-oi"><span>Open Interest</span><span class="num">${fInt(cur.oi)}</span></div>
-    <div class="cot-note">Netto = long − short. I <b style="color:var(--gold)">large speculators</b> seguono il trend; i <b style="color:var(--blue)">commercials</b> sono spesso contrarian. Estremi possono anticipare inversioni.</div>`;
+    <div class="cot-note">COT Index = percentile del netto su 3 anni. <b style="color:var(--blue)">Commercials</b> a ≥80 = potenziale <b>bottom</b>; ≤20 = potenziale <b>top</b> (contrarian). I <b style="color:var(--gold)">large specs</b> seguono il trend.</div>`;
   drawCOTChart(recs);}
 function drawCOTChart(recs){const cv=$('#cotChart');if(!cv)return;const ctx=cv.getContext('2d'),dpr=window.devicePixelRatio||1,r=cv.getBoundingClientRect();
   cv.width=r.width*dpr;cv.height=r.height*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);const W=r.width,H=r.height,pad=4;ctx.clearRect(0,0,W,H);
@@ -902,6 +925,21 @@ function liqLevels(sym){ const D=DATA[sym]; const o=D&&D.ohlc; if(!o||o.length<6
   const be=ls.filter(v=>v<px).sort((a,b)=>b-a)[0]; if(be)out.push({v:be,label:'liq↓',color:'#8294b4'});
   return out; }
 function liqActive(){ return ($('#liqToggle')&&$('#liqToggle').checked)?liqLevels(STATE.symbol):[]; }
+/* Smart Money Concepts su candele: struttura, BOS/CHoCH, FVG, Order Block */
+function smcCompute(c){ const n=c.length; if(n<12)return null; const sh=[],sl=[];
+  for(let i=2;i<n-2;i++){ if(c[i].h>c[i-1].h&&c[i].h>c[i-2].h&&c[i].h>=c[i+1].h&&c[i].h>=c[i+2].h)sh.push(i); if(c[i].l<c[i-1].l&&c[i].l<c[i-2].l&&c[i].l<=c[i+1].l&&c[i].l<=c[i+2].l)sl.push(i); }
+  let trend='range';
+  if(sh.length>=2&&sl.length>=2){ const hh=c[sh.at(-1)].h>c[sh.at(-2)].h,hl=c[sl.at(-1)].l>c[sl.at(-2)].l,lh=c[sh.at(-1)].h<c[sh.at(-2)].h,ll=c[sl.at(-1)].l<c[sl.at(-2)].l; if(hh&&hl)trend='up'; else if(lh&&ll)trend='down'; }
+  const lastSH=sh.length?c[sh.at(-1)].h:null,lastSL=sl.length?c[sl.at(-1)].l:null,last=c.at(-1); let brk=null;
+  if(lastSH!=null&&last.c>lastSH)brk={idx:n-1,level:lastSH,type:trend==='down'?'CHoCH':'BOS',dir:'up'};
+  else if(lastSL!=null&&last.c<lastSL)brk={idx:n-1,level:lastSL,type:trend==='up'?'CHoCH':'BOS',dir:'down'};
+  const fvg=[];
+  for(let i=2;i<n;i++){ const a=c[i-2],z=c[i];
+    if(a.h<z.l){let f=false;for(let k=i+1;k<n;k++)if(c[k].l<=a.h){f=true;break;}if(!f)fvg.push({lo:a.h,hi:z.l,start:i-2,bull:true});}
+    else if(a.l>z.h){let f=false;for(let k=i+1;k<n;k++)if(c[k].h>=a.l){f=true;break;}if(!f)fvg.push({lo:z.h,hi:a.l,start:i-2,bull:false});} }
+  let ob=null;
+  if(brk){ for(let i=brk.idx-1;i>=Math.max(0,brk.idx-12);i--){ const up=c[i].c>=c[i].o; if(brk.dir==='up'&&!up){ob={lo:c[i].l,hi:c[i].h,start:i,bull:true};break;} if(brk.dir==='down'&&up){ob={lo:c[i].l,hi:c[i].h,start:i,bull:false};break;} } }
+  return {trend,brk,fvg:fvg.slice(-3),ob}; }
 
 /* Risk Guardian (prop) + calcolatore posizione */
 const RG={cap:100000,dl:5,dd:10,tgt:8,pnl:0,risk:1};
@@ -1203,7 +1241,7 @@ function alertDesc(a){ const v=a.val; switch(a.type){
   case'rob':return `${a.sym} RSI ipercomprato (>70)`; case'ros':return `${a.sym} RSI ipervenduto (<30)`;
   case'gf':return `${a.sym} cross Gamma Flip`; case'cw':return `${a.sym} tocco Call Wall`; case'pw':return `${a.sym} tocco Put Wall`; default:return a.type; } }
 /* --- Telegram --- */
-const TG={token:'',chat:'',daily:false,dailyTime:'08:00',dailyLast:''};
+const TG={token:'',chat:'',daily:false,dailyTime:'08:00',dailyLast:'',weekly:false,weeklyLast:''};
 async function tgSend(text,html=true){ if(!TG.token||!TG.chat)return false;
   try{ const body={chat_id:TG.chat,text,disable_web_page_preview:true}; if(html)body.parse_mode='HTML';
     const r=await fetch(`https://api.telegram.org/bot${TG.token}/sendMessage`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); const j=await r.json(); return !!j.ok; }catch(e){return false;} }
@@ -1228,11 +1266,30 @@ async function buildDailySummary(){
 }
 async function sendDailySummary(manual){ if(!TG.token||!TG.chat){ if(manual)toast('Configura prima Telegram'); return; }
   if(manual)toast('Invio riepilogo…'); const ok=await tgSend(await buildDailySummary()); if(manual)toast(ok?'Riepilogo inviato ✓':'Invio fallito'); return ok; }
-// scheduler: invio automatico una volta al giorno all'orario impostato (CET)
-async function checkDailySummary(){ if(!TG.daily||!TG.token||!TG.chat)return;
-  const cet=cetNow(); const hhmm=String(cet.getHours()).padStart(2,'0')+':'+String(cet.getMinutes()).padStart(2,'0');
-  const today=cet.toISOString().slice(0,10);
-  if(hhmm>= (TG.dailyTime||'08:00') && TG.dailyLast!==today){ TG.dailyLast=today; await Storage.set('tg_daily_last',today); sendDailySummary(false); } }
+// Crypto Fear & Greed (alternative.me) — sentiment retail crypto
+async function loadCryptoFG(){ try{ const j=await getJSON('https://api.alternative.me/fng/?limit=1',12000); const d=j&&j.data&&j.data[0]; if(d){ CRYPTO_FG={v:+d.value,c:d.value_classification};
+  const e=$('#cryptoFG'); if(e){const v=CRYPTO_FG.v;e.textContent=`${v} · ${CRYPTO_FG.c}`;e.className='v '+(v<25?'dn':v>75?'up':'gd');} } }catch(e){} }
+let CRYPTO_FG=null;
+// Briefing settimanale: performance, COT index estremi, regime, calendario settimana
+async function buildWeeklySummary(){
+  const date=new Date().toLocaleDateString('it-IT'); const reg=$('#regime')?.textContent||'—';
+  const L=[`📅 <b>AURUM · Briefing settimanale</b> — ${date}`,`Regime: <b>${reg}</b> · Fear&amp;Greed ${fearGreed()}/100${CRYPTO_FG?` · Crypto F&amp;G ${CRYPTO_FG.v}`:''}`,'','<b>Performance 5 sedute:</b>'];
+  ['XAUUSD','XAGUSD','US500','US100','BTCUSD','WTIUSD','DXY'].forEach(s=>{const c=chgN(s,5);L.push(`• ${s}: ${c>=0?'+':''}${c.toFixed(2)}%`);});
+  try{ const [gj,sj]=await Promise.all([getJSON(cotURL('088691')),getJSON(cotURL('084691'))]);
+    const idx=rows=>{const all=rows.map(r=>(+r.comm_positions_long_all)-(+r.comm_positions_short_all)).reverse();return cotIndex(all);};
+    const ig=idx(gj),is=idx(sj); const fl=v=>v>=80?' ⚠️ estremo LONG':v<=20?' ⚠️ estremo SHORT':'';
+    L.push('',`<b>COT Index Commercials (3y):</b> Gold ${ig}${fl(ig)} · Silver ${is}${fl(is)}`);
+  }catch(e){}
+  if(CALENDAR.length){ const now=Date.now(),wk=now+7*864e5; const hi=CALENDAR.filter(e=>e.impact==='high'&&e.date.getTime()>now&&e.date.getTime()<wk).slice(0,6);
+    if(hi.length){L.push('','<b>News ad alto impatto settimana:</b>'); hi.forEach(e=>L.push(`• ${e.date.toLocaleString('it-IT',{weekday:'short',hour:'2-digit',minute:'2-digit',timeZone:'Europe/Rome'})} ${e.cur} — ${e.title}`));} }
+  L.push('','<i>Strumento educativo · non è un consiglio d\'investimento.</i>'); return L.join('\n');
+}
+async function sendWeeklySummary(manual){ if(!TG.token||!TG.chat){if(manual)toast('Configura prima Telegram');return;} if(manual)toast('Invio briefing…'); const ok=await tgSend(await buildWeeklySummary()); if(manual)toast(ok?'Briefing settimanale inviato ✓':'Invio fallito'); return ok; }
+// scheduler giornaliero + settimanale (lunedì)
+async function checkDailySummary(){ if(!TG.token||!TG.chat)return;
+  const cet=cetNow(); const hhmm=String(cet.getHours()).padStart(2,'0')+':'+String(cet.getMinutes()).padStart(2,'0'); const today=cet.toISOString().slice(0,10);
+  if(TG.daily && hhmm>=(TG.dailyTime||'08:00') && TG.dailyLast!==today){ TG.dailyLast=today; await Storage.set('tg_daily_last',today); sendDailySummary(false); }
+  if(TG.weekly && cet.getDay()===1 && hhmm>=(TG.dailyTime||'08:00') && TG.weeklyLast!==today){ TG.weeklyLast=today; await Storage.set('tg_weekly_last',today); sendWeeklySummary(false); } }
 async function tgDetect(){ if(!TG.token){toast('Inserisci prima il bot token');return;}
   try{ const r=await fetch(`https://api.telegram.org/bot${TG.token}/getUpdates`); const j=await r.json();
     const u=(j.result||[]).reverse().find(x=>x.message&&x.message.chat);
@@ -1246,11 +1303,13 @@ function renderTelegram(){ const b=$('#tgBox'); if(!b)return; const on=TG.token&
       <button id="tgSave">Salva</button><button id="tgDetect" title="Scrivi prima al bot">Rileva chat</button><button id="tgTest">Test</button>
     </div>
     <div class="tg-form" style="margin-top:5px">
-      <button id="tgSummary" class="add" style="flex:1;background:rgba(72,160,255,.14);border-color:var(--blue);color:var(--blue)">📊 Invia riepilogo ora</button>
+      <button id="tgSummary" class="add" style="flex:1;background:rgba(72,160,255,.14);border-color:var(--blue);color:var(--blue)">📊 Riepilogo</button>
+      <button id="tgWeekly" class="add" style="flex:1;background:rgba(155,123,255,.14);border-color:var(--violet);color:var(--violet)">📅 Settimanale</button>
     </div>
     <div class="tg-form" style="margin-top:5px;align-items:center">
-      <label class="al-snd" style="flex:1"><input type="checkbox" id="tgDaily" ${TG.daily?'checked':''}/> riepilogo giornaliero alle</label>
-      <input id="tgTime" type="time" value="${TG.dailyTime||'08:00'}" style="flex:0 0 88px"/>
+      <label class="al-snd" style="flex:1"><input type="checkbox" id="tgDaily" ${TG.daily?'checked':''}/> giornaliero alle</label>
+      <input id="tgTime" type="time" value="${TG.dailyTime||'08:00'}" style="flex:0 0 76px"/>
+      <label class="al-snd" title="Invio automatico ogni lunedì"><input type="checkbox" id="tgWeeklyAuto" ${TG.weekly?'checked':''}/> sett.(lun)</label>
     </div>
     <div class="tg-note">Crea un bot con <b>@BotFather</b> → incolla il token → scrivi al bot → <b>Rileva chat</b>. Riceverai alert, il <b>riepilogo giornaliero</b> (bias, regime, gamma, COT, gas) e il <b>giornale di trading</b>.</div>`;
   $('#tgSave').onclick=async()=>{ TG.token=$('#tgToken').value.trim(); TG.chat=$('#tgChat').value.trim();
@@ -1259,7 +1318,9 @@ function renderTelegram(){ const b=$('#tgBox'); if(!b)return; const on=TG.token&
   $('#tgTest').onclick=async()=>{ TG.token=$('#tgToken').value.trim(); TG.chat=$('#tgChat').value.trim(); await Storage.set('tg_token',TG.token); await Storage.set('tg_chat',TG.chat);
     toast('Invio test…'); const ok=await tgSend('✅ <b>AURUM</b> · test alert Telegram'); toast(ok?'Messaggio Telegram inviato ✓':'Invio fallito (token/chat_id?)'); renderTelegram(); };
   $('#tgSummary').onclick=()=>sendDailySummary(true);
-  $('#tgDaily').onchange=async e=>{ TG.daily=e.target.checked; await Storage.set('tg_daily',TG.daily); toast(TG.daily?'Riepilogo giornaliero attivo':'Riepilogo giornaliero disattivato'); };
+  $('#tgWeekly').onclick=()=>sendWeeklySummary(true);
+  $('#tgDaily').onchange=async e=>{ TG.daily=e.target.checked; await Storage.set('tg_daily',TG.daily); toast(TG.daily?'Riepilogo giornaliero attivo':'Disattivato'); };
+  $('#tgWeeklyAuto').onchange=async e=>{ TG.weekly=e.target.checked; await Storage.set('tg_weekly',TG.weekly); toast(TG.weekly?'Briefing settimanale (lun) attivo':'Disattivato'); };
   $('#tgTime').onchange=async e=>{ TG.dailyTime=e.target.value||'08:00'; await Storage.set('tg_daily_time',TG.dailyTime); };
 }
 function fireAlert(a,msg){ a.fired=true; a.firedAt=Date.now(); notify('AURUM Alert · '+a.sym,msg); beep(); toast('🔔 '+msg);
@@ -1320,6 +1381,7 @@ function bind(){
   $('#gexTicker').addEventListener('keydown',e=>{ if(e.key==='Enter')loadGamma(STATE.symbol); });
   const dc=$('#detailChart'); if(dc){ dc.addEventListener('mousemove',e=>{const r=dc.getBoundingClientRect();detailCross=e.clientX-r.left;drawDetailChart();}); dc.addEventListener('mouseleave',()=>{detailCross=null;drawDetailChart();}); }
   if($('#liqToggle'))$('#liqToggle').onchange=drawDetailChart;
+  if($('#smcToggle'))$('#smcToggle').onchange=drawDetailChart;
   window.addEventListener('resize',()=>{drawDetailChart();drawComp();});}
 (async function boot(){
   await importKeysFromHash();
@@ -1330,11 +1392,13 @@ function bind(){
   ALERTS=((await Storage.get('alerts'))||[]).map(a=>({...a,armed:a.armed!==false}));
   TG.token=(await Storage.get('tg_token'))||''; TG.chat=(await Storage.get('tg_chat'))||'';
   TG.daily=!!(await Storage.get('tg_daily')); TG.dailyTime=(await Storage.get('tg_daily_time'))||'08:00'; TG.dailyLast=(await Storage.get('tg_daily_last'))||'';
+  TG.weekly=!!(await Storage.get('tg_weekly')); TG.weeklyLast=(await Storage.get('tg_weekly_last'))||'';
   const rc=await Storage.get('rg_cfg'); if(rc)Object.assign(RG,rc);
   SY.forEach(ensureSim);bind();setKeyDot();initCotSel();renderCal();renderClock();renderAlerts();renderTelegram();renderRG();renderAll();
   setInterval(renderClock,1000);
   await fetchAll();renderAll();loadCOT(STATE.cot);loadGas();loadDivergence(STATE.symbol);loadGamma(STATE.symbol);fetchOHLC(STATE.symbol).then(()=>drawDetailChart());
   loadCalendar();                                    // calendario economico reale
+  loadCryptoFG(); setInterval(loadCryptoFG, 1800000); // crypto fear&greed (retail)
   setInterval(loadCalendar, 3600000);                // refresh ogni ora
   setInterval(()=>{checkNews();renderCal();}, 60000); // alert news + aggiorna lista
   setInterval(async()=>{await fetchAll();renderAll();},CONFIG.refreshMs);
