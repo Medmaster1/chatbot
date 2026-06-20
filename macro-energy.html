@@ -1,0 +1,574 @@
+<!DOCTYPE html><html lang="it"><head><meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>AURUM · Macro &amp; Energy Terminal</title>
+<!--
+  AURUM · Macro & Energy Terminal — single-file app per investitore/trader macro.
+  Fonti dati (tutte free tier):
+   - Riserve gas UE      → AGSI/GIE (agsi.gie.eu, key gratuita, CORS-native, header x-key)
+   - LNG send-out UE     → ALSI/GIE (alsi.gie.eu, stessa key GIE)
+   - Prezzi energia/FX   → Yahoo Finance (via proxy CORS: Cloudflare Worker dell'utente + fallback)
+   - Scorte petrolio USA → EIA v2 (api.eia.gov, key gratuita)
+   - Macro (tassi/CPI)   → FRED (api.stlouisfed.org, key gratuita, via proxy)
+   - Posizionamento      → CFTC COT (publicreporting.cftc.gov, CORS-native)
+  Le chiavi si salvano in locale (localStorage) o si importano dal link #agsi=..&eia=..&fred=..&proxy=..
+  Nessun consiglio d'investimento.
+-->
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --bg:#06090f;--bg2:#070d18;--panel:#0a111f;--panel2:#0b1426;--panel3:#0e1a30;
+  --line:rgba(150,170,205,.10);--line2:rgba(150,170,205,.20);
+  --txt:#cdd9ee;--txt2:#8294b4;--txt3:#5f7193;
+  --gold:#e7b54a;--gold2:#caa14a;--gold-d:rgba(231,181,74,.12);
+  --green:#23d18b;--green-d:rgba(35,209,139,.14);
+  --red:#ff4d5e;--red-d:rgba(255,77,94,.14);
+  --blue:#48a0ff;--amber:#ffb547;--violet:#9b7bff;--cyan:#5fc9e8;
+  --shadow:0 14px 40px -20px rgba(0,0,0,.9);
+  --mono:'JetBrains Mono','Space Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--mono);background:
+  radial-gradient(1100px 500px at 85% -10%,rgba(72,160,255,.05),transparent 60%),
+  radial-gradient(900px 460px at 0% 0%,rgba(231,181,74,.05),transparent 55%),var(--bg);
+  color:var(--txt);font-size:12.5px;line-height:1.4;-webkit-font-smoothing:antialiased;padding-bottom:30px}
+button{font-family:var(--mono);cursor:pointer;color:inherit}
+::selection{background:var(--gold);color:#000}
+.up{color:var(--green)}.dn{color:var(--red)}.gd{color:var(--gold)}.mut{color:var(--txt3)}
+.num{font-variant-numeric:tabular-nums}
+a{color:var(--blue);text-decoration:none}a:hover{color:var(--gold)}
+*::-webkit-scrollbar{width:8px;height:8px}*::-webkit-scrollbar-thumb{background:var(--line2);border-radius:8px}
+.wrap{max-width:1480px;margin:0 auto;padding:16px}
+
+.hdr{display:flex;align-items:center;gap:12px;padding:12px 16px;background:linear-gradient(180deg,#0a1322,#070d18);border:1px solid var(--line2);border-radius:12px;box-shadow:var(--shadow);margin-bottom:14px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:11px}
+.brand .mk{width:38px;height:38px;border-radius:9px;background:conic-gradient(from 210deg,var(--gold),#7c611f 55%,var(--gold));display:grid;place-items:center;color:#000;font-weight:800;font-size:17px;box-shadow:0 0 0 1px rgba(231,181,74,.4)}
+.brand .nm{font-weight:800;letter-spacing:.5px;color:#fff;font-size:15px}
+.brand .sub{font-size:9.5px;letter-spacing:2px;color:var(--txt3);text-transform:uppercase}
+.hdr .sp{flex:1}
+.home{font-size:11px;background:var(--panel2);border:1px solid var(--line2);padding:8px 12px;border-radius:9px}
+.badge{display:flex;align-items:center;gap:8px;background:var(--panel2);border:1px solid var(--line2);padding:8px 12px;border-radius:9px;font-size:10.5px}
+.badge .led{width:8px;height:8px;border-radius:50%;background:var(--amber)}
+.badge.live .led{background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse 2s infinite}
+.badge.part .led{background:var(--amber);box-shadow:0 0 8px var(--amber)}
+.badge.off .led{background:var(--red)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.clock{font-size:12px;background:var(--panel2);border:1px solid var(--line);padding:8px 12px;border-radius:9px}.clock b{color:var(--gold)}
+.btn{background:var(--panel2);border:1px solid var(--line2);padding:8px 13px;border-radius:9px;font-size:11px;font-weight:600;transition:.12s}
+.btn:hover{border-color:var(--gold2);color:#fff}
+
+.keys{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.apikey{display:flex;align-items:center;gap:6px;background:var(--panel2);border:1px solid var(--line2);padding:5px 7px;border-radius:9px}
+.apikey input{background:var(--bg);border:1px solid var(--line);color:#fff;padding:6px 8px;border-radius:6px;font-family:var(--mono);font-size:10.5px;width:140px}
+.apikey input:focus{outline:none;border-color:var(--gold2)}
+.apikey button{background:var(--gold-d);border:1px solid var(--gold2);color:var(--gold);padding:6px 9px;border-radius:6px;font-size:10px;font-weight:700}
+.apikey .ok{width:7px;height:7px;border-radius:50%;background:#33405e}.apikey .ok.on{background:var(--green);box-shadow:0 0 6px var(--green)}
+
+.kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:14px}
+@media(max-width:1100px){.kpis{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:560px){.kpis{grid-template-columns:repeat(2,1fr)}}
+.kpi{background:linear-gradient(180deg,var(--panel),var(--bg2));border:1px solid var(--line2);border-radius:11px;padding:12px 14px;position:relative;overflow:hidden;box-shadow:var(--shadow)}
+.kpi .k{font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.8px}
+.kpi .v{font-size:20px;font-weight:800;color:#fff;margin:3px 0;font-variant-numeric:tabular-nums}
+.kpi .c{font-size:11px;font-weight:700}
+.kpi .spk{position:absolute;right:8px;bottom:6px;width:80px;height:30px;opacity:.85}
+
+.grid{display:grid;grid-template-columns:1.15fr 1fr;gap:14px}
+@media(max-width:1100px){.grid{grid-template-columns:1fr}}
+.col{display:flex;flex-direction:column;gap:14px;min-width:0}
+.panel{background:linear-gradient(180deg,var(--panel),var(--bg2));border:1px solid var(--line2);border-radius:12px;box-shadow:var(--shadow)}
+.ph{display:flex;align-items:center;gap:9px;padding:11px 14px;border-bottom:1px solid var(--line);font-size:10.5px;letter-spacing:1.4px;text-transform:uppercase;color:var(--gold2);font-weight:700}
+.ph .sp{flex:1}.ph .tag{font-size:9px;color:var(--txt3);letter-spacing:.5px}
+.pb{padding:14px}
+.loading{color:var(--txt3);font-size:11px;padding:8px 2px}
+
+/* gas */
+.gas-top{display:flex;gap:16px;align-items:flex-end;margin-bottom:10px}
+.gas-big{font-size:34px;font-weight:800;color:#fff;line-height:1}
+.gas-sub{font-size:9px;color:var(--txt3);text-transform:uppercase;letter-spacing:1px;margin-top:3px}
+.gas-bar{height:11px;background:var(--panel3);border-radius:7px;overflow:hidden}
+.gas-bar span{display:block;height:100%;background:linear-gradient(90deg,var(--cyan),#2f86a8);border-radius:7px}
+.row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--line);font-size:11.5px}
+.row:last-child{border-bottom:none}.row .k{color:var(--txt2)}.row .v{font-weight:700}
+canvas.mini{width:100%;height:60px;display:block;margin:8px 0}
+.bias{display:flex;gap:11px;align-items:center;margin-top:10px;padding:11px;border-radius:10px;border:1px solid var(--line2)}
+.bias .ic{font-size:24px}.bias .t{font-weight:800;font-size:12.5px;color:#fff}.bias .s{font-size:10px;color:var(--txt2);margin-top:2px}
+.bias.bull{background:var(--green-d);border-color:rgba(35,209,139,.4)}
+.bias.bear{background:var(--red-d);border-color:rgba(255,77,94,.4)}
+.bias.neu{background:rgba(150,170,205,.08)}
+.note{font-size:10px;color:var(--txt3);line-height:1.55;margin-top:9px;border-top:1px dashed var(--line2);padding-top:9px}
+
+/* oil dual */
+.duo{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:6px}
+.duo .cell{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:10px}
+.duo .cell .lab{font-size:9px;color:var(--txt3);text-transform:uppercase;letter-spacing:.6px}
+.duo .cell .px{font-size:19px;font-weight:800;color:#fff;margin:2px 0}
+.duo .cell .ch{font-size:11px;font-weight:700}
+
+/* macro grid */
+.mgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.mcell{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:9px 11px}
+.mcell .lab{font-size:9px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px}
+.mcell .val{font-size:17px;font-weight:800;color:#fff;margin:2px 0;font-variant-numeric:tabular-nums}
+.mcell .sub{font-size:9.5px;color:var(--txt2)}
+.pill{display:inline-block;font-size:8.5px;font-weight:800;padding:2px 7px;border-radius:5px;margin-top:3px}
+.pill.pos{background:var(--green-d);color:var(--green)}.pill.neg{background:var(--red-d);color:var(--red)}.pill.warn{background:rgba(255,181,71,.16);color:var(--amber)}.pill.neu{background:rgba(150,170,205,.12);color:var(--txt2)}
+
+/* calendar */
+.ev{display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);font-size:11px}
+.ev:last-child{border-bottom:none}
+.ev .dt{flex:0 0 86px;color:var(--gold2);font-weight:700;font-size:10px}
+.ev .ti{flex:1;color:var(--txt)}
+.ev .imp{flex:0 0 auto;font-size:8px;font-weight:800;padding:2px 6px;border-radius:5px}
+.imp.h{background:var(--red-d);color:var(--red)}.imp.m{background:rgba(255,181,71,.16);color:var(--amber)}.imp.r{background:rgba(72,160,255,.16);color:var(--blue)}
+.ev.next{background:rgba(231,181,74,.06);border-radius:7px;padding-left:7px}
+
+/* synthesis */
+.synth{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+@media(max-width:560px){.synth{grid-template-columns:1fr}}
+.scard{background:var(--panel2);border:1px solid var(--line2);border-radius:10px;padding:12px;text-align:center}
+.scard .lab{font-size:9px;color:var(--txt3);text-transform:uppercase;letter-spacing:.8px}
+.scard .big{font-size:16px;font-weight:800;margin:6px 0 2px}
+.scard .desc{font-size:9.5px;color:var(--txt2);line-height:1.4}
+
+.opec{font-size:11px}
+.opec .row .v{font-variant-numeric:tabular-nums}
+.foot{margin-top:18px;font-size:9.5px;color:var(--txt3);text-align:center;line-height:1.7}
+</style></head>
+<body>
+<div class="wrap">
+
+  <div class="hdr">
+    <div class="brand"><div class="mk">A</div>
+      <div><div class="nm">MACRO &amp; ENERGY TERMINAL</div><div class="sub">AURUM Suite · KID Digital Wealth</div></div></div>
+    <div class="sp"></div>
+    <div class="badge" id="status"><span class="led"></span><span id="statusTxt">init…</span></div>
+    <div class="clock" id="clock">--:--:--</div>
+    <button class="btn" id="refreshBtn">↻ Aggiorna</button>
+    <a class="home" href="./index.html">← Suite</a>
+  </div>
+
+  <div class="keys">
+    <div class="apikey" title="AGSI/GIE key gratuita per le riserve di gas europee (agsi.gie.eu/account).">
+      <span class="ok" id="agsiOk"></span><input id="agsiKey" type="password" placeholder="AGSI gas key" autocomplete="off"/><button id="agsiSave">Gas</button></div>
+    <div class="apikey" title="EIA key gratuita per scorte petrolio USA (eia.gov/opendata).">
+      <span class="ok" id="eiaOk"></span><input id="eiaKey" type="password" placeholder="EIA oil key" autocomplete="off"/><button id="eiaSave">Oil</button></div>
+    <div class="apikey" title="FRED key gratuita per tassi/CPI/curva (fred.stlouisfed.org/docs/api/api_key.html).">
+      <span class="ok" id="fredOk"></span><input id="fredKey" type="password" placeholder="FRED macro key" autocomplete="off"/><button id="fredSave">Macro</button></div>
+    <div class="apikey" title="URL del tuo Cloudflare Worker CORS (vedi cloudflare-worker.js). Rende i dati affidabili.">
+      <span class="ok" id="proxyOk"></span><input id="proxyUrl" type="text" placeholder="CORS proxy URL" autocomplete="off"/><button id="proxySave">Proxy</button></div>
+  </div>
+
+  <!-- KPI -->
+  <div class="kpis" id="kpis">
+    <div class="kpi"><div class="k">Brent</div><div class="v" id="kBrent">--</div><div class="c" id="kBrentC">—</div><canvas class="spk" id="spkBrent"></canvas></div>
+    <div class="kpi"><div class="k">WTI</div><div class="v" id="kWti">--</div><div class="c" id="kWtiC">—</div><canvas class="spk" id="spkWti"></canvas></div>
+    <div class="kpi"><div class="k">Brent–WTI</div><div class="v" id="kSpread">--</div><div class="c" id="kSpreadC">spread</div></div>
+    <div class="kpi"><div class="k">NatGas (HH)</div><div class="v" id="kGas">--</div><div class="c" id="kGasC">—</div><canvas class="spk" id="spkGas"></canvas></div>
+    <div class="kpi"><div class="k">Gas UE stock</div><div class="v" id="kAgsi">--</div><div class="c" id="kAgsiC">riempimento</div></div>
+    <div class="kpi"><div class="k">Dollar (DXY)</div><div class="v" id="kDxy">--</div><div class="c" id="kDxyC">—</div><canvas class="spk" id="spkDxy"></canvas></div>
+  </div>
+
+  <!-- SYNTHESIS -->
+  <div class="panel" style="margin-bottom:14px">
+    <div class="ph">⚙ Macro-Energy Read · sintesi bias<span class="sp"></span><span class="tag">non è un consiglio d'investimento</span></div>
+    <div class="pb"><div class="synth" id="synth">
+      <div class="scard"><div class="lab">Gas / NatGas</div><div class="big mut" id="syGas">—</div><div class="desc" id="syGasD">in attesa dati…</div></div>
+      <div class="scard"><div class="lab">Petrolio</div><div class="big mut" id="syOil">—</div><div class="desc" id="syOilD">in attesa dati…</div></div>
+      <div class="scard"><div class="lab">Regime Macro</div><div class="big mut" id="syMac">—</div><div class="desc" id="syMacD">in attesa dati…</div></div>
+    </div></div>
+  </div>
+
+  <div class="grid">
+    <div class="col">
+      <!-- GAS -->
+      <div class="panel">
+        <div class="ph">⛽ Riserve Gas UE · AGSI/GIE<span class="sp"></span><span class="tag" id="gasDate">—</span></div>
+        <div class="pb" id="gasBody"><div class="loading">inserisci la AGSI key per i dati gas…</div></div>
+      </div>
+      <!-- OIL -->
+      <div class="panel">
+        <div class="ph">🛢 Petrolio · Brent / WTI / OPEC+<span class="sp"></span><span class="tag" id="oilDate">—</span></div>
+        <div class="pb" id="oilBody"><div class="loading">caricamento prezzi petrolio…</div></div>
+      </div>
+    </div>
+
+    <div class="col">
+      <!-- MACRO -->
+      <div class="panel">
+        <div class="ph">📊 Macro Cockpit · curva &amp; tassi<span class="sp"></span><span class="tag" id="macDate">FRED</span></div>
+        <div class="pb" id="macBody"><div class="loading">inserisci la FRED key per il quadro macro…</div></div>
+      </div>
+      <!-- COT -->
+      <div class="panel">
+        <div class="ph">📐 Posizionamento · COT WTI<span class="sp"></span><span class="tag" id="cotDate">CFTC</span></div>
+        <div class="pb" id="cotBody"><div class="loading">caricamento COT…</div></div>
+      </div>
+      <!-- CALENDAR -->
+      <div class="panel">
+        <div class="ph">🗓 Eventi macro &amp; energia<span class="sp"></span><span class="tag">ora locale</span></div>
+        <div class="pb" id="calBody"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    App single-file · dati: AGSI/GIE · EIA · FRED · Yahoo Finance · CFTC. Le chiavi restano nel tuo browser.<br/>
+    Strumento di ricerca: <b>nessun consiglio d'investimento</b>. © KID Digital Wealth
+  </div>
+</div>
+
+<script>
+/* ============================ STORAGE & KEYS ============================ */
+const Storage=(()=>{let m={};const ws=(typeof window!=='undefined'&&window.storage&&typeof window.storage.getItem==='function');
+  const ls=(()=>{try{localStorage.setItem('__t','1');localStorage.removeItem('__t');return true;}catch(e){return false;}})();
+  return{async get(k){try{if(ws){const v=await window.storage.getItem(k);return v?JSON.parse(v):null}}catch(e){}
+    if(ls){try{const v=localStorage.getItem(k);if(v!=null)return JSON.parse(v);}catch(e){}} return m[k]??null},
+  async set(k,v){try{if(ws){await window.storage.setItem(k,JSON.stringify(v))}}catch(e){}
+    if(ls){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}} m[k]=v}}})();
+async function importKeysFromHash(){const h=location.hash?location.hash.slice(1):'';if(!h)return;
+  const q=new URLSearchParams(h);let ch=false;
+  if(q.get('agsi')){await Storage.set('agsi_apikey',q.get('agsi').trim());ch=true;}
+  if(q.get('eia')){await Storage.set('eia_apikey',q.get('eia').trim());ch=true;}
+  if(q.get('fred')){await Storage.set('fred_apikey',q.get('fred').trim());ch=true;}
+  if(q.get('proxy')){await Storage.set('cors_proxy',q.get('proxy').trim());ch=true;}
+  if(ch){try{history.replaceState(null,'',location.pathname+location.search);}catch(e){}}}
+
+let AGSIKEY='',EIAKEY='',FREDKEY='',PROXY_URL='';
+
+/* ============================ UTILS ============================ */
+const $=(s,e=document)=>e.querySelector(s);
+const f=(n,d=2)=>(n==null||isNaN(n))?'--':Number(n).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const sgn=n=>n>0?'+':'';
+async function getJSON(url,ms=20000){const ctrl=new AbortController();const to=setTimeout(()=>ctrl.abort(),ms);
+  try{const r=await fetch(url,{signal:ctrl.signal});if(!r.ok)throw new Error('HTTP '+r.status);return await r.json();}finally{clearTimeout(to);}}
+
+/* proxy CORS: Cloudflare Worker dell'utente in testa, poi fallback pubblici */
+const PROXIES=[
+  u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+  u=>`https://api.codetabs.com/v1/proxy/?quest=${u}`,
+  u=>`https://corsproxy.org/?url=${encodeURIComponent(u)}`,
+  u=>`https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
+];
+function proxyList(){return PROXY_URL?[u=>`${PROXY_URL.replace(/\/$/,'')}/?url=${encodeURIComponent(u)}`,...PROXIES]:PROXIES;}
+async function proxyJSON(url){
+  for(const p of proxyList()){
+    for(let a=0;a<2;a++){
+      try{const j=await getJSON(p(url),16000);
+        if(j&&typeof j.contents==='string'){try{return JSON.parse(j.contents);}catch(e){return j.contents;}}
+        return j;
+      }catch(e){if(a===0)await new Promise(r=>setTimeout(r,350));}
+    }
+  }
+  throw new Error('proxy ko');
+}
+/* prova diretta (CORS-native) poi via proxy */
+async function smartJSON(url){try{return await getJSON(url,12000);}catch(e){return await proxyJSON(url);}}
+
+/* ============================ YAHOO ============================ */
+const yahooURL=s=>`https://query1.finance.yahoo.com/v8/finance/chart/${s}?interval=1d&range=3mo`;
+async function fetchYahoo(sym){
+  for(const p of proxyList()){
+    for(let a=0;a<2;a++){
+      try{const j=await getJSON(p(yahooURL(sym)),16000);
+        const data=(j&&typeof j.contents==='string')?JSON.parse(j.contents):j;
+        if(data&&data.chart&&data.chart.result){
+          const r=data.chart.result[0],meta=r.meta||{};
+          const closes=((r.indicators&&r.indicators.quote&&r.indicators.quote[0].close)||[]).filter(x=>x!=null);
+          const price=meta.regularMarketPrice??closes.at(-1);
+          if(closes.length)closes[closes.length-1]=price;
+          const prev=closes.length>1?closes[closes.length-2]:(meta.chartPreviousClose??price);
+          return{price,change:prev?(price/prev-1)*100:0,hist:closes.slice(-60)};
+        }
+        throw new Error('payload');
+      }catch(e){if(a===0)await new Promise(r=>setTimeout(r,350));}
+    }
+  }
+  return null;
+}
+function spark(id,hist,up){const cv=$('#'+id);if(!cv||!hist||hist.length<2)return;
+  const ctx=cv.getContext('2d'),dpr=window.devicePixelRatio||1,r=cv.getBoundingClientRect();
+  cv.width=r.width*dpr;cv.height=r.height*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);
+  const W=r.width,H=r.height,min=Math.min(...hist),max=Math.max(...hist),rng=(max-min)||1;
+  const x=i=>i/(hist.length-1)*W,y=v=>2+(1-(v-min)/rng)*(H-4);
+  ctx.clearRect(0,0,W,H);ctx.beginPath();hist.forEach((v,i)=>i?ctx.lineTo(x(i),y(v)):ctx.moveTo(x(i),y(v)));
+  ctx.strokeStyle=up?'#23d18b':'#ff4d5e';ctx.lineWidth=1.5;ctx.stroke();}
+function chg(el,v,suff='%'){const e=$('#'+el);if(!e)return;e.textContent=(v>=0?'▲ ':'▼ ')+sgn(v)+f(v,2)+suff;e.className='c '+(v>=0?'up':'dn');}
+
+/* ============================ STATE ============================ */
+const STATE={gas:null,oil:{},macro:{},loaded:0,total:0};
+
+/* ============================ GAS (AGSI) ============================ */
+async function loadGas(){
+  const body=$('#gasBody');
+  if(!AGSIKEY){body.innerHTML='<div class="loading">Inserisci la tua AGSI key (gratis su agsi.gie.eu/account) per le riserve di gas UE.</div>';$('#agsiOk').classList.remove('on');return;}
+  $('#agsiOk').classList.add('on');body.innerHTML='<div class="loading">caricamento dati gas…</div>';
+  try{
+    const j=await smartFetchAgsi();
+    if(!j||!Array.isArray(j.data)||!j.data.length)throw new Error('no data');
+    const recs=j.data.map(d=>({date:d.gasDayStart,full:+d.full,inj:+d.injection,wit:+d.withdrawal})).reverse();
+    renderGas(recs);
+  }catch(e){body.innerHTML='<div class="loading">Gas non disponibile (key non valida o rete). La key AGSI è gratuita su agsi.gie.eu/account.</div>';}
+}
+async function smartFetchAgsi(){
+  const url='https://agsi.gie.eu/api?continent=eu&size=120';
+  try{const r=await fetch(url,{headers:{'x-key':AGSIKEY}});return await r.json();}
+  catch(e){return await proxyJSON(url);} // alcuni proxy non inoltrano x-key: tentativo best-effort
+}
+function renderGas(recs){
+  const cur=recs.at(-1),wk=recs.length>7?recs[recs.length-8]:recs[0];
+  const full=cur.full,dWeek=full-wk.full,withdrawing=cur.wit>cur.inj;
+  const m=new Date(cur.date).getMonth(),injSeason=(m>=3&&m<=9);
+  let bias='neu',ic='⚖️',t='GAS: NEUTRO',s='Riserve in linea con la stagione.';
+  if(full<45&&withdrawing){bias='bull';ic='🔥';t='NATGAS: RIALZISTA';s='Riserve basse + svuotamento → pressione su offerta.';}
+  else if(full>80&&!withdrawing){bias='bear';ic='🧊';t='NATGAS: RIBASSISTA';s='Riserve alte + riempimento → offerta abbondante.';}
+  else if(full<55&&withdrawing){bias='bull';ic='🔥';t='NATGAS: LEGG. RIALZISTA';s='Riserve sotto media e in calo.';}
+  else if(full>70&&!withdrawing){bias='bear';ic='🧊';t='NATGAS: LEGG. RIBASSISTA';s='Riserve sopra media e in salita.';}
+  STATE.gas={full,dWeek,bias};
+  $('#gasDate').textContent='al '+cur.date;
+  $('#kAgsi').textContent=f(full,1)+'%';
+  $('#kAgsiC').textContent=sgn(dWeek)+f(dWeek,2)+' pp/sett';$('#kAgsiC').className='c '+(dWeek>=0?'up':'dn');
+  $('#gasBody').innerHTML=`
+    <div class="gas-top"><div><div class="gas-big">${f(full,1)}%</div><div class="gas-sub">riempimento UE</div></div>
+      <div style="flex:1"><div class="gas-bar"><span style="width:${clamp(full,0,100)}%"></span></div>
+      <div class="row" style="border:none;margin-top:8px"><span class="k">Δ settimana</span><span class="v ${dWeek>=0?'up':'dn'}">${sgn(dWeek)}${f(dWeek,2)} pp</span></div></div></div>
+    <canvas class="mini" id="gasChart"></canvas>
+    <div class="row"><span class="k">Stagione</span><span class="v">${injSeason?'Iniezione (apr–ott)':'Prelievo (nov–mar)'}</span></div>
+    <div class="row"><span class="k">Flusso giornaliero</span><span class="v ${withdrawing?'dn':'up'}">${withdrawing?'Svuotamento':'Riempimento'}</span></div>
+    <div class="bias ${bias}"><div class="ic">${ic}</div><div><div class="t">${t}</div><div class="s">${s}</div></div></div>
+    <div class="note">Le riserve di gas UE (AGSI/GIE) anticipano la pressione su <b>Natural Gas</b> ed energia: scorte basse + prelievo = supporto ai prezzi; scorte alte + iniezione = freno.</div>`;
+  drawArea('gasChart',recs.map(d=>d.full),'#5fc9e8');
+  renderSynthesis();
+}
+function drawArea(id,a,color){const cv=$('#'+id);if(!cv||!a.length)return;
+  const ctx=cv.getContext('2d'),dpr=window.devicePixelRatio||1,r=cv.getBoundingClientRect();
+  cv.width=r.width*dpr;cv.height=r.height*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);
+  const W=r.width,H=r.height,pad=3,min=Math.min(...a),max=Math.max(...a),rng=(max-min)||1;
+  const x=i=>pad+i/(a.length-1)*(W-pad*2),y=v=>pad+(1-(v-min)/rng)*(H-pad*2);
+  ctx.clearRect(0,0,W,H);const g=ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,color+'4d');g.addColorStop(1,color+'00');
+  ctx.beginPath();a.forEach((v,i)=>i?ctx.lineTo(x(i),y(v)):ctx.moveTo(x(i),y(v)));
+  ctx.lineTo(x(a.length-1),H-pad);ctx.lineTo(x(0),H-pad);ctx.closePath();ctx.fillStyle=g;ctx.fill();
+  ctx.strokeStyle=color;ctx.lineWidth=1.6;ctx.beginPath();a.forEach((v,i)=>i?ctx.lineTo(x(i),y(v)):ctx.moveTo(x(i),y(v)));ctx.stroke();}
+
+/* ============================ OIL (Yahoo + EIA + OPEC) ============================ */
+/* OPEC+ tracker editoriale — AGGIORNA QUI a mano dopo ogni riunione. */
+const OPEC={
+  updated:'giu 2026',
+  target:'~41,0 mb/g (quota dichiarata OPEC-9)',
+  voluntary:'tagli volontari ~2,2 mb/g in graduale rientro',
+  spare:'capacità inutilizzata ~5 mb/g (perlopiù Arabia Saudita/UAE)',
+  next:'prossima riunione ministeriale: vedi calendario',
+};
+async function loadOil(){
+  const body=$('#oilBody');
+  const [brent,wti,gas,dxy]=await Promise.all([fetchYahoo('BZ=F'),fetchYahoo('CL=F'),fetchYahoo('NG=F'),fetchYahoo('DX-Y.NYB')]);
+  if(brent){STATE.oil.brent=brent.price;$('#kBrent').textContent='$'+f(brent.price,2);chg('kBrentC',brent.change);spark('spkBrent',brent.hist,brent.change>=0);}
+  if(wti){STATE.oil.wti=wti.price;$('#kWti').textContent='$'+f(wti.price,2);chg('kWtiC',wti.change);spark('spkWti',wti.hist,wti.change>=0);}
+  if(gas){$('#kGas').textContent='$'+f(gas.price,3);chg('kGasC',gas.change);spark('spkGas',gas.hist,gas.change>=0);}
+  if(dxy){STATE.macro.dxy=dxy.price;$('#kDxy').textContent=f(dxy.price,2);chg('kDxyC',dxy.change);spark('spkDxy',dxy.hist,dxy.change>=0);}
+  const spread=(brent&&wti)?brent.price-wti.price:null;
+  if(spread!=null){$('#kSpread').textContent='$'+f(spread,2);
+    $('#kSpreadC').textContent=spread>4?'fisiologico':'compresso';$('#kSpreadC').className='c '+(spread>4?'mut':'gd');}
+
+  // EIA scorte petrolio USA
+  let eiaHtml='';
+  if(EIAKEY){
+    try{
+      const j=await smartJSON(`https://api.eia.gov/v2/seriesid/PET.WCESTUS1.W?api_key=${EIAKEY}`);
+      const rows=(j&&j.response&&j.response.data)||[];
+      rows.sort((a,b)=>(a.period<b.period?1:-1));
+      if(rows.length>1){
+        const cur=+rows[0].value,prev=+rows[1].value,delta=cur-prev; // migliaia di barili
+        const draw=delta<0;STATE.oil.eiaBias=draw?'bull':'bear';
+        eiaHtml=`<div class="row"><span class="k">Scorte greggio USA (EIA)</span><span class="v">${f(cur/1000,1)} mb</span></div>
+          <div class="row"><span class="k">Variazione settimanale</span><span class="v ${draw?'up':'dn'}">${sgn(delta/1000)}${f(delta/1000,2)} mb · ${draw?'DRAW (rialzista)':'BUILD (ribassista)'}</span></div>
+          <div class="row" style="border:none"><span class="k">Settimana al</span><span class="v mut">${rows[0].period}</span></div>`;
+        $('#oilDate').textContent='EIA '+rows[0].period;
+      }
+    }catch(e){eiaHtml='<div class="note">Scorte EIA non disponibili ora (rete/proxy).</div>';}
+  }else{
+    eiaHtml='<div class="note">Aggiungi la <b>EIA key</b> (gratis su eia.gov/opendata) per le scorte settimanali di greggio USA (build/draw → bias prezzo).</div>';
+  }
+
+  let spHtml='';
+  if(spread!=null){
+    const tight=spread<4;
+    spHtml=`<div class="bias ${tight?'bull':'neu'}"><div class="ic">${tight?'🔺':'⚖️'}</div>
+      <div><div class="t">Spread Brent–WTI: $${f(spread,2)}</div>
+      <div class="s">${tight?'Spread compresso → domanda export USA forte / offerta tesa.':'Spread fisiologico → logistica e export in equilibrio.'}</div></div></div>`;
+  }
+  body.innerHTML=`
+    <div class="duo">
+      <div class="cell"><div class="lab">Brent (BZ=F)</div><div class="px">${brent?'$'+f(brent.price,2):'--'}</div><div class="ch ${brent&&brent.change>=0?'up':'dn'}">${brent?sgn(brent.change)+f(brent.change,2)+'%':'—'}</div></div>
+      <div class="cell"><div class="lab">WTI (CL=F)</div><div class="px">${wti?'$'+f(wti.price,2):'--'}</div><div class="ch ${wti&&wti.change>=0?'up':'dn'}">${wti?sgn(wti.change)+f(wti.change,2)+'%':'—'}</div></div>
+    </div>
+    ${spHtml}
+    ${eiaHtml}
+    <div class="note opec" style="border-top:1px solid var(--line2);margin-top:11px;padding-top:10px">
+      <div style="color:var(--gold2);font-weight:700;letter-spacing:.5px;margin-bottom:6px">OPEC+ · tracker (editoriale, agg. ${OPEC.updated})</div>
+      <div class="row"><span class="k">Quota produttiva</span><span class="v">${OPEC.target}</span></div>
+      <div class="row"><span class="k">Tagli volontari</span><span class="v">${OPEC.voluntary}</span></div>
+      <div class="row"><span class="k">Spare capacity</span><span class="v">${OPEC.spare}</span></div>
+      <div class="row" style="border:none"><span class="k">Riunione</span><span class="v">${OPEC.next}</span></div>
+      <div style="font-size:9px;color:var(--txt3);margin-top:6px">Valori aggiornati manualmente: modifica l'oggetto <b>OPEC</b> nel codice dopo ogni decisione del cartello.</div>
+    </div>`;
+  renderSynthesis();
+}
+
+/* ============================ MACRO (FRED) ============================ */
+async function fredLast(series,limit=2){
+  const j=await proxyJSON(`https://api.stlouisfed.org/fred/series/observations?series_id=${series}&api_key=${FREDKEY}&file_type=json&sort_order=desc&limit=${limit}`);
+  const obs=(j&&j.observations)||[];
+  return obs.filter(o=>o.value&&o.value!=='.').map(o=>({d:o.date,v:+o.value}));
+}
+async function loadMacro(){
+  const body=$('#macBody');
+  if(!FREDKEY){body.innerHTML='<div class="loading">Inserisci la tua FRED key (gratis su fred.stlouisfed.org/docs/api/api_key.html) per curva, tassi, CPI, real yield.</div>';$('#fredOk').classList.remove('on');return;}
+  $('#fredOk').classList.add('on');body.innerHTML='<div class="loading">caricamento quadro macro…</div>';
+  try{
+    const [t10,t2,real10,ff,cpi]=await Promise.all([
+      fredLast('DGS10',2),fredLast('DGS2',2),fredLast('DFII10',2),fredLast('DFEDTARU',2),fredLast('CPIAUCSL',14)
+    ]);
+    const y10=t10[0]?.v,y2=t2[0]?.v,r10=real10[0]?.v,fed=ff[0]?.v;
+    const slope=(y10!=null&&y2!=null)?y10-y2:null;
+    let cpiYoY=null;
+    if(cpi.length>=13){cpiYoY=(cpi[0].v/cpi[12].v-1)*100;}
+    STATE.macro.slope=slope;STATE.macro.cpi=cpiYoY;STATE.macro.real10=r10;STATE.macro.fed=fed;
+    $('#macDate').textContent='FRED '+(t10[0]?.d||'');
+    const inv=slope!=null&&slope<0;
+    body.innerHTML=`
+      <div class="mgrid">
+        <div class="mcell"><div class="lab">Curva 2s10s</div><div class="val ${slope>=0?'up':'dn'}">${slope!=null?sgn(slope)+f(slope*100,0)+' bp':'--'}</div>
+          <span class="pill ${inv?'neg':'pos'}">${inv?'INVERTITA · recessione?':'positiva'}</span></div>
+        <div class="mcell"><div class="lab">Treasury 10Y</div><div class="val">${f(y10,2)}%</div><div class="sub">2Y: ${f(y2,2)}%</div></div>
+        <div class="mcell"><div class="lab">Real yield 10Y</div><div class="val">${f(r10,2)}%</div>
+          <span class="pill ${r10>2?'warn':'neu'}">${r10>2?'restrittivo · headwind oro/risk':'neutro'}</span></div>
+        <div class="mcell"><div class="lab">Fed funds (upper)</div><div class="val">${f(fed,2)}%</div><div class="sub">target BCN USA</div></div>
+        <div class="mcell"><div class="lab">CPI USA YoY</div><div class="val ${cpiYoY!=null&&cpiYoY>3?'dn':''}">${cpiYoY!=null?f(cpiYoY,1)+'%':'--'}</div>
+          <span class="pill ${cpiYoY>3?'neg':cpiYoY<2.5?'pos':'warn'}">${cpiYoY>3?'sopra target':cpiYoY<2.5?'verso target':'sticky'}</span></div>
+        <div class="mcell"><div class="lab">Dollar Index</div><div class="val">${STATE.macro.dxy!=null?f(STATE.macro.dxy,2):'--'}</div><div class="sub">Yahoo DX-Y</div></div>
+      </div>
+      <div class="note">Curva invertita + real yield elevato = condizioni restrittive (vento contrario per commodity e risk asset). Disinflazione + tagli attesi = supporto a oro ed energia.</div>`;
+    renderSynthesis();
+  }catch(e){body.innerHTML='<div class="loading">Macro non disponibile (key FRED non valida o proxy occupato). Riprova.</div>';}
+}
+
+/* ============================ COT WTI (CFTC) ============================ */
+async function loadCot(){
+  const body=$('#cotBody');
+  try{
+    const url='https://publicreporting.cftc.gov/resource/6dca-aqww.json?cftc_contract_market_code=067651&$order=report_date_as_yyyy_mm_dd%20DESC&$limit=8';
+    const j=await smartJSON(url);
+    if(!Array.isArray(j)||!j.length)throw new Error('no cot');
+    const net=r=>(+r.noncomm_positions_long_all)-(+r.noncomm_positions_short_all);
+    const cur=net(j[0]),prev=net(j[1]),delta=cur-prev;
+    const bull=cur>0;STATE.oil.cotBias=bull?'bull':'bear';
+    $('#cotDate').textContent=(j[0].report_date_as_yyyy_mm_dd||'').slice(0,10);
+    body.innerHTML=`
+      <div class="row"><span class="k">Net non-commercial</span><span class="v ${bull?'up':'dn'}">${sgn(cur)}${Math.round(cur).toLocaleString('en-US')}</span></div>
+      <div class="row"><span class="k">Variazione settimana</span><span class="v ${delta>=0?'up':'dn'}">${sgn(delta)}${Math.round(delta).toLocaleString('en-US')}</span></div>
+      <div class="bias ${bull?'bull':'bear'}"><div class="ic">${bull?'🟢':'🔴'}</div>
+        <div><div class="t">Speculatori ${bull?'NET LONG':'NET SHORT'} su WTI</div>
+        <div class="s">${delta>=0?'In aumento di posizioni lunghe.':'In riduzione / aumento short.'} Estremi di posizionamento = rischio di inversione (contrarian).</div></div></div>
+      <div class="note">Fonte: CFTC Commitments of Traders (legacy, NYMEX WTI 067651). I gestori speculativi anticipano il momentum ma agli estremi diventano segnale contrarian.</div>`;
+    renderSynthesis();
+  }catch(e){body.innerHTML='<div class="loading">COT non disponibile ora (rete/proxy). Riprova.</div>';}
+}
+
+/* ============================ CALENDARIO ============================ */
+function nextWeekday(target,h,min){ // prossima occorrenza settimanale (0=dom..6=sab) ora locale
+  const now=new Date();const d=new Date(now);
+  let add=(target-now.getDay()+7)%7;
+  d.setDate(now.getDate()+add);d.setHours(h,min,0,0);
+  if(add===0&&d<now)d.setDate(d.getDate()+7);
+  return d;
+}
+function renderCalendar(){
+  // ricorrenti settimanali (orari indicativi CET; EIA pubblica 10:30 ET)
+  const rec=[
+    {d:nextWeekday(3,16,30),t:'EIA — Scorte settimanali greggio USA',imp:'h'},
+    {d:nextWeekday(4,16,30),t:'EIA — Stoccaggio gas naturale USA',imp:'m'},
+    {d:nextWeekday(5,21,30),t:'CFTC — Commitments of Traders (COT)',imp:'r'},
+  ];
+  // eventi datati (curati a mano: aggiorna periodicamente)
+  const fixed=[
+    {d:new Date('2026-06-25T14:15:00'),t:'OPEC+ — riunione ministeriale (JMMC)',imp:'h'},
+    {d:new Date('2026-07-29T20:00:00'),t:'FOMC — decisione tassi Fed',imp:'h'},
+    {d:new Date('2026-07-23T14:15:00'),t:'BCE — decisione tassi',imp:'h'},
+    {d:new Date('2026-11-01T00:00:00'),t:'Inizio stagione di prelievo gas UE (heating season)',imp:'m'},
+  ];
+  const now=new Date();
+  const all=[...rec,...fixed].filter(e=>e.d>now).sort((a,b)=>a.d-b.d).slice(0,8);
+  const fmt=d=>d.toLocaleDateString('it-IT',{day:'2-digit',month:'short'})+' '+d.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
+  $('#calBody').innerHTML=all.map((e,i)=>`
+    <div class="ev ${i===0?'next':''}"><div class="dt">${fmt(e.d)}</div><div class="ti">${e.t}</div>
+    <div class="imp ${e.imp}">${e.imp==='h'?'ALTO':e.imp==='m'?'MEDIO':'REPORT'}</div></div>`).join('')
+    +`<div class="note">Eventi ricorrenti calcolati automaticamente; quelli datati (OPEC/Fed/BCE) sono curati: aggiornali nella funzione <b>renderCalendar()</b>.</div>`;
+}
+
+/* ============================ SINTESI ============================ */
+function biasLabel(b){return b==='bull'?{t:'RIALZISTA',c:'up'}:b==='bear'?{t:'RIBASSISTA',c:'dn'}:{t:'NEUTRO',c:'mut'};}
+function renderSynthesis(){
+  if(STATE.gas){const l=biasLabel(STATE.gas.bias);
+    $('#syGas').textContent=l.t;$('#syGas').className='big '+l.c;
+    $('#syGasD').textContent=`Stoccaggio UE ${f(STATE.gas.full,1)}% (${sgn(STATE.gas.dWeek)}${f(STATE.gas.dWeek,1)} pp/sett).`;}
+  // petrolio: combina spread + EIA + COT
+  const votes=[STATE.oil.eiaBias,STATE.oil.cotBias].filter(Boolean);
+  if(STATE.oil.brent&&STATE.oil.wti){
+    let b='neu';const bull=votes.filter(v=>v==='bull').length,bear=votes.filter(v=>v==='bear').length;
+    if(bull>bear)b='bull';else if(bear>bull)b='bear';
+    const l=biasLabel(b);$('#syOil').textContent=l.t;$('#syOil').className='big '+l.c;
+    $('#syOilD').textContent=`Brent $${f(STATE.oil.brent,1)} · WTI $${f(STATE.oil.wti,1)}.`+(votes.length?` Segnali: scorte/COT.`:' Aggiungi EIA per il bias completo.');
+  }
+  if(STATE.macro.slope!=null){
+    const restr=(STATE.macro.real10>2)||(STATE.macro.cpi>3);
+    const inv=STATE.macro.slope<0;
+    const b=(inv||restr)?'bear':'bull';const l=biasLabel(b);
+    $('#syMac').textContent=restr?'RESTRITTIVO':inv?'CAUTO':'ESPANSIVO';
+    $('#syMac').className='big '+(b==='bull'?'up':'dn');
+    $('#syMacD').textContent=`Curva ${inv?'invertita':'positiva'} · real yield ${f(STATE.macro.real10,1)}% · CPI ${STATE.macro.cpi!=null?f(STATE.macro.cpi,1)+'%':'n/d'}.`;
+  }
+}
+
+/* ============================ ORCHESTRAZIONE ============================ */
+function setStatus(cls,txt){const el=$('#status');el.className='badge '+cls;$('#statusTxt').textContent=txt;}
+async function loadAll(){
+  setStatus('part','caricamento…');
+  await Promise.allSettled([loadGas(),loadOil(),loadMacro(),loadCot()]);
+  renderCalendar();
+  const ok=STATE.oil.brent!=null;
+  setStatus(ok?'live':'off',ok?'dati live':'fonti non raggiungibili');
+}
+function tickClock(){const d=new Date();$('#clock').innerHTML='<b>'+d.toLocaleTimeString('it-IT')+'</b> · '+d.toLocaleDateString('it-IT',{day:'2-digit',month:'short'});}
+
+/* ============================ KEY UI ============================ */
+function wireKey(inputId,btnId,okId,storeKey,setter){
+  const inp=$('#'+inputId);
+  $('#'+btnId).addEventListener('click',async()=>{
+    const v=inp.value.trim();await Storage.set(storeKey,v);setter(v);
+    $('#'+okId).classList.toggle('on',!!v);inp.value=v?'••••••':'';await loadAll();
+  });
+}
+async function init(){
+  await importKeysFromHash();
+  AGSIKEY=await Storage.get('agsi_apikey')||'';
+  EIAKEY=await Storage.get('eia_apikey')||'';
+  FREDKEY=await Storage.get('fred_apikey')||'';
+  PROXY_URL=await Storage.get('cors_proxy')||'';
+  if(AGSIKEY){$('#agsiOk').classList.add('on');$('#agsiKey').value='••••••';}
+  if(EIAKEY){$('#eiaOk').classList.add('on');$('#eiaKey').value='••••••';}
+  if(FREDKEY){$('#fredOk').classList.add('on');$('#fredKey').value='••••••';}
+  if(PROXY_URL){$('#proxyOk').classList.add('on');$('#proxyUrl').value=PROXY_URL;}
+  wireKey('agsiKey','agsiSave','agsiOk','agsi_apikey',v=>AGSIKEY=v);
+  wireKey('eiaKey','eiaSave','eiaOk','eia_apikey',v=>EIAKEY=v);
+  wireKey('fredKey','fredSave','fredOk','fred_apikey',v=>FREDKEY=v);
+  $('#proxySave').addEventListener('click',async()=>{const v=$('#proxyUrl').value.trim();await Storage.set('cors_proxy',v);PROXY_URL=v;$('#proxyOk').classList.toggle('on',!!v);await loadAll();});
+  $('#refreshBtn').addEventListener('click',loadAll);
+  tickClock();setInterval(tickClock,1000);
+  await loadAll();
+  setInterval(loadAll,180000); // auto-refresh 3 min
+}
+init();
+</script>
+</body></html>
