@@ -65,6 +65,35 @@ button{font-family:var(--mono);cursor:pointer;color:inherit}select{font-family:v
 .intel-c .k{font-size:8.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.6px}
 .intel-c .v{font-size:15px;font-weight:800;color:#fff;margin:2px 0;font-variant-numeric:tabular-nums;line-height:1.1}
 .intel-c .s{font-size:9px;color:var(--txt3);line-height:1.3}
+/* equity module */
+.sh{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.sh .logo{width:42px;height:42px;border-radius:9px;background:#fff;object-fit:contain;padding:3px}
+.sh .nm b{font-size:18px;color:#fff}.sh .nm span{font-size:10px;color:var(--txt3);display:block}
+.sh .px{margin-left:auto;text-align:right}.sh .px .p{font-size:24px;font-weight:800;color:#fff}.sh .px .c{font-size:12px;font-weight:700}
+.fgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}@media(max-width:560px){.fgrid{grid-template-columns:repeat(2,1fr)}}
+.fc{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.fc .k{font-size:8.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px}.fc .v{font-size:14px;font-weight:800;color:#fff;margin-top:2px}
+.score-wrap{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.score{position:relative;width:120px;height:120px;flex:0 0 auto}.score svg{transform:rotate(-90deg)}
+.score .mid{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.score .mid .n{font-size:30px;font-weight:800;color:#fff}.score .mid .l{font-size:8px;color:var(--txt3);text-transform:uppercase;letter-spacing:1px}
+.sub-scores{flex:1;min-width:160px}
+.ss-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:10px}.ss-row .k{width:80px;color:var(--txt2)}
+.ss-bar{flex:1;height:7px;border-radius:5px;background:var(--panel3);overflow:hidden}.ss-bar>span{display:block;height:100%;border-radius:5px}
+.ss-row .v{width:30px;text-align:right;font-weight:700}
+.rec-bar{display:flex;height:24px;border-radius:6px;overflow:hidden;margin:8px 0}
+.rec-bar>span{display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#021}
+.rec-sb{background:#1aa86e}.rec-b{background:#23d18b}.rec-h{background:#8294b4}.rec-s{background:#ff8a5c}.rec-ss{background:#ff4d5e}
+.tgt{display:flex;justify-content:space-between;font-size:11px;padding:5px 0;border-bottom:1px dashed var(--line)}.tgt .v{font-weight:700}
+.ern{display:flex;align-items:flex-end;gap:4px;height:60px;margin:6px 0}
+.ern .b{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%}
+.ern .b i{width:100%;border-radius:3px 3px 0 0;min-height:2px}.ern .b small{font-size:7px;color:var(--txt3);margin-top:2px}
+.ern-row{display:flex;justify-content:space-between;font-size:10.5px;padding:4px 0;border-bottom:1px dashed var(--line)}.ern-row .v{font-weight:700}
+.nw{display:block;padding:8px 0;border-bottom:1px solid var(--line);text-decoration:none;color:inherit}
+.nw:hover{background:rgba(255,255,255,.02)}.nw b{color:var(--txt);font-size:11px;font-weight:600;display:block;line-height:1.35}
+.nw .m{font-size:9px;color:var(--txt3);margin-top:3px}
+.nw .sent{font-size:8px;font-weight:800;padding:1px 5px;border-radius:4px;margin-left:6px}
+.sent.pos{background:var(--green-d);color:var(--green)}.sent.neg{background:var(--red-d);color:var(--red)}.sent.neu{background:rgba(150,170,205,.12);color:var(--txt2)}
 .kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:14px}
 @media(max-width:1100px){.kpis{grid-template-columns:repeat(2,1fr)}}
 .kpi{background:linear-gradient(180deg,var(--panel),var(--bg2));border:1px solid var(--line2);border-radius:11px;padding:12px 14px;position:relative;overflow:hidden;box-shadow:var(--shadow)}
@@ -314,6 +343,15 @@ button{font-family:var(--mono);cursor:pointer;color:inherit}select{font-family:v
       <input id="proxyUrl" type="text" placeholder="CORS proxy URL (opz.)" autocomplete="off" />
       <button id="proxySave">Proxy</button>
     </div>
+    <div class="apikey" title="Finnhub API key gratuita (finnhub.io) per il modulo Azioni: fondamentali, analisti, earnings, news.">
+      <span class="ok" id="fhOk"></span>
+      <input id="fhKey" type="password" placeholder="Finnhub key (azioni)" autocomplete="off" />
+      <button id="fhSave">Stocks</button>
+    </div>
+    <div class="apikey" title="Analizza un'azione (es. AAPL, MSFT, NVDA)">
+      <input id="eqTicker" placeholder="ticker azione" autocomplete="off" style="width:110px;text-transform:uppercase" />
+      <button id="eqGo">Analizza</button>
+    </div>
     <div class="badge" id="dataBadge"><span class="led"></span><span id="dataStatus">connessione…</span></div>
     <div class="regime"><span class="lbl">Regime</span><span class="val" id="regime">--</span></div>
     <div class="clock" id="clock">--:--:-- <b>CET</b></div>
@@ -446,6 +484,25 @@ button{font-family:var(--mono);cursor:pointer;color:inherit}select{font-family:v
     </div>
   </div>
 
+  <!-- ===================== AZIONI / EQUITY ===================== -->
+  <div class="panel" style="margin:16px 0 14px;padding:2px;background:linear-gradient(90deg,rgba(155,123,255,.12),rgba(72,160,255,.08));border-color:var(--violet)">
+    <div class="intel" id="eqIntel" style="grid-template-columns:repeat(7,1fr)"></div>
+  </div>
+  <div class="grid" id="eqWrap" style="display:none">
+    <div class="col">
+      <div class="panel"><div class="pb"><div class="sh" id="eqHead"></div></div></div>
+      <div class="panel"><div class="ph">◷ Prezzo &amp; tecnico<span class="sp"></span><span class="tag" id="eqTechTag"></span></div><div class="pb"><canvas id="eqChart" style="width:100%;height:200px;display:block"></canvas></div></div>
+      <div class="panel"><div class="ph">📊 Fondamentali</div><div class="pb" id="eqFund"></div></div>
+      <div class="panel"><div class="ph">🎯 Investability Score</div><div class="pb" id="eqScore"></div></div>
+    </div>
+    <div class="col">
+      <div class="panel"><div class="ph">📅 Earnings<span class="sp"></span><span class="tag" id="eqErnTag"></span></div><div class="pb" id="eqEarn"></div></div>
+      <div class="panel"><div class="ph">👔 Analisti</div><div class="pb" id="eqAnalyst"></div></div>
+      <div class="panel"><div class="ph">📐 Gamma / Opzioni<span class="sp"></span><span class="tag">FlashAlpha</span></div><div class="pb" id="eqGex"></div></div>
+      <div class="panel"><div class="ph">📰 News &amp; sentiment</div><div class="pb" style="padding:6px 14px" id="eqNews"></div></div>
+    </div>
+  </div>
+
   <div class="foot">
     AURUM Research v5 · <b class="gd">dati reali</b>: CoinGecko (metalli/crypto) · Frankfurter/BCE (forex) · Yahoo (indici/materie/bond) · Twelve Data (oro, con key) · COT da CFTC · gas da <b class="gd">AGSI/GIE</b> · divergenze MACD·RSI H4/H1.
     Prezzi con possibile ritardo. Advisor, divergenze e bias gas sono supporti analitici, non consigli d'investimento.<br/>
@@ -517,6 +574,7 @@ async function importKeysFromHash(){const h=location.hash?location.hash.slice(1)
   if(q.get('agsi')){await Storage.set('agsi_apikey',q.get('agsi').trim());ch=true;}
   if(q.get('fa')){await Storage.set('fa_apikey',q.get('fa').trim());ch=true;}
   if(q.get('proxy')){await Storage.set('cors_proxy',q.get('proxy').trim());ch=true;}
+  if(q.get('fh')){await Storage.set('fh_key',q.get('fh').trim());ch=true;}
   if(q.get('tgtoken')){await Storage.set('tg_token',q.get('tgtoken').trim());ch=true;}
   if(q.get('tgchat')){await Storage.set('tg_chat',q.get('tgchat').trim());ch=true;}
   if(ch){try{history.replaceState(null,'',location.pathname+location.search);}catch(e){}}}
@@ -1417,12 +1475,97 @@ function bind(){
   const dc=$('#detailChart'); if(dc){ dc.addEventListener('mousemove',e=>{const r=dc.getBoundingClientRect();detailCross=e.clientX-r.left;drawDetailChart();}); dc.addEventListener('mouseleave',()=>{detailCross=null;drawDetailChart();}); }
   if($('#liqToggle'))$('#liqToggle').onchange=drawDetailChart;
   if($('#smcToggle'))$('#smcToggle').onchange=drawDetailChart;
-  window.addEventListener('resize',()=>{drawDetailChart();drawComp();});}
+  window.addEventListener('resize',()=>{drawDetailChart();drawComp();drawEqChart();});
+  // --- Equity controls ---
+  $('#fhSave').onclick=async()=>{ FH=$('#fhKey').value.trim(); await Storage.set('fh_key',FH); $('#fhOk').classList.toggle('on',!!FH); toast(FH?'Finnhub key salvata · azioni attive':'Finnhub key rimossa'); if(EQ.sym)selectStock(EQ.sym); };
+  $('#fhKey').addEventListener('keydown',e=>{if(e.key==='Enter')$('#fhSave').click();});
+  $('#eqGo').onclick=()=>selectStock($('#eqTicker').value);
+  $('#eqTicker').addEventListener('keydown',e=>{if(e.key==='Enter')selectStock($('#eqTicker').value);});
+}
+
+/* ===================== MODULO EQUITY / AZIONI ===================== */
+let FH=''; const EQ={sym:'',data:{}};
+async function fh(path){ return getJSON(`https://finnhub.io/api/v1${path}${path.includes('?')?'&':'?'}token=${FH}`); }
+function eqRsi(a,p=14){if(!a||a.length<p+1)return 50;let g=0,l=0;for(let i=a.length-p;i<a.length;i++){const d=a[i]-a[i-1];if(d>=0)g+=d;else l-=d;}g/=p;l/=p;return 100-100/(1+(l===0?100:g/l));}
+function eqTech(c){if(!c||c.length<30)return null;const last=c.at(-1),e20=ema(c,20).at(-1),e50=ema(c,50).at(-1),r=eqRsi(c),mom=last-c[c.length-11];
+  let b=0,s=0;[last>e20,last>e50,r>50,mom>0,e20>e50].forEach(x=>x?b++:s++);const sc=(b-s)/5;
+  return{score:sc,label:sc>0.5?'STRONG BUY':sc>0.15?'BUY':sc<-0.5?'STRONG SELL':sc<-0.15?'SELL':'NEUTRAL',rsi:r};}
+async function selectStock(sym){ sym=(sym||'').toUpperCase().trim(); if(!sym)return; EQ.sym=sym; EQ.data={}; $('#eqTicker').value=sym; $('#eqWrap').style.display='';
+  $('#eqHead').innerHTML='<div class="loading">caricamento '+sym+'…</div>'; ['eqFund','eqScore','eqEarn','eqAnalyst','eqNews'].forEach(id=>$('#'+id).innerHTML='<div class="loading">…</div>');
+  loadEqChart(sym); loadEqGex(sym);
+  if(!FH){ $('#eqHead').innerHTML='<div class="loading">Inserisci la <b>Finnhub key</b> (header) per i dati di '+sym+'</div>'; renderEqIntel(); return; }
+  try{ const [q,prof,met,rec,ern]=await Promise.all([fh('/quote?symbol='+sym),fh('/stock/profile2?symbol='+sym),fh('/stock/metric?symbol='+sym+'&metric=all'),fh('/stock/recommendation?symbol='+sym),fh('/stock/earnings?symbol='+sym)]);
+    EQ.data={q,prof,met:(met&&met.metric)||{},rec:rec||[],ern:ern||[]}; renderEqHead();renderEqFund();renderEqScore();renderEqEarn();renderEqAnalyst();renderEqIntel(); loadEqErnCal(sym); loadEqNews(sym);
+  }catch(e){ $('#eqHead').innerHTML='<div class="loading">Errore dati (Finnhub key valida?)</div>'; } }
+async function loadEqChart(sym){ try{ const j=await fetchViaProxies(`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=6mo`); const r=j.chart.result[0],t=r.timestamp||[],qq=(r.indicators&&r.indicators.quote&&r.indicators.quote[0])||{};
+  const c=[];for(let i=0;i<t.length;i++){const cl=qq.close?.[i];if(cl==null)continue;c.push({t:t[i]*1000,o:qq.open?.[i]??cl,h:qq.high?.[i]??cl,l:qq.low?.[i]??cl,c:cl});}
+  EQ.data.candles=c;EQ.data.tech=eqTech(c.map(k=>k.c));$('#eqTechTag').textContent=EQ.data.tech?('rating '+EQ.data.tech.label):'';drawEqChart();renderEqScore();renderEqIntel();
+}catch(e){$('#eqTechTag').textContent='prezzo n/d';} }
+async function loadEqGex(sym){ const el=$('#eqGex'); if(!FA_KEY){el.innerHTML='<div class="note">Aggiungi la key <b>FlashAlpha</b> per i livelli gamma del titolo.</div>';return;}
+  el.innerHTML='<div class="loading">FlashAlpha…</div>'; const j=await faGet('/exposure/levels/'+sym);
+  if(!j||j.status==='ERROR'||!j.levels){el.innerHTML='<div class="note">Gamma '+sym+': '+((j&&j.message)||'non disponibile')+'</div>';EQ.data.gex=null;renderEqIntel();return;}
+  const L=j.levels,S=j.underlying_price;EQ.data.gex={flip:L.gamma_flip,cw:L.call_wall,pw:L.put_wall,S};const dist=k=>k==null?'':((k/S-1)*100>=0?'+':'')+((k/S-1)*100).toFixed(1)+'%';
+  el.innerHTML=`<div class="tgt"><span>Call Wall</span><span class="v dn">${f(L.call_wall,2)} <small class="mut">${dist(L.call_wall)}</small></span></div>
+    <div class="tgt"><span>Gamma Flip</span><span class="v gd">${f(L.gamma_flip,2)} <small class="mut">${dist(L.gamma_flip)}</small></span></div>
+    <div class="tgt"><span>Put Wall</span><span class="v up">${f(L.put_wall,2)} <small class="mut">${dist(L.put_wall)}</small></span></div>
+    <div class="note">${S>=L.gamma_flip?'🧲 Sopra il Gamma Flip: regime stabile.':'⚡ Sotto il Gamma Flip: regime instabile.'}</div>`;
+  drawEqChart();renderEqIntel(); }
+async function loadEqErnCal(sym){ try{ const t=new Date(),to=new Date(Date.now()+120*864e5),ymd=d=>d.toISOString().slice(0,10);
+  const j=await fh(`/calendar/earnings?from=${ymd(t)}&to=${ymd(to)}&symbol=${sym}`); const e=j&&j.earningsCalendar&&j.earningsCalendar[0]; if(e){EQ.data.nextErn=e;$('#eqErnTag').textContent='prossimo '+e.date;renderEqEarn();renderEqIntel();} }catch(e){} }
+async function loadEqNews(sym){ try{ const t=new Date(),fr=new Date(Date.now()-14*864e5),ymd=d=>d.toISOString().slice(0,10);
+  const j=await fh(`/company-news?symbol=${sym}&from=${ymd(fr)}&to=${ymd(t)}`); EQ.data.news=(j||[]).slice(0,8); renderEqNews(); }catch(e){$('#eqNews').innerHTML='<div class="loading">news n/d</div>';} }
+function eqMc(v){return v==null?'--':v>=1e6?(v/1e6).toFixed(2)+'T':v>=1e3?(v/1e3).toFixed(1)+'B':v.toFixed(0)+'M';}
+function renderEqHead(){const {q,prof}=EQ.data;if(!q)return;const up=(q.dp||0)>=0;
+  $('#eqHead').innerHTML=`${prof&&prof.logo?`<img class="logo" src="${prof.logo}" onerror="this.style.display='none'"/>`:''}<div class="nm"><b>${EQ.sym}</b><span>${prof&&prof.name||''} ${prof&&prof.finnhubIndustry?'· '+prof.finnhubIndustry:''}</span></div><div class="px"><div class="p">${f(q.c,2)}</div><div class="c ${up?'up':'dn'}">${up?'▲ +':'▼ '}${f(q.d,2)} (${up?'+':''}${f(q.dp,2)}%)</div></div>`;}
+function renderEqFund(){const m=EQ.data.met,prof=EQ.data.prof;if(!m)return;
+  const rows=[['Market Cap',eqMc(prof&&prof.marketCapitalization)],['P/E (TTM)',f(m.peTTM,1)],['P/S (TTM)',f(m.psTTM,1)],['P/B',f(m.pbAnnual||m.pbQuarterly,1)],['EPS (TTM)',f(m.epsTTM,2)],['Div Yield',m.dividendYieldIndicatedAnnual!=null?f(m.dividendYieldIndicatedAnnual,2)+'%':'—'],['Margine netto',m.netProfitMarginTTM!=null?f(m.netProfitMarginTTM,1)+'%':'—'],['ROE',m.roeTTM!=null?f(m.roeTTM,1)+'%':'—'],['Cresc. ricavi',m.revenueGrowthTTMYoy!=null?f(m.revenueGrowthTTMYoy,1)+'%':'—'],['Beta',f(m.beta,2)],['52w High',f(m['52WeekHigh'],2)],['52w Low',f(m['52WeekLow'],2)]];
+  $('#eqFund').innerHTML=`<div class="fgrid">${rows.map(([k,v])=>`<div class="fc"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('')}</div>`;}
+function eqScores(){const m=EQ.data.met||{},R=EQ.data.tech;const cl=(v)=>clamp(v,0,100);
+  const val=m.peTTM>0?cl(100-(m.peTTM-10)/40*100):40,gro=m.revenueGrowthTTMYoy!=null?cl((m.revenueGrowthTTMYoy+5)/35*100):50,pro=m.netProfitMarginTTM!=null?cl(m.netProfitMarginTTM/30*100):50,tec=R?cl((R.score+1)/2*100):50;
+  const rec=EQ.data.rec&&EQ.data.rec[0]?(()=>{const r=EQ.data.rec[0],tot=r.strongBuy+r.buy+r.hold+r.sell+r.strongSell||1;return cl((r.strongBuy*100+r.buy*75+r.hold*50+r.sell*25)/tot);})():50;
+  return {val,gro,pro,tec,rec,tot:Math.round(val*0.22+gro*0.22+pro*0.18+tec*0.20+rec*0.18)};}
+function renderEqScore(){if(!EQ.data.q){return;}const s=eqScores(),col=s.tot>=66?'var(--green)':s.tot>=45?'var(--amber)':'var(--red)',lbl=s.tot>=66?'INTERESSANTE':s.tot>=45?'NEUTRALE':'DEBOLE',circ=2*Math.PI*52,off=circ*(1-s.tot/100);
+  const bar=(k,v)=>`<div class="ss-row"><span class="k">${k}</span><div class="ss-bar"><span style="width:${v}%;background:${v>=60?'var(--green)':v>=40?'var(--amber)':'var(--red)'}"></span></div><span class="v">${Math.round(v)}</span></div>`;
+  $('#eqScore').innerHTML=`<div class="score-wrap"><div class="score"><svg width="120" height="120"><circle cx="60" cy="60" r="52" fill="none" stroke="#101a30" stroke-width="10"/><circle cx="60" cy="60" r="52" fill="none" stroke="${col}" stroke-width="10" stroke-linecap="round" stroke-dasharray="${circ}" stroke-dashoffset="${off}"/></svg><div class="mid"><div class="n">${s.tot}</div><div class="l">${lbl}</div></div></div><div class="sub-scores">${bar('Valutazione',s.val)}${bar('Crescita',s.gro)}${bar('Redditività',s.pro)}${bar('Tecnico',s.tec)}${bar('Analisti',s.rec)}</div></div><div class="note">Composito euristico (valutazione, crescita, redditività, tecnico, consenso). Non è un consiglio.</div>`;}
+function renderEqEarn(){const ern=EQ.data.ern||[],ne=EQ.data.nextErn;let h='';
+  if(ne)h+=`<div class="ern-row"><span>Prossimi earnings</span><span class="v gd">${ne.date} ${ne.hour||''}</span></div><div class="ern-row"><span>Stima EPS</span><span class="v">${ne.epsEstimate!=null?f(ne.epsEstimate,2):'—'}</span></div>`;
+  if(ern.length){const e=ern.slice(0,8).reverse(),max=Math.max(...e.map(x=>Math.abs(x.actual||0)),0.1);
+    h+=`<div class="note" style="margin:8px 0 2px">EPS effettivo (ultimi trimestri)</div><div class="ern">${e.map(x=>{const a=x.actual||0,beat=(x.surprise||0)>=0;return `<div class="b" title="${x.period} act ${a} est ${x.estimate}"><i style="height:${Math.abs(a)/max*100}%;background:${beat?'var(--green)':'var(--red)'}"></i><small>${(x.period||'').slice(2,7)}</small></div>`;}).join('')}</div>`;
+    const last=ern[0];h+=`<div class="ern-row" style="border:none"><span>Ultima sorpresa</span><span class="v ${(last.surprisePercent||0)>=0?'up':'dn'}">${last.surprisePercent!=null?(last.surprisePercent>=0?'+':'')+f(last.surprisePercent,1)+'%':'—'}</span></div>`;}
+  $('#eqEarn').innerHTML=h||'<div class="loading">nessun dato earnings</div>';}
+function renderEqAnalyst(){const r=EQ.data.rec&&EQ.data.rec[0];if(!r){$('#eqAnalyst').innerHTML='<div class="loading">nessun rating</div>';return;}
+  const tot=r.strongBuy+r.buy+r.hold+r.sell+r.strongSell||1,seg=(n,c)=>n>0?`<span class="${c}" style="width:${n/tot*100}%">${n}</span>`:'';const cs=(r.strongBuy*5+r.buy*4+r.hold*3+r.sell*2+r.strongSell)/tot,clbl=cs>=4.2?'STRONG BUY':cs>=3.4?'BUY':cs>=2.6?'HOLD':cs>=1.8?'SELL':'STRONG SELL';
+  $('#eqAnalyst').innerHTML=`<div class="tgt"><span>Consensus (${tot} analisti)</span><span class="v ${cs>=3.4?'up':cs<=2.6?'dn':'gd'}">${clbl}</span></div><div class="rec-bar">${seg(r.strongBuy,'rec-sb')}${seg(r.buy,'rec-b')}${seg(r.hold,'rec-h')}${seg(r.sell,'rec-s')}${seg(r.strongSell,'rec-ss')}</div><div class="note">SB ${r.strongBuy} · B ${r.buy} · H ${r.hold} · S ${r.sell} · SS ${r.strongSell} <span class="mut">(${r.period})</span></div>`;}
+const EQPOS=['surge','beat','soar','rally','jump','record','upgrade','growth','strong','gain','rise','top','win','boost'],EQNEG=['plunge','miss','fall','drop','cut','downgrade','lawsuit','warn','slump','loss','weak','decline','probe','recall'];
+function eqSent(t){t=(t||'').toLowerCase();let s=0;EQPOS.forEach(w=>{if(t.includes(w))s++;});EQNEG.forEach(w=>{if(t.includes(w))s--;});return s>0?'pos':s<0?'neg':'neu';}
+function renderEqNews(){const nw=EQ.data.news||[];if(!nw.length){$('#eqNews').innerHTML='<div class="loading">nessuna news</div>';return;}
+  $('#eqNews').innerHTML=nw.map(a=>{const s=eqSent(a.headline),dt=new Date((a.datetime||0)*1000).toLocaleDateString('it-IT',{day:'2-digit',month:'short'});return `<a class="nw" href="${a.url}" target="_blank" rel="noopener"><b>${a.headline} <span class="sent ${s}">${s.toUpperCase()}</span></b><div class="m">${a.source} · ${dt}</div></a>`;}).join('');}
+function renderEqIntel(){const {q,met,tech,gex,rec}=EQ.data;const m=met||{};const s=q?eqScores():null;
+  const consensus=rec&&rec[0]?(()=>{const r=rec[0],tot=r.strongBuy+r.buy+r.hold+r.sell+r.strongSell||1,cs=(r.strongBuy*5+r.buy*4+r.hold*3+r.sell*2+r.strongSell)/tot;return cs>=3.4?'BUY':cs<=2.6?'SELL':'HOLD';})():'—';
+  const gx=gex?(q&&q.c>=gex.flip?'POS':'NEG'):'n/d';
+  $('#eqIntel').innerHTML=`<div class="intel-c"><div class="k">Azione</div><div class="v">${EQ.sym||'—'}</div><div class="s">${q?f(q.c,2)+' '+(q.dp>=0?'+':'')+f(q.dp,1)+'%':'cerca un ticker'}</div></div>
+   <div class="intel-c"><div class="k">Score</div><div class="v" style="color:${s&&s.tot>=66?'var(--green)':s&&s.tot>=45?'var(--amber)':'var(--red)'}">${s?s.tot:'—'}</div><div class="s">investability</div></div>
+   <div class="intel-c"><div class="k">Tecnico</div><div class="v ${tech?(tech.score>0.15?'up':tech.score<-0.15?'dn':'gd'):'mut'}">${tech?tech.label:'—'}</div><div class="s">${tech?'RSI '+tech.rsi.toFixed(0):''}</div></div>
+   <div class="intel-c"><div class="k">P/E</div><div class="v">${f(m.peTTM,1)}</div><div class="s">yield ${m.dividendYieldIndicatedAnnual!=null?f(m.dividendYieldIndicatedAnnual,1)+'%':'—'}</div></div>
+   <div class="intel-c"><div class="k">Analisti</div><div class="v ${consensus==='BUY'?'up':consensus==='SELL'?'dn':'gd'}">${consensus}</div><div class="s">consensus</div></div>
+   <div class="intel-c"><div class="k">Gamma</div><div class="v ${gx==='POS'?'up':gx==='NEG'?'dn':'mut'}">${gx}</div><div class="s">${gex?'flip '+f(gex.flip,1):'opzioni'}</div></div>
+   <div class="intel-c"><div class="k">Earnings</div><div class="v" style="font-size:12px">${EQ.data.nextErn?EQ.data.nextErn.date:'—'}</div><div class="s">prossimo report</div></div>`;}
+function drawEqChart(){const cv=$('#eqChart'),c=EQ.data.candles;if(!cv||!c||c.length<2)return;const ctx=cv.getContext('2d'),dpr=window.devicePixelRatio||1,r=cv.getBoundingClientRect();
+  cv.width=r.width*dpr;cv.height=r.height*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);const W=r.width,H=r.height,padT=6,padB=4,padR=52,padL=4;ctx.clearRect(0,0,W,H);
+  const cd=c.slice(-90),n=cd.length;let hi=-1e9,lo=1e9;cd.forEach(k=>{hi=Math.max(hi,k.h);lo=Math.min(lo,k.l);});const g=EQ.data.gex;if(g){[g.flip,g.cw,g.pw].forEach(v=>{if(v>lo*.95&&v<hi*1.05){hi=Math.max(hi,v);lo=Math.min(lo,v);}});}
+  const pad=(hi-lo)*.06||1;hi+=pad;lo-=pad;const rng=hi-lo,plotW=W-padL-padR,x=i=>padL+i/(n-1)*plotW,y=v=>padT+(1-(v-lo)/rng)*(H-padT-padB);
+  ctx.font='9px JetBrains Mono';ctx.textBaseline='middle';for(let i=0;i<=4;i++){const p=lo+rng*i/4,yy=y(p);ctx.strokeStyle='rgba(150,170,205,.06)';ctx.beginPath();ctx.moveTo(padL,yy);ctx.lineTo(W-padR,yy);ctx.stroke();ctx.fillStyle='#5f7193';ctx.textAlign='left';ctx.fillText(f(p,2),W-padR+4,yy);}
+  const cl=cd.map(k=>k.c);[[20,'rgba(231,181,74,.55)'],[50,'rgba(72,160,255,.5)']].forEach(([p,col])=>{if(cl.length<p)return;const e=ema(cl,p);ctx.strokeStyle=col;ctx.lineWidth=1;ctx.beginPath();e.forEach((v,i)=>i?ctx.lineTo(x(i),y(v)):ctx.moveTo(x(i),y(v)));ctx.stroke();});
+  const cw=Math.max(1.5,plotW/n*.62);cd.forEach((k,i)=>{const up=k.c>=k.o,col=up?'#23d18b':'#ff4d5e';ctx.strokeStyle=col;ctx.fillStyle=col;ctx.lineWidth=1;const xc=x(i);ctx.beginPath();ctx.moveTo(xc,y(k.h));ctx.lineTo(xc,y(k.l));ctx.stroke();const yo=y(k.o),yc=y(k.c);ctx.fillRect(xc-cw/2,Math.min(yo,yc),cw,Math.max(1,Math.abs(yc-yo)));});
+  if(g){[[g.cw,'#ff4d5e','CW'],[g.flip,'#ffb547','FLIP'],[g.pw,'#23d18b','PW']].forEach(([v,col,lb])=>{if(v<=lo||v>=hi)return;const yy=y(v);ctx.strokeStyle=col;ctx.setLineDash([5,3]);ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(padL,yy);ctx.lineTo(W-padR,yy);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle=col;ctx.font='bold 8px JetBrains Mono';ctx.textAlign='left';ctx.fillText(lb,padL+3,yy-4);});}
+  const last=cd.at(-1).c,yl=y(last);ctx.fillStyle='#e7b54a';ctx.fillRect(W-padR,yl-7,padR,14);ctx.fillStyle='#000';ctx.font='bold 9px JetBrains Mono';ctx.textAlign='left';ctx.fillText(f(last,2),W-padR+4,yl);}
+
 (async function boot(){
   await importKeysFromHash();
   APIKEY=(await Storage.get('td_apikey'))||''; if(APIKEY)$('#tdKey').value=APIKEY;
   AGSIKEY=(await Storage.get('agsi_apikey'))||''; if(AGSIKEY)$('#agsiKey').value=AGSIKEY;
   FA_KEY=(await Storage.get('fa_apikey'))||''; if(FA_KEY)$('#faKey').value=FA_KEY;
+  FH=(await Storage.get('fh_key'))||''; if(FH)$('#fhKey').value=FH; $('#fhOk')&&$('#fhOk').classList.toggle('on',!!FH); renderEqIntel();
   PROXY_URL=(await Storage.get('cors_proxy'))||''; if(PROXY_URL)$('#proxyUrl').value=PROXY_URL;
   ALERTS=((await Storage.get('alerts'))||[]).map(a=>({...a,armed:a.armed!==false}));
   TG.token=(await Storage.get('tg_token'))||''; TG.chat=(await Storage.get('tg_chat'))||'';
