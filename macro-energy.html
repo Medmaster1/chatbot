@@ -206,6 +206,11 @@ canvas.mini{width:100%;height:60px;display:block;margin:8px 0}
         <div class="ph">⛽ Riserve Gas UE · AGSI/GIE<span class="sp"></span><span class="tag" id="gasDate">—</span></div>
         <div class="pb" id="gasBody"><div class="loading">inserisci la AGSI key per i dati gas…</div></div>
       </div>
+      <!-- LNG -->
+      <div class="panel">
+        <div class="ph">🚢 LNG Europa · ALSI/GIE<span class="sp"></span><span class="tag" id="lngDate">—</span></div>
+        <div class="pb" id="lngBody"><div class="loading">la AGSI key abilita anche i dati LNG…</div></div>
+      </div>
       <!-- OIL -->
       <div class="panel">
         <div class="ph">🛢 Petrolio · Brent / WTI / OPEC+<span class="sp"></span><span class="tag" id="oilDate">—</span></div>
@@ -265,6 +270,7 @@ let AGSIKEY='',EIAKEY='',FREDKEY='',PROXY_URL='';
 /* ============================ UTILS ============================ */
 const $=(s,e=document)=>e.querySelector(s);
 const f=(n,d=2)=>(n==null||isNaN(n))?'--':Number(n).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+const fInt=n=>(n==null||isNaN(n))?'--':Number(Math.round(n)).toLocaleString('en-US');
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 const sgn=n=>n>0?'+':'';
 async function getJSON(url,ms=20000){const ctrl=new AbortController();const to=setTimeout(()=>ctrl.abort(),ms);
@@ -340,16 +346,49 @@ async function loadGas(){
   if(!AGSIKEY){body.innerHTML='<div class="loading">Inserisci la tua AGSI key (gratis su agsi.gie.eu/account) per le riserve di gas UE.</div>';$('#agsiOk').classList.remove('on');return;}
   $('#agsiOk').classList.add('on');body.innerHTML='<div class="loading">caricamento dati gas…</div>';
   try{
-    const j=await smartFetchAgsi();
+    const j=await smartFetchGie('https://agsi.gie.eu/api?continent=eu&size=120');
     if(!j||!Array.isArray(j.data)||!j.data.length)throw new Error('no data');
     const recs=j.data.map(d=>({date:d.gasDayStart,full:+d.full,inj:+d.injection,wit:+d.withdrawal})).reverse();
     renderGas(recs);
   }catch(e){body.innerHTML='<div class="loading">Gas non disponibile (key non valida o rete). La key AGSI è gratuita su agsi.gie.eu/account.</div>';}
 }
-async function smartFetchAgsi(){
-  const url='https://agsi.gie.eu/api?continent=eu&size=120';
+async function smartFetchGie(url){ // AGSI e ALSI condividono la stessa key GIE (header x-key)
   try{const r=await fetch(url,{headers:{'x-key':AGSIKEY}});return await r.json();}
   catch(e){return await proxyJSON(url);} // alcuni proxy non inoltrano x-key: tentativo best-effort
+}
+
+/* ============================ LNG UE (ALSI) ============================ */
+async function loadLng(){
+  const body=$('#lngBody');
+  if(!AGSIKEY){body.innerHTML='<div class="loading">La stessa AGSI key abilita anche i dati LNG (ALSI/GIE).</div>';return;}
+  body.innerHTML='<div class="loading">caricamento dati LNG…</div>';
+  try{
+    const j=await smartFetchGie('https://alsi.gie.eu/api?continent=eu&size=120');
+    if(!j||!Array.isArray(j.data)||!j.data.length)throw new Error('no data');
+    const recs=j.data.map(d=>({date:d.gasDayStart,full:+d.full,sendOut:+d.sendOut,inv:+d.lngInventory})).reverse();
+    renderLng(recs);
+  }catch(e){body.innerHTML='<div class="loading">LNG non disponibile (key non valida o rete). Stessa key gratuita di AGSI su agsi.gie.eu/account.</div>';}
+}
+function renderLng(recs){
+  const cur=recs.at(-1),wk=recs.length>7?recs[recs.length-8]:recs[0];
+  const so=cur.sendOut,dWeek=so-wk.sendOut,full=cur.full,inv=cur.inv,rising=dWeek>0;
+  STATE.lng={sendOut:so,rising};
+  $('#lngDate').textContent='al '+cur.date;
+  const strong=isFinite(so)&&so>0&&rising;
+  $('#lngBody').innerHTML=`
+    <div class="gas-top"><div><div class="gas-big" style="font-size:26px">${isFinite(so)?fInt(so):'--'}</div><div class="gas-sub">send-out LNG · GWh/g</div></div>
+      <div style="flex:1">
+      <div class="row" style="border:none"><span class="k">Δ settimana</span><span class="v ${dWeek>=0?'up':'dn'}">${isFinite(dWeek)?sgn(dWeek)+fInt(dWeek)+' GWh/g':'—'}</span></div>
+      <div class="row"><span class="k">Riempimento serbatoi</span><span class="v">${isFinite(full)?f(full,1)+'%':'—'}</span></div>
+      <div class="row" style="border:none"><span class="k">LNG nei serbatoi</span><span class="v">${isFinite(inv)?f(inv,1)+' TWh':'—'}</span></div></div></div>
+    <canvas class="mini" id="lngChart"></canvas>
+    <div class="bias neu"><div class="ic">${strong?'🚢':'⚓'}</div><div>
+      <div class="t">${strong?'LNG IN FORTE RICHIAMO':'Send-out LNG moderato'}</div>
+      <div class="s">${strong?'I rigassificatori spingono gas in rete: allevia il prelievo dagli stoccaggi e sostiene l\'offerta.':'Contributo LNG stabile; la rete dipende più da stoccaggi e import via tubo.'}</div></div></div>
+    <div class="note">L'ALSI/GIE misura la rigassificazione: send-out alto e crescente = più gas da LNG nel sistema europeo, fattore di offerta che si combina con lo stoccaggio AGSI per definire il bilancio gas.</div>`;
+  const soArr=recs.map(d=>d.sendOut).filter(v=>isFinite(v));
+  if(soArr.length>1)drawArea('lngChart',soArr,'#ffb547');
+  renderSynthesis();
 }
 function renderGas(recs){
   const cur=recs.at(-1),wk=recs.length>7?recs[recs.length-8]:recs[0];
@@ -548,7 +587,9 @@ function biasLabel(b){return b==='bull'?{t:'RIALZISTA',c:'up'}:b==='bear'?{t:'RI
 function renderSynthesis(){
   if(STATE.gas){const l=biasLabel(STATE.gas.bias);
     $('#syGas').textContent=l.t;$('#syGas').className='big '+l.c;
-    $('#syGasD').textContent=`Stoccaggio UE ${f(STATE.gas.full,1)}% (${sgn(STATE.gas.dWeek)}${f(STATE.gas.dWeek,1)} pp/sett).`;}
+    let d=`Stoccaggio UE ${f(STATE.gas.full,1)}% (${sgn(STATE.gas.dWeek)}${f(STATE.gas.dWeek,1)} pp/sett).`;
+    if(STATE.lng&&isFinite(STATE.lng.sendOut))d+=` LNG send-out ${fInt(STATE.lng.sendOut)} GWh/g ${STATE.lng.rising?'↑':'→'}.`;
+    $('#syGasD').textContent=d;}
   // petrolio: combina spread + EIA + COT
   const votes=[STATE.oil.eiaBias,STATE.oil.cotBias].filter(Boolean);
   if(STATE.oil.brent&&STATE.oil.wti){
@@ -613,7 +654,7 @@ async function loadCorr(){
 function setStatus(cls,txt){const el=$('#status');el.className='badge '+cls;$('#statusTxt').textContent=txt;}
 async function loadAll(){
   setStatus('part','caricamento…');
-  await Promise.allSettled([loadGas(),loadOil(),loadMacro(),loadCot(),loadCorr()]);
+  await Promise.allSettled([loadGas(),loadLng(),loadOil(),loadMacro(),loadCot(),loadCorr()]);
   renderCalendar();
   const ok=STATE.oil.brent!=null;
   setStatus(ok?'live':'off',ok?'dati live':'fonti non raggiungibili');
