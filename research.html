@@ -1,0 +1,134 @@
+<!DOCTYPE html><html lang="it"><head><meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Research — KID Digital Wealth</title>
+<meta name="description" content="Note di mercato e analisi indipendenti su macro globale, riserve di gas europeo, petrolio e metalli preziosi."/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+<link rel="icon" href="./assets/favicon.svg" type="image/svg+xml"/>
+<link rel="canonical" href="https://medmaster1.github.io/chatbot/research.html"/>
+<meta property="og:type" content="website"/>
+<meta property="og:site_name" content="KID Digital Wealth"/>
+<meta property="og:title" content="Research — KID Digital Wealth"/>
+<meta property="og:description" content="Note di mercato e analisi indipendenti su macro globale, riserve di gas europeo, petrolio e metalli preziosi."/>
+<meta property="og:url" content="https://medmaster1.github.io/chatbot/research.html"/>
+<meta property="og:image" content="https://medmaster1.github.io/chatbot/assets/og.png"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:title" content="Research — KID Digital Wealth"/>
+<meta name="twitter:description" content="Analisi indipendenti su macro, gas europeo, petrolio e metalli preziosi."/>
+<meta name="twitter:image" content="https://medmaster1.github.io/chatbot/assets/og.png"/>
+<link rel="stylesheet" href="./assets/site.css"/>
+</head><body>
+
+<header class="site-nav">
+  <a class="nav-brand" href="./profilo.html"><span class="mk">A</span><span>KID Digital Wealth</span></a>
+  <nav class="nav-links" aria-label="Navigazione principale">
+    <a href="./profilo.html">Profilo</a>
+    <a href="./research.html" class="active">Research</a>
+    <a href="./index.html">Strumenti</a>
+    <a href="./contatti.html">Contatti</a>
+    <a href="./legal.html">Legal</a>
+  </nav>
+</header>
+
+<div class="hero" style="padding:56px 0 40px">
+  <div class="container">
+    <div class="eyebrow">Ricerca indipendente</div>
+    <h1 style="font-size:34px">Note di mercato</h1>
+    <p class="lead">Analisi su macro, gas europeo, petrolio e metalli. Idee, non consigli: ogni nota è un ragionamento, non una raccomandazione.</p>
+  </div>
+</div>
+
+<section><div class="container">
+  <div class="filters" id="filters"></div>
+  <div class="grid-2" id="posts"></div>
+  <p class="muted" style="text-align:center;font-size:11px;margin-top:30px">
+    Per pubblicare una nuova nota: aggiungi un oggetto all'array <b>POSTS</b> in fondo a <b>research.html</b>.
+  </p>
+</div></section>
+
+<!-- READER -->
+<div class="overlay" id="overlay">
+  <div class="reader">
+    <button class="close" id="closeReader" aria-label="Chiudi">✕</button>
+    <div class="post-meta" id="rMeta"></div>
+    <h2 id="rTitle"></h2>
+    <div class="body" id="rBody"></div>
+  </div>
+</div>
+
+<footer class="site-footer">
+  <div class="foot-grid">
+    <div class="col"><h4>KID Digital Wealth</h4>
+      <a href="./profilo.html">Profilo</a><a href="./research.html">Research</a><a href="./index.html">Strumenti</a></div>
+    <div class="col"><h4>Strumenti</h4>
+      <a href="./macro-energy.html">Macro &amp; Energy</a><a href="./market-analysis.html">Market Analysis</a><a href="./gold-silver-terminal.html">Gold / Silver</a></div>
+    <div class="col"><h4>Contatti</h4>
+      <a href="./contatti.html">Scrivimi</a><a href="./contatti.html#newsletter">Newsletter</a><a href="./legal.html">Note legali</a></div>
+  </div>
+  <div class="disclaimer">
+    <b>Avvertenza:</b> i contenuti hanno finalità informative/didattiche e non costituiscono consulenza finanziaria né raccomandazioni d'investimento. Le performance passate non sono indicative di risultati futuri. © <span id="yr"></span> KID Digital Wealth.
+  </div>
+</footer>
+
+<script>
+document.getElementById('yr').textContent=new Date().getFullYear();
+
+/* =========================================================
+   NOTE DI RICERCA — modifica/aggiungi qui i tuoi articoli.
+   Ogni post: {id, title, date(YYYY-MM-DD), cat, excerpt, body(HTML)}
+   ========================================================= */
+const POSTS=[
+  {id:'gas-inverno', title:'Riserve di gas UE: cosa dicono i livelli di stoccaggio', date:'2026-06-15', cat:'Energia',
+   excerpt:'Lo stoccaggio europeo è il miglior anticipatore della pressione sul Natural Gas. Come leggerlo prima della stagione di prelievo.',
+   body:`<p>I livelli di stoccaggio aggregati (fonte AGSI/GIE) sono il singolo dato più informativo per anticipare la dinamica dei prezzi del gas in Europa.</p>
+   <h3>La logica</h3>
+   <p>Scorte basse + prelievo in corso = offerta tesa = supporto ai prezzi. Scorte alte + iniezione = offerta abbondante = freno. La stagionalità conta: aprile–ottobre è iniezione, novembre–marzo è prelievo.</p>
+   <h3>Cosa guardo</h3>
+   <ul><li>% riempimento vs media a 5 anni</li><li>ritmo settimanale di iniezione/prelievo</li><li>meteo (gradi-giorno) come proxy della domanda</li><li>flussi LNG in ingresso</li></ul>
+   <p>Trovi questi dati in tempo reale nel terminal <a href="./macro-energy.html">Macro &amp; Energy</a>.</p>
+   <p class="muted">Esempio dimostrativo. Sostituisci con la tua analisi.</p>`},
+  {id:'opec-spread', title:'OPEC+ e lo spread Brent–WTI: leggere le politiche petrolifere', date:'2026-06-08', cat:'Petrolio',
+   excerpt:'Le decisioni del cartello e lo spread tra i due benchmark raccontano lo stato reale di domanda e offerta.',
+   body:`<p>Le quote produttive OPEC+ e la spare capacity definiscono il "pavimento" e il "soffitto" del prezzo del greggio nel medio periodo.</p>
+   <h3>Lo spread Brent–WTI</h3>
+   <p>Uno spread compresso segnala spesso domanda export USA forte o offerta tesa; uno spread ampio riflette dinamiche logistiche e di inventario interno. Lo seguo insieme alle scorte settimanali EIA (draw rialzista, build ribassista).</p>
+   <p class="muted">Esempio dimostrativo. Sostituisci con la tua analisi.</p>`},
+  {id:'curva-tassi', title:'Curva dei tassi e real yield: la cornice macro per le commodity', date:'2026-05-28', cat:'Macro',
+   excerpt:'Una curva invertita e real yield elevati creano vento contrario per le materie prime. Perché parto sempre da qui.',
+   body:`<p>Prima di guardare il singolo asset definisco il regime: la curva 2s10s e il rendimento reale a 10 anni mi dicono se le condizioni sono restrittive o espansive.</p>
+   <h3>La lettura</h3>
+   <p>Real yield alto = costo opportunità alto per asset che non rendono cedola (oro) e headwind per il risk. Disinflazione + tagli attesi = supporto a oro ed energia. È la cornice dentro cui leggo tutto il resto.</p>
+   <p class="muted">Esempio dimostrativo. Sostituisci con la tua analisi.</p>`},
+];
+
+const fmtDate=d=>new Date(d).toLocaleDateString('it-IT',{day:'2-digit',month:'long',year:'numeric'});
+const cats=['Tutti',...[...new Set(POSTS.map(p=>p.cat))]];
+let activeCat='Tutti';
+
+function renderFilters(){
+  document.getElementById('filters').innerHTML=cats.map(c=>`<button data-c="${c}" class="${c===activeCat?'active':''}">${c}</button>`).join('');
+  document.querySelectorAll('#filters button').forEach(b=>b.onclick=()=>{activeCat=b.dataset.c;renderFilters();renderPosts();});
+}
+function renderPosts(){
+  const list=POSTS.filter(p=>activeCat==='Tutti'||p.cat===activeCat).sort((a,b)=>b.date.localeCompare(a.date));
+  document.getElementById('posts').innerHTML=list.map(p=>`
+    <div class="card post-card" data-id="${p.id}">
+      <div class="post-meta"><span class="tag">${p.cat}</span><span>${fmtDate(p.date)}</span></div>
+      <h3>${p.title}</h3><p>${p.excerpt}</p><div class="go">Leggi la nota →</div>
+    </div>`).join('');
+  document.querySelectorAll('.post-card').forEach(c=>c.onclick=()=>openReader(c.dataset.id));
+}
+function openReader(id){
+  const p=POSTS.find(x=>x.id===id);if(!p)return;
+  document.getElementById('rMeta').innerHTML=`<span class="tag">${p.cat}</span><span>${fmtDate(p.date)}</span>`;
+  document.getElementById('rTitle').textContent=p.title;
+  document.getElementById('rBody').innerHTML=p.body;
+  document.getElementById('overlay').classList.add('open');document.body.style.overflow='hidden';
+}
+function closeReader(){document.getElementById('overlay').classList.remove('open');document.body.style.overflow='';}
+document.getElementById('closeReader').onclick=closeReader;
+document.getElementById('overlay').onclick=e=>{if(e.target.id==='overlay')closeReader();};
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeReader();});
+
+renderFilters();renderPosts();
+</script>
+</body></html>

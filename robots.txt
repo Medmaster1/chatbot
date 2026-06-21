@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://medmaster1.github.io/chatbot/sitemap.xml

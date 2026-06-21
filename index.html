@@ -1,6 +1,17 @@
 <!DOCTYPE html><html lang="it"><head><meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>AURUM Suite — KID Digital Wealth</title>
+<meta name="description" content="Piattaforma di strumenti per investitore e trader professionale: macro, energia, gas UE, petrolio, metalli ed equity. Ricerca indipendente, dati reali."/>
+<link rel="icon" href="./assets/favicon.svg" type="image/svg+xml"/>
+<link rel="canonical" href="https://medmaster1.github.io/chatbot/"/>
+<meta property="og:type" content="website"/>
+<meta property="og:site_name" content="KID Digital Wealth"/>
+<meta property="og:title" content="AURUM Suite — KID Digital Wealth"/>
+<meta property="og:description" content="Strumenti per investitore/trader: macro, energia, gas UE, petrolio, metalli ed equity. Ricerca indipendente, dati reali."/>
+<meta property="og:url" content="https://medmaster1.github.io/chatbot/"/>
+<meta property="og:image" content="https://medmaster1.github.io/chatbot/assets/og.png"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:image" content="https://medmaster1.github.io/chatbot/assets/og.png"/>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800&display=swap" rel="stylesheet"/>
 <style>
 :root{--gold:#e7b54a;--green:#23d18b;--blue:#48a0ff}
@@ -13,7 +24,7 @@ body{font-family:'JetBrains Mono',monospace;background:
 .mk{width:54px;height:54px;border-radius:12px;background:conic-gradient(from 210deg,var(--gold),#7c611f 55%,var(--gold));display:grid;place-items:center;color:#000;font-weight:800;font-size:26px;box-shadow:0 0 0 1px rgba(231,181,74,.4)}
 h1{font-size:26px;color:#fff;letter-spacing:1px}
 .sub{font-size:11px;letter-spacing:3px;color:#5f7193;text-transform:uppercase;margin-bottom:34px}
-.cards{display:grid;grid-template-columns:repeat(3,minmax(240px,300px));gap:18px}
+.cards{display:grid;grid-template-columns:repeat(3,minmax(240px,300px));gap:18px;max-width:940px}
 @media(max-width:820px){.cards{grid-template-columns:1fr}}
 a.card{display:block;text-decoration:none;color:inherit;background:linear-gradient(180deg,#0a111f,#080d18);border:1px solid rgba(150,170,205,.2);border-radius:16px;padding:24px;transition:.18s}
 a.card:hover{transform:translateY(-4px);border-color:var(--gold);box-shadow:0 18px 50px -20px rgba(0,0,0,.8)}
@@ -21,10 +32,21 @@ a.card:hover{transform:translateY(-4px);border-color:var(--gold);box-shadow:0 18
 .ct{font-size:16px;font-weight:800;color:#fff;margin-bottom:6px}
 .cd{font-size:11.5px;color:#8294b4;line-height:1.6}
 .go{margin-top:14px;font-size:11px;font-weight:700;color:var(--gold)}
+.topnav{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-bottom:22px}
+.topnav a{font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:#8294b4;padding:7px 12px;border:1px solid rgba(150,170,205,.2);border-radius:8px;text-decoration:none;transition:.15s}
+.topnav a:hover{color:#fff;border-color:var(--gold)}
 .foot{margin-top:36px;font-size:10px;color:#5f7193;text-align:center;line-height:1.7}
+.foot a{color:var(--gold);text-decoration:none}
 </style></head><body>
 <div class="brand"><div class="mk">A</div><div><h1>AURUM&nbsp;SUITE</h1></div></div>
 <div class="sub">KID Digital Wealth · Trading &amp; Research</div>
+<div class="topnav">
+  <a href="./profilo.html">Profilo</a>
+  <a href="./research.html">Research</a>
+  <a href="./index.html">Strumenti</a>
+  <a href="./contatti.html">Contatti</a>
+  <a href="./legal.html">Legal</a>
+</div>
 <div class="cards">
   <a class="card" href="./market-analysis.html"><div class="ic" style="color:var(--blue)">▦</div>
     <div class="ct">Market Analysis</div>
@@ -42,6 +64,10 @@ a.card:hover{transform:translateY(-4px);border-color:var(--gold);box-shadow:0 18
     <div class="ct">Equity / Stocks</div>
     <div class="cd">Analista azioni: fondamentali, earnings, rating analisti, news, gamma e Investability Score (Finnhub + FlashAlpha).</div>
     <div class="go">Apri →</div></a>
+  <a class="card" href="./macro-energy.html"><div class="ic" style="color:#5fc9e8">⛽</div>
+    <div class="ct">Macro &amp; Energy</div>
+    <div class="cd">Terminal macro/energia: riserve gas UE (AGSI), Brent/WTI, scorte EIA, OPEC+, curva tassi e CPI (FRED), COT e calendario eventi.</div>
+    <div class="go">Apri →</div></a>
 </div>
-<div class="foot">App single-file · dati simulati in v1 · nessun consiglio d'investimento<br/>© KID Digital Wealth</div>
+<div class="foot"><a href="./profilo.html">Profilo</a> · <a href="./research.html">Research</a> · <a href="./contatti.html">Contatti</a> · <a href="./legal.html">Note legali</a><br/>App single-file · nessun consiglio d'investimento · © KID Digital Wealth</div>
 </body></html>

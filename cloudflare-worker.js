@@ -21,6 +21,9 @@ const ALLOW = [
   'api.frankfurter.dev',
   'publicreporting.cftc.gov',
   'agsi.gie.eu',
+  'alsi.gie.eu',
+  'api.eia.gov',
+  'api.stlouisfed.org',
   'lab.flashalpha.com',
   'nfs.faireconomy.media',
 ];
