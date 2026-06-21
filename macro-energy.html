@@ -101,6 +101,7 @@ a{color:var(--blue);text-decoration:none}a:hover{color:var(--gold)}
 .row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--line);font-size:11.5px}
 .row:last-child{border-bottom:none}.row .k{color:var(--txt2)}.row .v{font-weight:700}
 canvas.mini{width:100%;height:60px;display:block;margin:8px 0}
+#curveChart{width:100%;height:230px;display:block;margin-top:8px}
 .bias{display:flex;gap:11px;align-items:center;margin-top:10px;padding:11px;border-radius:10px;border:1px solid var(--line2)}
 .bias .ic{font-size:24px}.bias .t{font-weight:800;font-size:12.5px;color:#fff}.bias .s{font-size:10px;color:var(--txt2);margin-top:2px}
 .bias.bull{background:var(--green-d);border-color:rgba(35,209,139,.4)}
@@ -235,6 +236,12 @@ canvas.mini{width:100%;height:60px;display:block;margin:8px 0}
         <div class="pb" id="calBody"></div>
       </div>
     </div>
+  </div>
+
+  <!-- FORWARD CURVE -->
+  <div class="panel" style="margin-top:14px">
+    <div class="ph">📉 Curva forward · WTI (NYMEX)<span class="sp"></span><span class="tag" id="curveTag">—</span></div>
+    <div class="pb" id="curveBody"><div class="loading">caricamento curva forward…</div></div>
   </div>
 
   <!-- CORRELATIONS -->
@@ -608,6 +615,79 @@ function renderSynthesis(){
   }
 }
 
+/* ============================ CURVA FORWARD WTI ============================ */
+const MCODE=['F','G','H','J','K','M','N','Q','U','V','X','Z']; // gen..dic (codici future)
+function wtiContracts(n=12){
+  const now=new Date();const y0=now.getFullYear(),m0=now.getMonth();const out=[];
+  for(let i=1;i<=n;i++){ // dal mese prossimo in avanti
+    const mm=(m0+i)%12,yy=y0+Math.floor((m0+i)/12);
+    out.push({sym:`CL${MCODE[mm]}${String(yy).slice(-2)}.NYM`,
+      label:new Date(yy,mm,1).toLocaleDateString('it-IT',{month:'short',year:'2-digit'})});
+  }
+  return out;
+}
+async function eiaCurve(){ // fallback: WTI future contract 1..4 (EIA)
+  if(!EIAKEY)return [];
+  const ids=['RCLC1','RCLC2','RCLC3','RCLC4'];
+  const vals=await Promise.all(ids.map(id=>smartJSON(`https://api.eia.gov/v2/seriesid/PET.${id}.D?api_key=${EIAKEY}`)
+    .then(j=>{const r=(j&&j.response&&j.response.data)||[];r.sort((a,b)=>a.period<b.period?1:-1);return r.length?+r[0].value:null;}).catch(()=>null)));
+  return vals.map((v,i)=>({label:'M'+(i+1),price:v})).filter(p=>isFinite(p.price)&&p.price>0);
+}
+async function loadCurve(){
+  const body=$('#curveBody');body.innerHTML='<div class="loading">caricamento curva forward…</div>';
+  const cons=wtiContracts(12);
+  const prices=await Promise.all(cons.map(c=>fetchYahoo(c.sym).then(r=>r?r.price:null).catch(()=>null)));
+  let pts=cons.map((c,i)=>({label:c.label,price:prices[i]})).filter(p=>isFinite(p.price)&&p.price>0);
+  let src='Yahoo · contratti mensili';
+  if(pts.length<3){pts=await eiaCurve();src='EIA · contract 1–4';}
+  if(pts.length<3){body.innerHTML='<div class="loading">Curva non disponibile ora (contratti illiquidi/proxy occupato). Con la EIA key uso i contratti 1–4 come fallback.</div>';return;}
+  renderCurve(pts,src);
+}
+function renderCurve(pts,src){
+  const first=pts[0].price,last=pts.at(-1).price,diff=last-first,pct=(last/first-1)*100;
+  const contango=diff>0;
+  $('#curveTag').textContent=src;
+  const bias=contango?'bear':'bull';
+  $('#curveBody').innerHTML=`
+    <div class="duo">
+      <div class="cell"><div class="lab">Front (${pts[0].label})</div><div class="px">$${f(first,2)}</div></div>
+      <div class="cell"><div class="lab">${contango?'Contango':'Backwardation'} · front→back</div>
+        <div class="px ${contango?'dn':'up'}">${sgn(diff)}$${f(Math.abs(diff),2)}</div>
+        <div class="ch ${contango?'dn':'up'}">${sgn(pct)}${f(pct,2)}% su ${pts.length} mesi</div></div>
+    </div>
+    <canvas id="curveChart"></canvas>
+    <div class="bias ${bias}"><div class="ic">${contango?'🟥':'🟩'}</div><div>
+      <div class="t">${contango?'CONTANGO — curva crescente':'BACKWARDATION — curva decrescente'}</div>
+      <div class="s">${contango?'Future più cari dello spot: offerta abbondante / incentivo allo stoccaggio. Tipicamente ribassista o di mercato ben rifornito.':'Spot più caro dei future: offerta tesa / domanda immediata forte. Tipicamente rialzista, premia chi detiene il fisico.'}</div></div></div>
+    <div class="note">La forma della curva dei future WTI riassume il bilancio domanda/offerta nel tempo: la <b>backwardation</b> segnala scarsità immediata, il <b>contango</b> abbondanza. Si combina con scorte EIA e decisioni OPEC+.</div>`;
+  drawCurve('curveChart',pts);
+}
+function drawCurve(id,pts){
+  const cv=$('#'+id);if(!cv)return;const ctx=cv.getContext('2d'),dpr=window.devicePixelRatio||1,r=cv.getBoundingClientRect();
+  cv.width=r.width*dpr;cv.height=r.height*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);
+  const W=r.width,H=r.height,padL=46,padR=14,padT=14,padB=28;
+  const a=pts.map(p=>p.price),min=Math.min(...a),max=Math.max(...a),rng=(max-min)||1;
+  const lo=min-rng*0.12,hi=max+rng*0.12,R=hi-lo;
+  const x=i=>padL+(pts.length>1?i/(pts.length-1):0.5)*(W-padL-padR);
+  const y=v=>padT+(1-(v-lo)/R)*(H-padT-padB);
+  ctx.clearRect(0,0,W,H);
+  // griglia + label Y
+  ctx.font='9px JetBrains Mono,monospace';ctx.fillStyle='#5f7193';ctx.strokeStyle='rgba(150,170,205,.10)';ctx.lineWidth=1;
+  for(let k=0;k<=3;k++){const v=lo+R*k/3,yy=y(v);
+    ctx.beginPath();ctx.moveTo(padL,yy);ctx.lineTo(W-padR,yy);ctx.stroke();
+    ctx.fillText('$'+f(v,1),4,yy+3);}
+  // area + linea
+  const g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,'rgba(231,181,74,.28)');g.addColorStop(1,'rgba(231,181,74,0)');
+  ctx.beginPath();a.forEach((v,i)=>i?ctx.lineTo(x(i),y(v)):ctx.moveTo(x(i),y(v)));
+  ctx.lineTo(x(a.length-1),H-padB);ctx.lineTo(x(0),H-padB);ctx.closePath();ctx.fillStyle=g;ctx.fill();
+  ctx.strokeStyle='#e7b54a';ctx.lineWidth=2;ctx.beginPath();a.forEach((v,i)=>i?ctx.lineTo(x(i),y(v)):ctx.moveTo(x(i),y(v)));ctx.stroke();
+  // punti + label X (alternati per non affollare)
+  ctx.fillStyle='#cdd9ee';ctx.textAlign='center';
+  a.forEach((v,i)=>{ctx.beginPath();ctx.arc(x(i),y(v),2.6,0,7);ctx.fillStyle='#e7b54a';ctx.fill();
+    if(i%2===0||i===a.length-1){ctx.fillStyle='#5f7193';ctx.fillText(pts[i].label,x(i),H-10);}});
+  ctx.textAlign='left';
+}
+
 /* ============================ CORRELAZIONI CROSS-ASSET ============================ */
 const CORR_ASSETS=[
   {sym:'BZ=F',label:'Brent'},{sym:'CL=F',label:'WTI'},{sym:'NG=F',label:'NatGas'},
@@ -654,7 +734,7 @@ async function loadCorr(){
 function setStatus(cls,txt){const el=$('#status');el.className='badge '+cls;$('#statusTxt').textContent=txt;}
 async function loadAll(){
   setStatus('part','caricamento…');
-  await Promise.allSettled([loadGas(),loadLng(),loadOil(),loadMacro(),loadCot(),loadCorr()]);
+  await Promise.allSettled([loadGas(),loadLng(),loadOil(),loadMacro(),loadCot(),loadCurve(),loadCorr()]);
   renderCalendar();
   const ok=STATE.oil.brent!=null;
   setStatus(ok?'live':'off',ok?'dati live':'fonti non raggiungibili');
