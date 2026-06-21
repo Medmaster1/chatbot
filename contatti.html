@@ -1,0 +1,127 @@
+<!DOCTYPE html><html lang="it"><head><meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Contatti — KID Digital Wealth</title>
+<meta name="description" content="Contatta KID Digital Wealth per consulenza, ricerca su commettenza o per iscriverti alla newsletter macro/energia."/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="./assets/site.css"/>
+</head><body>
+
+<header class="site-nav">
+  <a class="nav-brand" href="./profilo.html"><span class="mk">A</span><span>KID Digital Wealth</span></a>
+  <nav class="nav-links">
+    <a href="./profilo.html">Profilo</a>
+    <a href="./research.html">Research</a>
+    <a href="./index.html">Strumenti</a>
+    <a href="./contatti.html" class="active">Contatti</a>
+    <a href="./legal.html">Legal</a>
+  </nav>
+</header>
+
+<div class="hero" style="padding:56px 0 40px"><div class="container">
+  <div class="eyebrow">Parliamone</div>
+  <h1 style="font-size:34px">Contatti</h1>
+  <p class="lead">Consulenza, ricerca su commettenza, collaborazioni o semplicemente una domanda sul mercato. Rispondo personalmente.</p>
+</div></div>
+
+<!-- CONTACT FORM -->
+<section><div class="container">
+  <div class="sec-head"><div class="k">Scrivimi</div><h2>Invia un messaggio</h2></div>
+  <form class="form" id="contactForm">
+    <div class="alert" id="cAlert"></div>
+    <div class="field"><label for="name">Nome</label><input id="name" name="name" type="text" required placeholder="Mario Rossi"/></div>
+    <div class="field"><label for="email">Email</label><input id="email" name="email" type="email" required placeholder="tu@email.com"/></div>
+    <div class="field"><label for="topic">Argomento</label><input id="topic" name="topic" type="text" placeholder="Consulenza · Ricerca · Collaborazione"/></div>
+    <div class="field"><label for="msg">Messaggio</label><textarea id="msg" name="message" required placeholder="Come posso aiutarti?"></textarea></div>
+    <button class="btn btn-primary" type="submit" style="align-self:center">Invia messaggio →</button>
+    <p class="form-note">Inviando accetti il trattamento dei dati come da <a href="./legal.html#privacy">Privacy Policy</a>.</p>
+  </form>
+</div></section>
+
+<!-- NEWSLETTER -->
+<section class="band" id="newsletter"><div class="container" style="text-align:center">
+  <div class="sec-head"><div class="k">Newsletter</div><h2>Ricevi le note macro &amp; energia</h2><p>Analisi sintetiche su gas UE, petrolio e regime macro. Niente spam, disiscrizione in un click.</p></div>
+  <form class="inline-form" id="newsForm">
+    <input id="newsEmail" name="email" type="email" required placeholder="la-tua@email.com"/>
+    <button class="btn btn-primary" type="submit">Iscrivimi</button>
+  </form>
+  <div class="alert" id="nAlert" style="max-width:460px;margin:14px auto 0"></div>
+</div></section>
+
+<!-- DIRECT INFO -->
+<section><div class="container">
+  <div class="grid-3">
+    <div class="card"><div class="ic">✉️</div><h3>Email diretta</h3><p><a href="#" id="mailLink">Scrivimi via email</a><br/><span class="muted" style="font-size:11px">Imposta il tuo indirizzo nel file contatti.html.</span></p></div>
+    <div class="card"><div class="ic">🔗</div><h3>Social / Pro</h3><p><a href="#">LinkedIn</a> · <a href="#">X / Twitter</a><br/><span class="muted" style="font-size:11px">Aggiungi i tuoi profili reali.</span></p></div>
+    <div class="card"><div class="ic">📍</div><h3>Dove</h3><p>Italia · da remoto<br/><span class="muted" style="font-size:11px">Aggiorna sede e fuso orario.</span></p></div>
+  </div>
+</div></section>
+
+<footer class="site-footer">
+  <div class="foot-grid">
+    <div class="col"><h4>KID Digital Wealth</h4>
+      <a href="./profilo.html">Profilo</a><a href="./research.html">Research</a><a href="./index.html">Strumenti</a></div>
+    <div class="col"><h4>Strumenti</h4>
+      <a href="./macro-energy.html">Macro &amp; Energy</a><a href="./market-analysis.html">Market Analysis</a><a href="./gold-silver-terminal.html">Gold / Silver</a></div>
+    <div class="col"><h4>Contatti</h4>
+      <a href="./contatti.html">Scrivimi</a><a href="./contatti.html#newsletter">Newsletter</a><a href="./legal.html">Note legali</a></div>
+  </div>
+  <div class="disclaimer">
+    <b>Avvertenza:</b> il contatto non instaura un rapporto di consulenza finanziaria. I contenuti del sito hanno finalità informative. © <span id="yr"></span> KID Digital Wealth.
+  </div>
+</footer>
+
+<script>
+document.getElementById('yr').textContent=new Date().getFullYear();
+
+/* =========================================================
+   CONFIGURAZIONE — imposta i tuoi recapiti.
+   1) FORMSPREE_ID: crea un form gratis su https://formspree.io
+      e incolla l'ID (es. "xmyzabcd"). Senza, si usa il fallback mailto.
+   2) CONTACT_EMAIL: la tua email pubblica.
+   ========================================================= */
+const FORMSPREE_ID='';                  // es. 'xmyzabcd'  (vuoto = fallback mailto)
+const CONTACT_EMAIL='info@esempio.com'; // ← la tua email pubblica
+
+document.getElementById('mailLink').href='mailto:'+CONTACT_EMAIL;
+document.getElementById('mailLink').textContent=CONTACT_EMAIL;
+
+function showAlert(el,ok,msg){el.className='alert '+(ok?'ok':'err');el.textContent=msg;}
+
+async function postFormspree(data){
+  const r=await fetch('https://formspree.io/f/'+FORMSPREE_ID,{
+    method:'POST',headers:{'Accept':'application/json'},body:data});
+  if(!r.ok)throw new Error('formspree');
+  return true;
+}
+
+document.getElementById('contactForm').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const form=e.target,alert=document.getElementById('cAlert');
+  const fd=new FormData(form);
+  if(FORMSPREE_ID){
+    try{await postFormspree(fd);showAlert(alert,true,'Messaggio inviato. Ti risponderò al più presto.');form.reset();}
+    catch(err){showAlert(alert,false,'Invio non riuscito. Riprova o scrivimi via email.');}
+  }else{
+    // Fallback: apre il client di posta precompilato
+    const subj=encodeURIComponent('Contatto sito — '+(fd.get('topic')||'Richiesta'));
+    const body=encodeURIComponent(`Nome: ${fd.get('name')}\nEmail: ${fd.get('email')}\n\n${fd.get('message')}`);
+    window.location.href=`mailto:${CONTACT_EMAIL}?subject=${subj}&body=${body}`;
+    showAlert(alert,true,'Apro il tuo client di posta… (configura Formspree per l\'invio diretto).');
+  }
+});
+
+document.getElementById('newsForm').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const alert=document.getElementById('nAlert'),email=document.getElementById('newsEmail').value;
+  if(FORMSPREE_ID){
+    try{const fd=new FormData();fd.append('email',email);fd.append('_subject','Iscrizione newsletter');
+      await postFormspree(fd);showAlert(alert,true,'Iscrizione registrata. Benvenuto!');e.target.reset();}
+    catch(err){showAlert(alert,false,'Iscrizione non riuscita. Riprova più tardi.');}
+  }else{
+    const subj=encodeURIComponent('Iscrizione newsletter');
+    window.location.href=`mailto:${CONTACT_EMAIL}?subject=${subj}&body=${encodeURIComponent('Iscrivimi: '+email)}`;
+    showAlert(alert,true,'Apro il tuo client di posta per l\'iscrizione.');
+  }
+});
+</script>
+</body></html>
