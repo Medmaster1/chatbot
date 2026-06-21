@@ -132,6 +132,16 @@ canvas.mini{width:100%;height:60px;display:block;margin:8px 0}
 
 .opec{font-size:11px}
 .opec .row .v{font-variant-numeric:tabular-nums}
+
+/* correlations */
+.corrwrap{overflow-x:auto}
+.corr{border-collapse:collapse;width:100%;font-size:10px;min-width:560px}
+.corr th{color:var(--txt2);font-weight:700;padding:5px 4px;text-align:center;white-space:nowrap}
+.corr th.row{text-align:right;padding-right:8px;color:var(--txt2)}
+.corr td{text-align:center;padding:0;height:30px;color:#06121a;font-weight:800;font-variant-numeric:tabular-nums;border:1px solid var(--bg);border-radius:3px}
+.corr td.diag{color:var(--txt3);background:var(--panel3)!important}
+.corrlegend{display:flex;align-items:center;gap:8px;margin-top:11px;font-size:9.5px;color:var(--txt3);flex-wrap:wrap}
+.corrlegend .bar{height:9px;width:120px;border-radius:5px;background:linear-gradient(90deg,#ff4d5e,#5f7193,#23d18b)}
 .foot{margin-top:18px;font-size:9.5px;color:var(--txt3);text-align:center;line-height:1.7}
 </style></head>
 <body>
@@ -211,6 +221,12 @@ canvas.mini{width:100%;height:60px;display:block;margin:8px 0}
     </div>
   </div>
 
+  <!-- CORRELATIONS -->
+  <div class="panel" style="margin-top:14px">
+    <div class="ph">🔗 Correlazioni cross-asset · rendimenti giornalieri<span class="sp"></span><span class="tag" id="corrTag">~45 sedute</span></div>
+    <div class="pb" id="corrBody"><div class="loading">calcolo correlazioni…</div></div>
+  </div>
+
   <div class="foot">
     App single-file · dati: AGSI/GIE · EIA · FRED · Yahoo Finance · CFTC. Le chiavi restano nel tuo browser.<br/>
     Strumento di ricerca: <b>nessun consiglio d'investimento</b>. © KID Digital Wealth
@@ -267,24 +283,33 @@ async function smartJSON(url){try{return await getJSON(url,12000);}catch(e){retu
 
 /* ============================ YAHOO ============================ */
 const yahooURL=s=>`https://query1.finance.yahoo.com/v8/finance/chart/${s}?interval=1d&range=3mo`;
-async function fetchYahoo(sym){
+async function yahooRaw(sym){ // ritorna il chart JSON grezzo (via proxy con fallback) o null
   for(const p of proxyList()){
     for(let a=0;a<2;a++){
       try{const j=await getJSON(p(yahooURL(sym)),16000);
         const data=(j&&typeof j.contents==='string')?JSON.parse(j.contents):j;
-        if(data&&data.chart&&data.chart.result){
-          const r=data.chart.result[0],meta=r.meta||{};
-          const closes=((r.indicators&&r.indicators.quote&&r.indicators.quote[0].close)||[]).filter(x=>x!=null);
-          const price=meta.regularMarketPrice??closes.at(-1);
-          if(closes.length)closes[closes.length-1]=price;
-          const prev=closes.length>1?closes[closes.length-2]:(meta.chartPreviousClose??price);
-          return{price,change:prev?(price/prev-1)*100:0,hist:closes.slice(-60)};
-        }
+        if(data&&data.chart&&data.chart.result)return data;
         throw new Error('payload');
       }catch(e){if(a===0)await new Promise(r=>setTimeout(r,350));}
     }
   }
   return null;
+}
+async function fetchYahoo(sym){
+  const data=await yahooRaw(sym);if(!data)return null;
+  const r=data.chart.result[0],meta=r.meta||{};
+  const closes=((r.indicators&&r.indicators.quote&&r.indicators.quote[0].close)||[]).filter(x=>x!=null);
+  const price=meta.regularMarketPrice??closes.at(-1);
+  if(closes.length)closes[closes.length-1]=price;
+  const prev=closes.length>1?closes[closes.length-2]:(meta.chartPreviousClose??price);
+  return{price,change:prev?(price/prev-1)*100:0,hist:closes.slice(-60)};
+}
+async function fetchYahooSeries(sym){ // serie {date->close} per allineamento correlazioni
+  const data=await yahooRaw(sym);if(!data)return null;
+  const r=data.chart.result[0];const ts=r.timestamp||[];
+  const c=(r.indicators&&r.indicators.quote&&r.indicators.quote[0].close)||[];
+  const out={};ts.forEach((t,i)=>{if(c[i]!=null){const d=new Date(t*1000).toISOString().slice(0,10);out[d]=c[i];}});
+  return out;
 }
 function spark(id,hist,up){const cv=$('#'+id);if(!cv||!hist||hist.length<2)return;
   const ctx=cv.getContext('2d'),dpr=window.devicePixelRatio||1,r=cv.getBoundingClientRect();
@@ -531,11 +556,53 @@ function renderSynthesis(){
   }
 }
 
+/* ============================ CORRELAZIONI CROSS-ASSET ============================ */
+const CORR_ASSETS=[
+  {sym:'BZ=F',label:'Brent'},{sym:'CL=F',label:'WTI'},{sym:'NG=F',label:'NatGas'},
+  {sym:'GC=F',label:'Gold'},{sym:'^GSPC',label:'S&P500'},
+  {sym:'DX-Y.NYB',label:'DXY'},{sym:'EURUSD=X',label:'EURUSD'},{sym:'^TNX',label:'US10Y'},
+];
+function pearson(a,b){const n=Math.min(a.length,b.length);if(n<5)return null;
+  let sa=0,sb=0;for(let i=0;i<n;i++){sa+=a[i];sb+=b[i];}const ma=sa/n,mb=sb/n;
+  let num=0,da=0,db=0;for(let i=0;i<n;i++){const x=a[i]-ma,y=b[i]-mb;num+=x*y;da+=x*x;db+=y*y;}
+  const den=Math.sqrt(da*db);return den?num/den:null;}
+function corrColor(r){ // -1 rosso · 0 grigio · +1 verde
+  const c1=[255,77,94],c0=[95,113,147],c2=[35,209,139];let a,b,t;
+  if(r<0){a=c1;b=c0;t=r+1;}else{a=c0;b=c2;t=r;}
+  return`rgb(${a.map((v,i)=>Math.round(v+(b[i]-v)*t)).join(',')})`;}
+async function loadCorr(){
+  const body=$('#corrBody');
+  const series=await Promise.all(CORR_ASSETS.map(a=>fetchYahooSeries(a.sym).catch(()=>null)));
+  const valid=CORR_ASSETS.map((a,i)=>({...a,data:series[i]})).filter(a=>a.data&&Object.keys(a.data).length>10);
+  if(valid.length<3){body.innerHTML='<div class="loading">Correlazioni non disponibili ora (proxy occupato). Riprova tra poco.</div>';return;}
+  // date comuni a tutti gli asset validi → returns allineati
+  let common=Object.keys(valid[0].data);
+  valid.forEach(a=>{const s=new Set(Object.keys(a.data));common=common.filter(d=>s.has(d));});
+  common.sort();common=common.slice(-46); // ~45 rendimenti
+  if(common.length<8){body.innerHTML='<div class="loading">Serie storiche non allineabili ora. Riprova.</div>';return;}
+  const rets=valid.map(a=>{const arr=[];for(let i=1;i<common.length;i++){const p0=a.data[common[i-1]],p1=a.data[common[i]];if(p0&&p1)arr.push(p1/p0-1);}return arr;});
+  $('#corrTag').textContent=(common.length-1)+' sedute';
+  // matrice
+  let h='<div class="corrwrap"><table class="corr"><tr><th></th>'+valid.map(a=>`<th>${a.label}</th>`).join('')+'</tr>';
+  for(let i=0;i<valid.length;i++){
+    h+=`<tr><th class="row">${valid[i].label}</th>`;
+    for(let j=0;j<valid.length;j++){
+      if(i===j){h+='<td class="diag">1.00</td>';continue;}
+      const r=pearson(rets[i],rets[j]);
+      h+=r==null?'<td class="diag">–</td>':`<td style="background:${corrColor(r)}">${r>=0?'+':''}${r.toFixed(2)}</td>`;
+    }
+    h+='</tr>';
+  }
+  h+='</table></div><div class="corrlegend"><span>−1</span><span class="bar"></span><span>+1</span><span style="margin-left:10px">verde = si muovono insieme · rosso = inversi · rendimenti % giornalieri</span></div>';
+  h+='<div class="note">Una correlazione alta riduce la diversificazione: due asset molto verdi sono di fatto la stessa scommessa. Energia inversa al <b>DXY</b> e legata al <b>risk-on</b> (S&amp;P) è la lettura macro tipica; rotture di questi pattern segnalano cambi di regime.</div>';
+  body.innerHTML=h;
+}
+
 /* ============================ ORCHESTRAZIONE ============================ */
 function setStatus(cls,txt){const el=$('#status');el.className='badge '+cls;$('#statusTxt').textContent=txt;}
 async function loadAll(){
   setStatus('part','caricamento…');
-  await Promise.allSettled([loadGas(),loadOil(),loadMacro(),loadCot()]);
+  await Promise.allSettled([loadGas(),loadOil(),loadMacro(),loadCot(),loadCorr()]);
   renderCalendar();
   const ok=STATE.oil.brent!=null;
   setStatus(ok?'live':'off',ok?'dati live':'fonti non raggiungibili');
