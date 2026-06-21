@@ -9,6 +9,8 @@ on:
     paths:
       - "*.html"
       - "assets/**"
+      - sitemap.xml
+      - robots.txt
       - .github/workflows/pages.yml
   workflow_dispatch: {}
 
@@ -40,6 +42,8 @@ jobs:
           cp ./*.html _site/ 2>/dev/null || true
           [ -d ./assets ] && cp -r ./assets _site/ || true
           [ -f ./.nojekyll ] && cp ./.nojekyll _site/ || true
+          [ -f ./sitemap.xml ] && cp ./sitemap.xml _site/ || true
+          [ -f ./robots.txt ] && cp ./robots.txt _site/ || true
           echo "Contenuto _site:" && ls -la _site
 
 
