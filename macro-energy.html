@@ -178,6 +178,19 @@ canvas.mini{width:100%;height:60px;display:block;margin:8px 0}
       <span class="ok" id="fredOk"></span><input id="fredKey" type="password" placeholder="FRED macro key" autocomplete="off"/><button id="fredSave">Macro</button></div>
     <div class="apikey" title="URL del tuo Cloudflare Worker CORS (vedi cloudflare-worker.js). Rende i dati affidabili.">
       <span class="ok" id="proxyOk"></span><input id="proxyUrl" type="text" placeholder="CORS proxy URL" autocomplete="off"/><button id="proxySave">Proxy</button></div>
+    <div class="apikey" title="Twelve Data: prezzi/serie storiche più affidabili (twelvedata.com). Usata da Market Analysis e Gold/Silver.">
+      <span class="ok" id="tdOk"></span><input id="tdKey" type="password" placeholder="Twelve Data key" autocomplete="off"/><button id="tdSave">TwelveData</button></div>
+    <div class="apikey" title="FlashAlpha: gamma/GEX e opzioni reali (lab.flashalpha.com). Usata da Market Analysis ed Equity.">
+      <span class="ok" id="faOk"></span><input id="faKey" type="password" placeholder="FlashAlpha key" autocomplete="off"/><button id="faSave">FlashAlpha</button></div>
+    <div class="apikey" title="Finnhub: fondamentali, earnings, news azioni (finnhub.io). Usata da Equity.">
+      <span class="ok" id="fhOk"></span><input id="fhKey" type="password" placeholder="Finnhub key" autocomplete="off"/><button id="fhSave">Finnhub</button></div>
+    <div class="apikey" title="Telegram Bot token per alert/riepiloghi (@BotFather). Usata da Market Analysis.">
+      <span class="ok" id="tgTokOk"></span><input id="tgToken" type="password" placeholder="Telegram bot token" autocomplete="off"/><button id="tgTokSave">TG token</button></div>
+    <div class="apikey" title="Telegram chat_id di destinazione dei messaggi del bot.">
+      <span class="ok" id="tgChatOk"></span><input id="tgChat" type="text" placeholder="Telegram chat_id" autocomplete="off"/><button id="tgChatSave">TG chat</button></div>
+  </div>
+  <div style="font-size:10px;color:var(--txt3);margin:-6px 0 14px;line-height:1.6">
+    🔑 <b>Hub chiavi della suite</b>: le chiavi si salvano nel browser e sono <b>condivise</b> con tutti gli strumenti AURUM (stesso dominio). Su questa pagina sono attive <b>AGSI/EIA/FRED/Proxy</b>; <b>Twelve Data, FlashAlpha, Finnhub e Telegram</b> vengono usate da Market Analysis, Gold/Silver ed Equity. Importabili anche da link: <code>#agsi=&amp;eia=&amp;fred=&amp;td=&amp;fa=&amp;fh=&amp;tgtoken=&amp;tgchat=&amp;proxy=</code>
   </div>
 
   <!-- KPI -->
@@ -270,9 +283,15 @@ async function importKeysFromHash(){const h=location.hash?location.hash.slice(1)
   if(q.get('eia')){await Storage.set('eia_apikey',q.get('eia').trim());ch=true;}
   if(q.get('fred')){await Storage.set('fred_apikey',q.get('fred').trim());ch=true;}
   if(q.get('proxy')){await Storage.set('cors_proxy',q.get('proxy').trim());ch=true;}
+  if(q.get('td')){await Storage.set('td_apikey',q.get('td').trim());ch=true;}
+  if(q.get('fa')){await Storage.set('fa_apikey',q.get('fa').trim());ch=true;}
+  if(q.get('fh')){await Storage.set('fh_key',q.get('fh').trim());ch=true;}
+  if(q.get('tgtoken')){await Storage.set('tg_token',q.get('tgtoken').trim());ch=true;}
+  if(q.get('tgchat')){await Storage.set('tg_chat',q.get('tgchat').trim());ch=true;}
   if(ch){try{history.replaceState(null,'',location.pathname+location.search);}catch(e){}}}
 
 let AGSIKEY='',EIAKEY='',FREDKEY='',PROXY_URL='';
+let TDKEY='',FAKEY='',FHKEY='',TG_TOKEN='',TG_CHAT='';
 
 /* ============================ UTILS ============================ */
 const $=(s,e=document)=>e.querySelector(s);
@@ -749,6 +768,14 @@ function wireKey(inputId,btnId,okId,storeKey,setter){
     $('#'+okId).classList.toggle('on',!!v);inp.value=v?'••••••':'';await loadAll();
   });
 }
+// salva una chiave condivisa con la suite senza ricaricare i dati di questa pagina
+function wireStore(inputId,btnId,okId,storeKey,setter,mask=true){
+  const inp=$('#'+inputId);
+  $('#'+btnId).addEventListener('click',async()=>{
+    const v=inp.value.trim();await Storage.set(storeKey,v);if(setter)setter(v);
+    $('#'+okId).classList.toggle('on',!!v);if(mask)inp.value=v?'••••••':'';
+  });
+}
 async function init(){
   await importKeysFromHash();
   AGSIKEY=await Storage.get('agsi_apikey')||'';
@@ -763,6 +790,19 @@ async function init(){
   wireKey('eiaKey','eiaSave','eiaOk','eia_apikey',v=>EIAKEY=v);
   wireKey('fredKey','fredSave','fredOk','fred_apikey',v=>FREDKEY=v);
   $('#proxySave').addEventListener('click',async()=>{const v=$('#proxyUrl').value.trim();await Storage.set('cors_proxy',v);PROXY_URL=v;$('#proxyOk').classList.toggle('on',!!v);await loadAll();});
+  // chiavi condivise con il resto della suite (config-only su questa pagina)
+  TDKEY=await Storage.get('td_apikey')||'';FAKEY=await Storage.get('fa_apikey')||'';FHKEY=await Storage.get('fh_key')||'';
+  TG_TOKEN=await Storage.get('tg_token')||'';TG_CHAT=await Storage.get('tg_chat')||'';
+  if(TDKEY){$('#tdOk').classList.add('on');$('#tdKey').value='••••••';}
+  if(FAKEY){$('#faOk').classList.add('on');$('#faKey').value='••••••';}
+  if(FHKEY){$('#fhOk').classList.add('on');$('#fhKey').value='••••••';}
+  if(TG_TOKEN){$('#tgTokOk').classList.add('on');$('#tgToken').value='••••••';}
+  if(TG_CHAT){$('#tgChatOk').classList.add('on');$('#tgChat').value=TG_CHAT;}
+  wireStore('tdKey','tdSave','tdOk','td_apikey',v=>TDKEY=v);
+  wireStore('faKey','faSave','faOk','fa_apikey',v=>FAKEY=v);
+  wireStore('fhKey','fhSave','fhOk','fh_key',v=>FHKEY=v);
+  wireStore('tgToken','tgTokSave','tgTokOk','tg_token',v=>TG_TOKEN=v);
+  wireStore('tgChat','tgChatSave','tgChatOk','tg_chat',v=>TG_CHAT=v,false);
   $('#refreshBtn').addEventListener('click',loadAll);
   tickClock();setInterval(tickClock,1000);
   await loadAll();
