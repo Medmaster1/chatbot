@@ -1,0 +1,201 @@
+//@version=6
+indicator("MACD + RSI", shorttitle = "MACD+RSI", format = format.price, precision = 2, timeframe = "", timeframe_gaps = true)
+
+// ══════════════════════════════ INPUTS ════════════════════════════════════════
+
+GRP_RSI        = "RSI"
+rsiSource      = input.source(close, "Source", group = GRP_RSI)
+rsiLength      = input.int(14, "Length", minval = 1, group = GRP_RSI)
+calcDivergence = input.bool(false, "Divergence", group = GRP_RSI, display = display.none,
+                  tooltip = "Enables divergence detection and alerts.")
+
+GRP_SMOOTH = "RSI Smoothing"
+smoothType = input.string("None", "Type", group = GRP_SMOOTH, display = display.none,
+              options = ["None","SMA","EMA","SMMA (RMA)","WMA","VWMA","SMA + Bollinger Bands"])
+var isBB     = smoothType == "SMA + Bollinger Bands"
+var enableMA = smoothType != "None"
+smoothLen    = input.int(14,  "Length",    group = GRP_SMOOTH, display = display.none, active = smoothType != "None")
+bbMult       = input.float(2.0, "BB StdDev", minval = 0.001, maxval = 50, step = 0.5,
+                group = GRP_SMOOTH, display = display.none, active = isBB,
+                tooltip = "Only when 'SMA + Bollinger Bands' is selected.")
+
+GRP_MACD   = "MACD"
+macdSource = input.source(close, "Source",          group = GRP_MACD)
+fastLen    = input.int(12, "Fast Length",  minval = 1, group = GRP_MACD)
+slowLen    = input.int(26, "Slow Length",  minval = 1, group = GRP_MACD)
+sigLen     = input.int(9,  "Signal Length",minval = 1, group = GRP_MACD)
+oscType    = input.string("EMA", "Oscillator MA", ["EMA","SMA"], group = GRP_MACD, display = display.none)
+sigType    = input.string("EMA", "Signal MA",     ["EMA","SMA"], group = GRP_MACD, display = display.none)
+normLen    = input.int(100, "Norm. Period", minval = 10, group = GRP_MACD,
+              tooltip = "Lookback bars used to auto-scale MACD into the lower section.")
+
+// ══════════════════════════════ MA FUNCTION ═══════════════════════════════════
+// Unified: covers all types needed by both RSI smoothing and MACD oscillator/signal.
+ma(float src, int len, simple string t) =>
+    switch t
+        "EMA"                   => ta.ema(src, len)
+        "SMA"                   => ta.sma(src, len)
+        "SMA + Bollinger Bands" => ta.sma(src, len)
+        "SMMA (RMA)"            => ta.rma(src, len)
+        "WMA"                   => ta.wma(src, len)
+        "VWMA"                  => ta.vwma(src, len)
+
+// ══════════════════════════════ CALCULATIONS ══════════════════════════════════
+
+// RSI
+rsiChg = ta.change(rsiSource)
+rsiUp  = ta.rma(math.max(rsiChg, 0), rsiLength)
+rsiDn  = ta.rma(-math.min(rsiChg, 0), rsiLength)
+rsi    = rsiDn == 0 ? 100 : rsiUp == 0 ? 0 : 100 - (100 / (1 + rsiUp / rsiDn))
+
+// MACD
+maFast  = ma(macdSource, fastLen, oscType)
+maSlow  = ma(macdSource, slowLen, oscType)
+macdVal = maFast - maSlow
+sigVal  = ma(macdVal, sigLen, sigType)
+histVal = macdVal - sigVal
+
+// ══════════════════════════════ LAYOUT ════════════════════════════════════════
+//
+//  200 ──────────────────────────── (hidden top)
+//      [ RSI section — shifted by +100 ]
+//  170 ── RSI Overbought (70) ──── (dashed green)
+//      [ RSI line ]
+//  150 ── RSI Midline   (50) ──── (dashed gray)
+//      [ RSI line ]
+//  130 ── RSI Oversold  (30) ──── (dashed red)
+//
+//  100 ════════ SEPARATOR ════════  (solid, linewidth 2)
+//
+//   50 ── MACD Zero Line ────────── (dashed gray)
+//      [ MACD histogram + lines, normalized ±40 around 50 ]
+//    0 ──────────────────────────── (hidden bottom)
+
+MACD_AMP = 40  // MACD normalized amplitude → lives within [10, 90]
+
+rsiShifted  = rsi + 100
+smoothMA    = enableMA ? ma(rsi, smoothLen, smoothType) + 100 : na
+smoothStDev = isBB ? ta.stdev(rsi, smoothLen) * bbMult : na
+
+normBase = ta.highest(math.abs(macdVal), normLen)
+histN    = normBase != 0 ? 50 + (histVal / normBase) * MACD_AMP : 50.0
+macdN    = normBase != 0 ? 50 + (macdVal / normBase) * MACD_AMP : 50.0
+signalN  = normBase != 0 ? 50 + (sigVal  / normBase) * MACD_AMP : 50.0
+
+// ══════════════════════════════ REFERENCE LINES ═══════════════════════════════
+
+h200 = hline(200, "",                        display = display.none)
+h170 = hline(170, "RSI Overbought (70)",     color = color.new(#26a69a, 30), linestyle = hline.style_dashed)
+h150 = hline(150, "RSI Midline (50)",        color = color.new(#787B86, 55), linestyle = hline.style_dashed)
+h130 = hline(130, "RSI Oversold (30)",       color = color.new(#ef5350, 30), linestyle = hline.style_dashed)
+h100 = hline(100, "──────── Separator ───────", color = #787B86, linewidth = 2)
+h050 = hline(50,  "MACD Zero Line",          color = color.new(#787B86, 55), linestyle = hline.style_dashed)
+h000 = hline(0,   "",                        display = display.none)
+
+// ── Section backgrounds (drawn first = bottom layer) ─────────────────────────
+fill(h200, h100, color = color.new(#7E57C2, 96), title = "RSI Section BG")
+fill(h100, h000, color = color.new(#2196F3, 96), title = "MACD Section BG")
+
+// ── OB / OS zone backgrounds ─────────────────────────────────────────────────
+fill(h200, h170, color = color.new(color.green, 90), title = "RSI OB Zone")
+fill(h130, h100, color = color.new(color.red,   90), title = "RSI OS Zone")
+
+// ══════════════════════════════ RSI PLOTS ══════════════════════════════════════
+
+rsiPlot = plot(rsiShifted, "RSI", color = #7E57C2, linewidth = 2)
+midPlot = plot(150, color = na, editable = false, display = display.none)
+
+// Dynamic gradient that follows the RSI line into OB/OS zones
+fill(rsiPlot, midPlot, 200, 170,
+     top_color    = color.new(color.green, 0),
+     bottom_color = color.new(color.green, 100),
+     title = "RSI OB Gradient")
+fill(rsiPlot, midPlot, 130, 100,
+     top_color    = color.new(color.red, 100),
+     bottom_color = color.new(color.red, 0),
+     title = "RSI OS Gradient")
+
+// RSI Smoothing MA
+plot(smoothMA, "RSI-based MA", color = color.yellow,
+     display = enableMA ? display.all : display.none, editable = enableMA)
+
+bbUpper = plot(smoothMA + smoothStDev, "Upper Bollinger Band", color = color.green,
+               display = isBB ? display.all : display.none, editable = isBB)
+bbLower = plot(smoothMA - smoothStDev, "Lower Bollinger Band", color = color.green,
+               display = isBB ? display.all : display.none, editable = isBB)
+fill(bbUpper, bbLower, color = isBB ? color.new(color.green, 90) : na,
+     title = "BB Background Fill",
+     display = isBB ? display.all : display.none, editable = isBB)
+
+// ══════════════════════════════ MACD PLOTS ══════════════════════════════════════
+
+histColor = histVal >= 0
+     ? (histVal > histVal[1] ? #26a69a : #b2dfdb)
+     : (histVal > histVal[1] ? #ffcdd2 : #ff5252)
+
+plot(histN,   "MACD Histogram", histColor, style = plot.style_columns)
+plot(macdN,   "MACD Line",      #2196F3)
+plot(signalN, "MACD Signal",    #ff6d00)
+
+// ══════════════════════════════ DIVERGENCE (RSI) ═══════════════════════════════
+
+LB_R = 5
+LB_L = 5
+R_LO = 5
+R_HI = 60
+
+_inRange(bool cond) =>
+    b = ta.barssince(cond)
+    R_LO <= b and b <= R_HI
+
+plFound  = false
+phFound  = false
+bullCond = false
+bearCond = false
+rsiLBR   = rsi[LB_R]           // raw RSI for value comparisons
+rsiLBR_p = rsiShifted[LB_R]    // shifted RSI for plot positions
+
+if calcDivergence
+    plFound  := not na(ta.pivotlow(rsi, LB_L, LB_R))
+    rsiHL     = rsiLBR > ta.valuewhen(plFound, rsiLBR, 1) and _inRange(plFound[1])
+    lowLBR    = low[LB_R]
+    priceLL   = lowLBR < ta.valuewhen(plFound, lowLBR, 1)
+    bullCond := priceLL and rsiHL and plFound
+
+    phFound  := not na(ta.pivothigh(rsi, LB_L, LB_R))
+    rsiLH     = rsiLBR < ta.valuewhen(phFound, rsiLBR, 1) and _inRange(phFound[1])
+    highLBR   = high[LB_R]
+    priceHH   = highLBR > ta.valuewhen(phFound, highLBR, 1)
+    bearCond := priceHH and rsiLH and phFound
+
+BULL_C = color.green
+BEAR_C = color.red
+TEXT_C = color.white
+NONE_C = color.new(color.white, 100)
+
+plot(plFound ? rsiLBR_p : na, "Regular Bullish", offset = -LB_R, linewidth = 2,
+     color   = bullCond ? BULL_C : NONE_C,
+     display = display.pane, editable = calcDivergence)
+plotshape(bullCond ? rsiLBR_p : na, "Regular Bullish Label", text = " Bull ",
+     offset    = -LB_R, style = shape.labelup, location = location.absolute,
+     color     = BULL_C, textcolor = TEXT_C,
+     display   = display.pane, editable = calcDivergence)
+
+plot(phFound ? rsiLBR_p : na, "Regular Bearish", offset = -LB_R, linewidth = 2,
+     color   = bearCond ? BEAR_C : NONE_C,
+     display = display.pane, editable = calcDivergence)
+plotshape(bearCond ? rsiLBR_p : na, "Regular Bearish Label", text = " Bear ",
+     offset    = -LB_R, style = shape.labeldown, location = location.absolute,
+     color     = BEAR_C, textcolor = TEXT_C,
+     display   = display.pane, editable = calcDivergence)
+
+// ══════════════════════════════ ALERTS ════════════════════════════════════════
+
+alertcondition(histVal[1] >= 0 and histVal < 0,
+     "MACD: Rising→Falling", "MACD histogram switched from rising to falling state")
+alertcondition(histVal[1] <= 0 and histVal > 0,
+     "MACD: Falling→Rising", "MACD histogram switched from falling to rising state")
+alertcondition(bullCond,
+     "RSI: Bullish Divergence", "Regular Bullish Divergence found")
+alertcondition(bearCond,
+     "RSI: Bearish Divergence", "Regular Bearish Divergence found")
