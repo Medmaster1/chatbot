@@ -27,6 +27,7 @@ Tutto in **HTML/CSS/JS puro** (app single-file), pubblicato su **GitHub Pages**.
 | Gold / Silver | `gold-silver-terminal.html` | Trading desk metalli: candele, order book, ticket, P&L, gold/silver ratio |
 | Confluence Helper | `confluence-helper.html` | Checklist top-down multi-timeframe con scoring di confluenza |
 | Equity / Stocks | `equity.html` | Analista azioni: fondamentali, earnings, rating, gamma, Investability Score |
+| TradingView | `tradingview.html` | Grafico avanzato real-time + ticker tape, analisi tecnica, info simbolo e calendario economico (widget free TradingView) su metalli, energia, indici, FX e crypto |
 
 ---
 
