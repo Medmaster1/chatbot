@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AURUM Terminal — TradingView | KID Digital Wealth</title>
+<meta name="description" content="Terminal grafico TradingView: grafico avanzato real-time, ticker, analisi tecnica e calendario economico su metalli, energia, indici, FX e crypto." />
+<link rel="icon" href="./assets/favicon.svg" type="image/svg+xml"/>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+/* ============================================================================
+   AURUM TERMINAL — TradingView desk · KID Digital Wealth
+   Dark navy + oro, estetica terminal. Single-file. Widget TradingView free.
+   ========================================================================== */
+:root{
+  --bg:#05080f; --bg2:#080d18;
+  --panel:#0a111f; --panel2:#0d1526; --panel3:#101a30;
+  --line:rgba(150,170,205,.10); --line2:rgba(150,170,205,.20);
+  --txt:#cdd9ee; --txt2:#8294b4; --txt3:#5f7193;
+  --gold:#e7b54a; --gold2:#caa14a;
+  --green:#23d18b; --red:#ff4d5e; --blue:#48a0ff;
+  --shadow:0 14px 40px -18px rgba(0,0,0,.9);
+  --mono:'JetBrains Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--mono);background:var(--bg);color:var(--txt);font-size:12px;line-height:1.35;-webkit-font-smoothing:antialiased;overflow:hidden}
+button{font-family:var(--mono);cursor:pointer;color:inherit}
+::selection{background:var(--gold);color:#000}
+a{color:inherit;text-decoration:none}
+
+.app{display:grid;grid-template-rows:auto auto auto 1fr auto;height:100vh}
+
+/* ---- Header ---- */
+.hdr{display:flex;align-items:center;gap:14px;padding:8px 14px;background:linear-gradient(180deg,#0a1322,#070d18);border-bottom:1px solid var(--line2)}
+.brand{display:flex;align-items:center;gap:10px}
+.brand .mk{width:34px;height:34px;border-radius:8px;background:conic-gradient(from 210deg,var(--gold),#7c611f 55%,var(--gold));display:grid;place-items:center;color:#000;font-weight:800;box-shadow:0 0 0 1px rgba(231,181,74,.4)}
+.brand .nm{font-weight:800;color:#fff;letter-spacing:1px;font-size:15px}
+.brand .sb{font-size:9px;letter-spacing:2px;color:var(--txt3);text-transform:uppercase}
+.hdr .spacer{flex:1}
+.topnav{display:flex;gap:5px;flex-wrap:wrap}
+.topnav a{font-size:10px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--txt2);padding:6px 10px;border:1px solid var(--line2);border-radius:7px;transition:.15s}
+.topnav a:hover{color:#fff;border-color:var(--gold)}
+.topnav a.active{color:var(--gold);border-color:var(--gold)}
+
+/* ---- Ticker tape ---- */
+.tape{border-bottom:1px solid var(--line);background:var(--bg2)}
+
+/* ---- Symbol selector ---- */
+.selbar{display:flex;align-items:center;gap:14px;padding:7px 14px;background:linear-gradient(180deg,#0a111f,#080d18);border-bottom:1px solid var(--line);overflow-x:auto}
+.selgrp{display:flex;align-items:center;gap:6px;flex:none}
+.selgrp .lbl{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--txt3);margin-right:2px}
+.chip{font-size:11px;font-weight:600;color:var(--txt2);padding:5px 11px;border:1px solid var(--line2);border-radius:7px;background:var(--panel);white-space:nowrap;transition:.14s}
+.chip:hover{color:#fff;border-color:var(--gold2)}
+.chip.active{color:#000;background:var(--gold);border-color:var(--gold);font-weight:700}
+.sep{width:1px;align-self:stretch;background:var(--line2);flex:none;margin:2px 2px}
+
+/* ---- Main grid ---- */
+.main{display:grid;grid-template-columns:1fr 320px;gap:1px;background:var(--line);min-height:0}
+.chartcol{display:flex;flex-direction:column;min-width:0;background:var(--bg)}
+#tv-chart{flex:1;min-height:0}
+.side{display:flex;flex-direction:column;background:var(--bg);overflow-y:auto}
+.scard{border-bottom:1px solid var(--line)}
+.scard .stitle{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--txt3);padding:8px 12px 4px}
+#tv-symbolinfo{min-height:170px}
+#tv-ta{min-height:430px}
+#tv-cal{min-height:280px}
+
+/* ---- Footer ---- */
+.foot{display:flex;align-items:center;gap:10px;padding:7px 14px;background:linear-gradient(180deg,#0a1322,#070d18);border-top:1px solid var(--line2);font-size:10px;color:var(--txt3)}
+.foot .spacer{flex:1}
+.foot a{color:var(--gold)}
+.tv-credit{color:var(--txt2)}
+.tv-credit a{color:var(--blue)}
+
+/* widget chrome */
+.tradingview-widget-container{height:100%}
+.tradingview-widget-copyright{font-size:9px!important;color:var(--txt3)!important;text-align:center;padding:3px 0}
+.tradingview-widget-copyright a{color:var(--blue)!important}
+
+@media(max-width:900px){
+  body{overflow:auto}
+  .app{height:auto;min-height:100vh}
+  .main{grid-template-columns:1fr}
+  #tv-chart{height:62vh}
+  .side{max-height:none}
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- HEADER -->
+  <header class="hdr">
+    <a class="brand" href="./index.html" title="Strumenti">
+      <div class="mk">A</div>
+      <div>
+        <div class="nm">AURUM&nbsp;TERMINAL</div>
+        <div class="sb">TradingView Desk · KID Digital Wealth</div>
+      </div>
+    </a>
+    <div class="spacer"></div>
+    <nav class="topnav">
+      <a href="./index.html">Strumenti</a>
+      <a href="./market-analysis.html">Market Analysis</a>
+      <a href="./gold-silver-terminal.html">Gold / Silver</a>
+      <a href="./macro-energy.html">Macro &amp; Energy</a>
+      <a href="./tradingview.html" class="active">TradingView</a>
+    </nav>
+  </header>
+
+  <!-- TICKER TAPE -->
+  <div class="tape"><div id="tv-tape"></div></div>
+
+  <!-- SYMBOL SELECTOR -->
+  <div class="selbar" id="selbar">
+    <!-- chips injected by JS -->
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="chartcol">
+      <div id="tv-chart"></div>
+    </div>
+    <aside class="side">
+      <div class="scard"><div class="stitle">Simbolo</div><div id="tv-symbolinfo"></div></div>
+      <div class="scard"><div class="stitle">Analisi tecnica</div><div id="tv-ta"></div></div>
+      <div class="scard"><div class="stitle">Calendario economico</div><div id="tv-cal"></div></div>
+    </aside>
+  </div>
+
+  <!-- FOOTER -->
+  <footer class="foot">
+    <span>App single-file · widget <strong>TradingView</strong></span>
+    <span class="spacer"></span>
+    <span class="tv-credit">Dati e grafici da <a href="https://www.tradingview.com/" rel="noopener nofollow" target="_blank">TradingView</a></span>
+    <span>·</span>
+    <span>Nessun consiglio d'investimento · © KID Digital Wealth</span>
+  </footer>
+
+</div>
+
+<script>
+/* ==========================================================================
+   Universo simboli — mercati coerenti con la suite AURUM
+   ========================================================================== */
+const GROUPS = [
+  { lbl:'Metalli',  items:[
+    { t:'Oro',     s:'OANDA:XAUUSD' },
+    { t:'Argento', s:'OANDA:XAGUSD' },
+    { t:'Platino', s:'TVC:PLATINUM' },
+    { t:'Rame',    s:'TVC:COPPER' },
+  ]},
+  { lbl:'Energia',  items:[
+    { t:'Brent',   s:'TVC:UKOIL' },
+    { t:'WTI',     s:'TVC:USOIL' },
+    { t:'Nat Gas', s:'TVC:NATURALGAS' },
+  ]},
+  { lbl:'Indici',   items:[
+    { t:'S&P 500', s:'FOREXCOM:SPXUSD' },
+    { t:'Nasdaq',  s:'FOREXCOM:NSXUSD' },
+    { t:'DAX',     s:'TVC:DEU40' },
+    { t:'DXY',     s:'TVC:DXY' },
+  ]},
+  { lbl:'FX',       items:[
+    { t:'EUR/USD', s:'FX:EURUSD' },
+    { t:'GBP/USD', s:'FX:GBPUSD' },
+    { t:'USD/JPY', s:'FX:USDJPY' },
+  ]},
+  { lbl:'Crypto',   items:[
+    { t:'Bitcoin', s:'BITSTAMP:BTCUSD' },
+    { t:'Ethereum',s:'BITSTAMP:ETHUSD' },
+  ]},
+  { lbl:'Tassi',    items:[
+    { t:'US 10Y',  s:'TVC:US10Y' },
+    { t:'US 02Y',  s:'TVC:US02Y' },
+  ]},
+];
+
+const THEME = {
+  theme:'dark',
+  toolbar_bg:'#0a111f',
+  backgroundColor:'rgba(5,8,15,1)',
+};
+
+/* legge simbolo iniziale da #symbol=... oppure default Oro */
+function initialSymbol(){
+  const m = location.hash.match(/symbol=([^&]+)/i);
+  if(m) return decodeURIComponent(m[1]).toUpperCase();
+  return 'OANDA:XAUUSD';
+}
+let CURRENT = initialSymbol();
+
+/* ==========================================================================
+   Loader generico widget TradingView
+   Ricrea il container e inietta lo script con la config come testo (JSON).
+   ========================================================================== */
+function loadWidget(mountId, src, config){
+  const mount = document.getElementById(mountId);
+  if(!mount) return;
+  mount.innerHTML = '';
+  const wrap = document.createElement('div');
+  wrap.className = 'tradingview-widget-container';
+  const inner = document.createElement('div');
+  inner.className = 'tradingview-widget-container__widget';
+  wrap.appendChild(inner);
+  const sc = document.createElement('script');
+  sc.type = 'text/javascript';
+  sc.src = src;
+  sc.async = true;
+  sc.innerHTML = JSON.stringify(config);
+  wrap.appendChild(sc);
+  mount.appendChild(wrap);
+}
+
+/* ---- Ticker tape (statico, non cambia col simbolo) ---- */
+function loadTape(){
+  loadWidget('tv-tape', 'https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js', {
+    symbols:[
+      {proName:'OANDA:XAUUSD', title:'Oro'},
+      {proName:'OANDA:XAGUSD', title:'Argento'},
+      {proName:'TVC:UKOIL',    title:'Brent'},
+      {proName:'TVC:USOIL',    title:'WTI'},
+      {proName:'TVC:NATURALGAS',title:'Nat Gas'},
+      {proName:'FOREXCOM:SPXUSD',title:'S&P 500'},
+      {proName:'TVC:DXY',      title:'DXY'},
+      {proName:'FX:EURUSD',    title:'EUR/USD'},
+      {proName:'BITSTAMP:BTCUSD',title:'Bitcoin'},
+      {proName:'TVC:US10Y',    title:'US 10Y'},
+    ],
+    showSymbolLogo:true, isTransparent:true, displayMode:'adaptive',
+    colorTheme:'dark', locale:'it'
+  });
+}
+
+/* ---- Calendario economico (statico) ---- */
+function loadCalendar(){
+  loadWidget('tv-cal', 'https://s3.tradingview.com/external-embedding/embed-widget-events.js', {
+    colorTheme:'dark', isTransparent:true, locale:'it',
+    countryFilter:'us,eu,it,gb,de,jp,cn', importanceFilter:'0,1',
+    width:'100%', height:'100%'
+  });
+}
+
+/* ---- Widget che dipendono dal simbolo ---- */
+function loadSymbolWidgets(sym){
+  /* Grafico avanzato real-time */
+  loadWidget('tv-chart', 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js', {
+    symbol:sym, interval:'60', timezone:'Europe/Rome',
+    theme:'dark', style:'1', locale:'it',
+    backgroundColor:THEME.backgroundColor, toolbar_bg:THEME.toolbar_bg,
+    enable_publishing:false, allow_symbol_change:true, withdateranges:true,
+    hide_side_toolbar:false, details:true, hotlist:false, calendar:false,
+    studies:['STD;EMA','STD;RSI'],
+    support_host:'https://www.tradingview.com',
+    width:'100%', height:'100%'
+  });
+  /* Info simbolo */
+  loadWidget('tv-symbolinfo', 'https://s3.tradingview.com/external-embedding/embed-widget-symbol-info.js', {
+    symbol:sym, colorTheme:'dark', isTransparent:true, locale:'it', width:'100%'
+  });
+  /* Analisi tecnica (gauge) */
+  loadWidget('tv-ta', 'https://s3.tradingview.com/external-embedding/embed-widget-technical-analysis.js', {
+    symbol:sym, interval:'1h', colorTheme:'dark', isTransparent:true, locale:'it',
+    showIntervalTabs:true, displayMode:'single', width:'100%', height:'100%'
+  });
+}
+
+/* ==========================================================================
+   Selettore simboli
+   ========================================================================== */
+function buildSelector(){
+  const bar = document.getElementById('selbar');
+  bar.innerHTML = '';
+  GROUPS.forEach((g, gi)=>{
+    const grp = document.createElement('div');
+    grp.className = 'selgrp';
+    const lbl = document.createElement('span');
+    lbl.className = 'lbl'; lbl.textContent = g.lbl;
+    grp.appendChild(lbl);
+    g.items.forEach(it=>{
+      const b = document.createElement('button');
+      b.className = 'chip';
+      b.textContent = it.t;
+      b.dataset.sym = it.s;
+      if(it.s === CURRENT) b.classList.add('active');
+      b.onclick = ()=> selectSymbol(it.s);
+      grp.appendChild(b);
+    });
+    bar.appendChild(grp);
+    if(gi < GROUPS.length-1){
+      const sep = document.createElement('div');
+      sep.className = 'sep';
+      bar.appendChild(sep);
+    }
+  });
+}
+
+function selectSymbol(sym){
+  CURRENT = sym;
+  history.replaceState(null, '', '#symbol=' + encodeURIComponent(sym));
+  document.querySelectorAll('.chip').forEach(c=>
+    c.classList.toggle('active', c.dataset.sym === sym));
+  loadSymbolWidgets(sym);
+}
+
+/* ==========================================================================
+   Boot
+   ========================================================================== */
+(function boot(){
+  buildSelector();
+  loadTape();
+  loadCalendar();
+  loadSymbolWidgets(CURRENT);
+})();
+</script>
+</body>
+</html>
