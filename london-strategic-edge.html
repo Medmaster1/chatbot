@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>London Strategic Edge — Market Intelligence | KID Digital Wealth</title>
+<meta name="description" content="Terminal di market intelligence: dealer gamma exposure (GEX/DEX/VEX), muri call/put, gamma flip, volatilità implicita/realizzata, VRP, options flow e regime VIX. Dati reali FlashAlpha, ispirato a London Strategic Edge."/>
+<link rel="icon" href="./assets/favicon.svg" type="image/svg+xml"/>
+<link rel="canonical" href="https://medmaster1.github.io/chatbot/london-strategic-edge.html"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+/* ============================================================================
+   LONDON STRATEGIC EDGE — market intelligence terminal (AURUM Suite)
+   Ispirato a londonstrategicedge.com · dati reali via FlashAlpha (lab.flashalpha.com)
+   App single-file · nessun login: incolla la tua FlashAlpha key (resta nel browser)
+   ========================================================================== */
+:root{--bg:#06090f;--bg2:#080d18;--panel:#0a111f;--panel2:#0d1526;--panel3:#101a30;
+  --line:rgba(150,170,205,.10);--line2:rgba(150,170,205,.20);--txt:#cdd9ee;--txt2:#8294b4;--txt3:#5f7193;
+  --gold:#e7b54a;--gold2:#caa14a;--gold-d:rgba(231,181,74,.12);--green:#23d18b;--green-d:rgba(35,209,139,.14);
+  --red:#ff4d5e;--red-d:rgba(255,77,94,.14);--blue:#48a0ff;--blue-d:rgba(72,160,255,.12);--amber:#ffb547;--violet:#9b7bff;
+  --shadow:0 14px 40px -20px rgba(0,0,0,.9);--mono:'JetBrains Mono',ui-monospace,monospace;}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--mono);background:radial-gradient(1100px 500px at 85% -10%,rgba(72,160,255,.05),transparent 60%),radial-gradient(900px 460px at 0% 0%,rgba(231,181,74,.05),transparent 55%),var(--bg);color:var(--txt);font-size:12.5px;line-height:1.4;-webkit-font-smoothing:antialiased;padding-bottom:30px}
+button,input,select{font-family:var(--mono)}button{cursor:pointer;color:inherit}
+a{color:var(--gold);text-decoration:none}
+::selection{background:var(--gold);color:#000}.up{color:var(--green)}.dn{color:var(--red)}.gd{color:var(--gold)}.bl{color:var(--blue)}.mut{color:var(--txt3)}.num{font-variant-numeric:tabular-nums}
+*::-webkit-scrollbar{width:8px;height:8px}*::-webkit-scrollbar-thumb{background:var(--line2);border-radius:8px}
+.wrap{max-width:1480px;margin:0 auto;padding:16px}
+/* header */
+.hdr{display:flex;align-items:center;gap:12px;padding:12px 16px;background:linear-gradient(180deg,#0a1322,#070d18);border:1px solid var(--line2);border-radius:12px;box-shadow:var(--shadow);margin-bottom:12px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:11px}
+.brand .mk{width:38px;height:38px;border-radius:9px;background:conic-gradient(from 210deg,var(--gold),#7c611f 55%,var(--gold));display:grid;place-items:center;color:#000;font-weight:800;font-size:15px}
+.brand .nm{font-weight:800;color:#fff;font-size:15px;letter-spacing:.3px}.brand .sub{font-size:9px;letter-spacing:2px;color:var(--txt3);text-transform:uppercase}
+.hdr .sp{flex:1}
+.search{display:flex;gap:6px}.search input{background:var(--bg);border:1px solid var(--line2);color:#fff;padding:8px 11px;border-radius:9px;font-size:13px;width:110px;text-transform:uppercase}
+.search button{background:var(--gold-d);border:1px solid var(--gold2);color:var(--gold);padding:8px 12px;border-radius:9px;font-weight:700}
+.apikey{display:flex;align-items:center;gap:6px;background:var(--panel2);border:1px solid var(--line2);padding:5px 7px;border-radius:9px}
+.apikey input{background:var(--bg);border:1px solid var(--line);color:#fff;padding:6px 8px;border-radius:6px;font-size:10.5px;width:150px}
+.apikey button{background:var(--gold-d);border:1px solid var(--gold2);color:var(--gold);padding:6px 9px;border-radius:6px;font-size:10px;font-weight:700}
+.apikey .ok{width:7px;height:7px;border-radius:50%;background:#33405e}.apikey .ok.on{background:var(--green);box-shadow:0 0 6px var(--green)}
+.clock{font-size:11.5px;background:var(--panel2);border:1px solid var(--line);padding:8px 11px;border-radius:9px}.clock b{color:var(--gold)}
+/* subnav */
+.subnav{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.subnav a{font-size:10px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--txt2);padding:6px 11px;border:1px solid var(--line);border-radius:8px}
+.subnav a:hover{color:#fff;border-color:var(--gold)}
+.subnav a.home{color:var(--gold);border-color:var(--gold2)}
+/* setup note */
+.setup{margin-bottom:12px;padding:11px 14px;background:linear-gradient(90deg,var(--blue-d),transparent);border:1px solid var(--line2);border-left:3px solid var(--blue);border-radius:10px;font-size:11px;color:var(--txt2);line-height:1.6}
+.setup b{color:#fff}.setup.hide{display:none}
+/* macro strip */
+.intel-panel{margin-bottom:14px;padding:2px;background:linear-gradient(90deg,rgba(231,181,74,.12),rgba(72,160,255,.08));border:1px solid var(--gold2);border-radius:12px}
+.intel{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:var(--line)}
+@media(max-width:1100px){.intel{grid-template-columns:repeat(4,1fr)}}@media(max-width:560px){.intel{grid-template-columns:repeat(2,1fr)}}
+.intel-c{background:linear-gradient(180deg,var(--panel),var(--bg2));padding:9px 12px}
+.intel-c .k{font-size:8.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.6px}
+.intel-c .v{font-size:15px;font-weight:800;color:#fff;margin:2px 0;line-height:1.1}.intel-c .s{font-size:9px;color:var(--txt3)}
+/* layout */
+.grid{display:grid;grid-template-columns:1.55fr 1fr;gap:14px}@media(max-width:1100px){.grid{grid-template-columns:1fr}}
+.col{display:flex;flex-direction:column;gap:14px;min-width:0}
+.panel{background:linear-gradient(180deg,var(--panel),var(--bg2));border:1px solid var(--line2);border-radius:12px;box-shadow:var(--shadow)}
+.ph{display:flex;align-items:center;gap:9px;padding:11px 14px;border-bottom:1px solid var(--line);font-size:10.5px;letter-spacing:1.4px;text-transform:uppercase;color:var(--gold2);font-weight:700}
+.ph .sp{flex:1}.ph .tag{font-size:9px;color:var(--txt3);letter-spacing:.5px}
+.pb{padding:14px}.loading{padding:18px;text-align:center;color:var(--txt3);font-size:11px}
+.note{margin-top:10px;font-size:10.5px;color:var(--txt2);line-height:1.6;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:9px 11px}
+.err{font-size:10.5px;color:var(--amber);background:rgba(255,181,71,.08);border:1px solid rgba(255,181,71,.25);border-radius:8px;padding:9px 11px;line-height:1.55}
+/* symbol header */
+.sh{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.sh .nm b{font-size:22px;color:#fff;letter-spacing:.5px}.sh .nm span{font-size:10px;color:var(--txt3);display:block;margin-top:2px}
+.sh .px{margin-left:auto;text-align:right}.sh .px .p{font-size:24px;font-weight:800;color:#fff}.sh .px .c{font-size:11px;color:var(--txt3)}
+.badge{display:inline-block;font-size:8.5px;font-weight:700;letter-spacing:.5px;padding:2px 7px;border-radius:20px;text-transform:uppercase;vertical-align:middle}
+.badge.g{background:var(--green-d);color:var(--green);border:1px solid rgba(35,209,139,.3)}
+.badge.r{background:var(--red-d);color:var(--red);border:1px solid rgba(255,77,94,.3)}
+.badge.b{background:var(--blue-d);color:var(--blue);border:1px solid rgba(72,160,255,.3)}
+.badge.m{background:var(--panel3);color:var(--txt2);border:1px solid var(--line2)}
+/* metric grid */
+.mgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:14px}
+@media(max-width:640px){.mgrid{grid-template-columns:repeat(2,1fr)}}
+.mc{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:9px 10px}
+.mc .k{font-size:8.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px}
+.mc .v{font-size:15px;font-weight:800;color:#fff;margin-top:3px}.mc .v small{font-size:9px;color:var(--txt3);font-weight:600}
+/* dealer levels ladder */
+.ladder{display:flex;flex-direction:column;gap:0;margin-top:4px}
+.rung{display:flex;align-items:center;justify-content:space-between;padding:10px 2px;border-bottom:1px dashed var(--line)}
+.rung:last-child{border-bottom:none}
+.rung .lab{font-size:11px;color:var(--txt2)}.rung .lab b{color:#fff;font-weight:700}
+.rung .val{font-size:14px;font-weight:800;font-variant-numeric:tabular-nums}
+.rung .val small{font-size:9.5px;color:var(--txt3);font-weight:600;margin-left:4px}
+/* wall map */
+.wallmap{margin-top:12px;height:60px;position:relative;background:linear-gradient(180deg,var(--panel2),var(--bg2));border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.wallmap .mk{position:absolute;top:0;bottom:0;width:2px}
+.wallmap .mk .cap{position:absolute;top:5px;font-size:8px;white-space:nowrap;transform:translateX(-50%);left:50%}
+.wallmap .mk .cap2{position:absolute;bottom:5px;font-size:9px;font-weight:800;white-space:nowrap;transform:translateX(-50%);left:50%}
+/* gex chart */
+#gexChart{width:100%;height:210px;display:block}
+/* narrative */
+.narr{font-size:11.5px;color:var(--txt);line-height:1.7;white-space:pre-wrap}
+/* universe table */
+.utable{width:100%;border-collapse:collapse;font-size:11px}
+.utable th{text-align:left;font-size:8.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--txt3);font-weight:600;padding:6px 8px;border-bottom:1px solid var(--line2)}
+.utable td{padding:7px 8px;border-bottom:1px solid var(--line)}
+.utable tr{cursor:pointer;transition:.12s}.utable tbody tr:hover{background:var(--panel2)}
+.utable td.sym{font-weight:800;color:#fff}
+.uchips{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px}
+.uchip{font-size:10px;font-weight:700;padding:6px 10px;border:1px solid var(--line2);border-radius:8px;background:var(--panel2);color:var(--txt2)}
+.uchip:hover{border-color:var(--gold);color:#fff}
+.uchip.on{border-color:var(--gold2);color:var(--gold);background:var(--gold-d)}
+/* term structure bars */
+.term{display:flex;align-items:flex-end;gap:8px;height:90px;margin-top:6px;padding:0 4px}
+.term .b{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;justify-content:flex-end}
+.term .b .bar{width:100%;border-radius:4px 4px 0 0;background:linear-gradient(180deg,var(--blue),rgba(72,160,255,.25));min-height:3px}
+.term .b .bk{font-size:8.5px;color:var(--txt3)}.term .b .bv{font-size:10px;font-weight:800;color:#fff}
+/* toast */
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--panel3);border:1px solid var(--gold2);color:#fff;padding:10px 16px;border-radius:9px;font-size:11px;opacity:0;pointer-events:none;transition:.25s;z-index:99}
+#toast.on{opacity:1}
+.foot{margin-top:18px;font-size:9.5px;color:var(--txt3);text-align:center;line-height:1.8}
+.foot a{color:var(--gold)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="hdr">
+    <div class="brand">
+      <div class="mk">£</div>
+      <div><div class="nm">LONDON&nbsp;STRATEGIC&nbsp;EDGE</div><div class="sub">AURUM Suite · Market Intelligence</div></div>
+    </div>
+    <div class="sp"></div>
+    <div class="search"><input id="symIn" placeholder="TICKER" maxlength="8" value="SPY"/><button id="symGo">Analizza</button></div>
+    <div class="apikey" title="FlashAlpha API key (lab.flashalpha.com). Resta solo nel tuo browser (localStorage). Stessa key usata da Equity e Market Analysis.">
+      <span class="ok" id="faOk"></span><input id="faKey" type="password" placeholder="FlashAlpha key"/><button id="faSave">Salva</button>
+    </div>
+    <div class="clock" id="clock"><b>—</b></div>
+  </div>
+
+  <div class="subnav">
+    <a class="home" href="./index.html">← Suite</a>
+    <a href="./market-analysis.html">Market Analysis</a>
+    <a href="./equity.html">Equity</a>
+    <a href="./gold-silver-terminal.html">Gold / Silver</a>
+    <a href="./macro-energy.html">Macro &amp; Energy</a>
+    <a href="./tradingview.html">TradingView</a>
+  </div>
+
+  <div class="setup" id="setup">
+    🔑 <b>Come iniziare:</b> incolla la tua <b>FlashAlpha API key</b> (da <a href="https://flashalpha.com/pricing" target="_blank" rel="noopener">flashalpha.com</a>) nel campo in alto → <b>Salva</b>. La key resta <b>solo nel tuo browser</b> (localStorage) e non viene mai inviata altrove. Poi cerca un ticker (es. <b>SPY</b>, <b>QQQ</b>, <b>AAPL</b>). La <b>lista universo</b> qui sotto funziona anche senza key.
+  </div>
+
+  <!-- macro strip -->
+  <div class="intel-panel"><div class="intel" id="macro">
+    <div class="intel-c"><div class="k">VIX</div><div class="v">—</div><div class="s">fear gauge</div></div>
+    <div class="intel-c"><div class="k">VVIX</div><div class="v">—</div><div class="s">vol of vol</div></div>
+    <div class="intel-c"><div class="k">SKEW</div><div class="v">—</div><div class="s">tail risk</div></div>
+    <div class="intel-c"><div class="k">MOVE</div><div class="v">—</div><div class="s">bond vol</div></div>
+    <div class="intel-c"><div class="k">SPX</div><div class="v">—</div><div class="s">S&amp;P 500</div></div>
+    <div class="intel-c"><div class="k">Term VIX</div><div class="v">—</div><div class="s">struttura</div></div>
+    <div class="intel-c"><div class="k">Fear &amp; Greed</div><div class="v">—</div><div class="s">sentiment</div></div>
+  </div></div>
+
+  <div class="grid">
+    <!-- LEFT -->
+    <div class="col">
+      <div class="panel">
+        <div class="ph">📊 Snapshot<span class="sp"></span><span class="tag" id="snapTag">FlashAlpha</span></div>
+        <div class="pb" id="snap"><div class="loading">Inserisci la key e cerca un ticker…</div></div>
+      </div>
+      <div class="panel">
+        <div class="ph">🧲 Dealer Exposure &amp; Gamma<span class="sp"></span><span class="tag">GEX · Walls · Flip</span></div>
+        <div class="pb" id="dealer"><div class="loading">—</div></div>
+      </div>
+      <div class="panel">
+        <div class="ph">📉 Gamma per Strike<span class="sp"></span><span class="tag" id="gexTag">/exposure/gex</span></div>
+        <div class="pb" id="gexbox"><canvas id="gexChart"></canvas><div id="gexNote"></div></div>
+      </div>
+      <div class="panel">
+        <div class="ph">📝 Narrativa GEX<span class="sp"></span><span class="tag">plain English</span></div>
+        <div class="pb" id="narr"><div class="loading">—</div></div>
+      </div>
+    </div>
+
+    <!-- RIGHT -->
+    <div class="col">
+      <div class="panel">
+        <div class="ph">🌡️ Volatilità<span class="sp"></span><span class="tag">IV · HV · VRP · Term</span></div>
+        <div class="pb" id="vol"><div class="loading">—</div></div>
+      </div>
+      <div class="panel">
+        <div class="ph">💧 Options Flow<span class="sp"></span><span class="tag" id="flowTag">/flow/summary</span></div>
+        <div class="pb" id="flow"><div class="loading">—</div></div>
+      </div>
+      <div class="panel">
+        <div class="ph">🗂️ Universo &amp; Screener<span class="sp"></span><span class="tag" id="uniTag">pubblico</span></div>
+        <div class="pb" id="uni"><div class="loading">Carico universo…</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <b class="gd">London Strategic Edge</b> · terminal di market intelligence della AURUM Suite · dati reali <a href="https://lab.flashalpha.com" target="_blank" rel="noopener">FlashAlpha</a><br/>
+    App single-file · ispirato a londonstrategicedge.com · la key resta nel tuo browser · strumento educativo, <b>non è un consiglio d'investimento</b> · © KID Digital Wealth
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+/* ---------- storage (localStorage con fallback in memoria) ---------- */
+const Storage=(()=>{let m={};const ls=(()=>{try{localStorage.setItem('__t','1');localStorage.removeItem('__t');return true}catch(e){return false}})();
+  return{get(k){if(ls){try{const v=localStorage.getItem(k);if(v!=null)return JSON.parse(v)}catch(e){}}return m[k]??null},
+         set(k,v){if(ls){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}m[k]=v}};})();
+const $=s=>document.querySelector(s);
+const FA_BASE='https://lab.flashalpha.com/v1';
+let FA=''; const ST={sym:'SPY',data:{}};
+
+/* ---------- helpers ---------- */
+const f=(v,d=2)=>v==null||isNaN(v)?'—':Number(v).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+const pct=(v,d=2)=>v==null||isNaN(v)?'—':(v>=0?'+':'')+Number(v).toFixed(d)+'%';
+function bn(v){if(v==null||isNaN(v))return '—';const a=Math.abs(v);const s=v<0?'-':'';
+  if(a>=1e9)return s+'$'+(a/1e9).toFixed(2)+'B';if(a>=1e6)return s+'$'+(a/1e6).toFixed(1)+'M';if(a>=1e3)return s+'$'+(a/1e3).toFixed(1)+'K';return s+'$'+a.toFixed(0);}
+function dist(k,S){return (k==null||S==null)?'':((k/S-1)*100>=0?'+':'')+((k/S-1)*100).toFixed(1)+'%';}
+function toast(t){const el=$('#toast');el.textContent=t;el.classList.add('on');clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove('on'),1900);}
+function dot(){$('#faOk').classList.toggle('on',!!FA);}
+function clock(){const d=new Date();$('#clock').innerHTML='<b>'+d.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit',second:'2-digit'})+'</b> '+d.toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit'});}
+setInterval(clock,1000);clock();
+
+/* ---------- FlashAlpha fetch ---------- */
+async function faGet(path,ms=14000){
+  if(!FA)return{status:'NOKEY'};
+  const c=new AbortController();const t=setTimeout(()=>c.abort(),ms);
+  try{const r=await fetch(FA_BASE+path,{headers:{'X-Api-Key':FA},signal:c.signal});
+    let j={};try{j=await r.json();}catch(e){j={};}
+    if(!r.ok&&(!j||j.status!=='ERROR'))j={status:'ERROR',http:r.status,message:(j&&(j.message||j.error))||('HTTP '+r.status)};
+    return j;
+  }catch(e){return{status:'ERROR',message:e.name==='AbortError'?'timeout':'rete non disponibile'};}
+  finally{clearTimeout(t);}
+}
+// messaggio d'errore leggibile (gestisce tier_restricted, nokey, ecc.)
+function errMsg(j){
+  if(!j)return 'nessuna risposta';
+  if(j.status==='NOKEY')return 'Inserisci la tua FlashAlpha key in alto per sbloccare questo dato.';
+  const m=j.message||j.error||'non disponibile';
+  if(j.required_plan)return m+' (piano attuale: '+(j.current_plan||'?')+' → richiesto: '+j.required_plan+').';
+  return m;
+}
+function errBox(j){return '<div class="err">⚠ '+errMsg(j)+'</div>';}
+
+/* ================= RENDER ================= */
+
+/* --- macro strip (da /exposure/summary .macro) --- */
+function renderMacro(mac){
+  if(!mac)return;
+  const cell=(k,vHtml,s)=>`<div class="intel-c"><div class="k">${k}</div><div class="v">${vHtml}</div><div class="s">${s}</div></div>`;
+  const q=(o,dg=2)=>o&&o.value!=null?f(o.value,dg):'—';
+  const chg=o=>o&&o.change_pct!=null?`<span class="${o.change_pct>=0?'up':'dn'}" style="font-size:9px">${pct(o.change_pct)}</span>`:'';
+  const ts=mac.vix_term_structure, fg=mac.fear_and_greed;
+  const tsTxt=ts?`${ts.structure==='contango'?'Contango':(ts.structure==='backwardation'?'Backwardat.':(ts.structure||'—'))}`:'—';
+  const tsCls=ts&&ts.structure==='backwardation'?'dn':'up';
+  const fgCol=fg?(fg.score>=55?'up':fg.score<=45?'dn':'gd'):'';
+  $('#macro').innerHTML=
+    cell('VIX', q(mac.vix)+' '+chg(mac.vix), 'fear gauge')+
+    cell('VVIX', q(mac.vvix), 'vol of vol')+
+    cell('SKEW', q(mac.skew), 'tail risk')+
+    cell('MOVE', q(mac.move), 'bond vol')+
+    cell('SPX', q(mac.spx)+' '+chg(mac.spx), 'S&P 500')+
+    cell('Term VIX', `<span class="${tsCls}">${tsTxt}</span>`, ts?('slope '+f(ts.near_slope_pct,1)+'%'):'struttura')+
+    cell('Fear & Greed', `<span class="${fgCol}">${fg?fg.score:'—'}</span>`, fg?(fg.rating||'sentiment'):'sentiment');
+}
+
+/* --- snapshot (da /exposure/summary) --- */
+function renderSnap(j){
+  const el=$('#snap');
+  if(!j||j.status){el.innerHTML=errBox(j);return;}
+  const p=j.price||{},v=j.volatility||{},of=j.options_flow||{},ex=j.exposure||{};
+  const open=j.market_open;
+  const regBadge=ex.regime? (ex.regime.indexOf('negative')>=0?'<span class="badge r">short gamma</span>':'<span class="badge g">long gamma</span>') : '';
+  const asof=j.as_of?new Date(j.as_of).toLocaleString('it-IT',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'';
+  el.innerHTML=`
+    <div class="sh">
+      <div class="nm"><b>${j.symbol||ST.sym}</b><span>${open?'<span class="badge g">MERCATO APERTO</span>':'<span class="badge m">mercato chiuso</span>'} ${regBadge}</span></div>
+      <div class="px"><div class="p">${f(p.mid??p.last,2)}</div><div class="c">bid ${f(p.bid,2)} · ask ${f(p.ask,2)}</div></div>
+    </div>
+    <div class="mgrid">
+      <div class="mc"><div class="k">ATM IV</div><div class="v">${f(v.atm_iv,1)}<small>%</small></div></div>
+      <div class="mc"><div class="k">HV 20g</div><div class="v">${f(v.hv_20,1)}<small>%</small></div></div>
+      <div class="mc"><div class="k">HV 60g</div><div class="v">${f(v.hv_60,1)}<small>%</small></div></div>
+      <div class="mc"><div class="k">VRP</div><div class="v ${(v.vrp??vrpCalc(v))>=0?'up':'dn'}">${v.vrp!=null?f(v.vrp,1):(vrpCalc(v)!=null?f(vrpCalc(v),1):'—')}</div></div>
+      <div class="mc"><div class="k">P/C OI</div><div class="v">${f(of.pc_ratio_oi,2)}</div></div>
+      <div class="mc"><div class="k">P/C Vol</div><div class="v">${f(of.pc_ratio_volume,2)}</div></div>
+      <div class="mc"><div class="k">Espir. attive</div><div class="v">${of.active_expirations??'—'}</div></div>
+      <div class="mc"><div class="k">DTE pond. OI</div><div class="v">${ex.oi_weighted_dte!=null?f(ex.oi_weighted_dte,0):'—'}<small>g</small></div></div>
+    </div>
+    ${asof?`<div class="note">Ultimo aggiornamento: <b>${asof}</b> · call OI ${(of.total_call_oi||0).toLocaleString('en-US')} · put OI ${(of.total_put_oi||0).toLocaleString('en-US')}</div>`:''}`;
+}
+function vrpCalc(v){return (v&&v.atm_iv!=null&&v.hv_20!=null)?(v.atm_iv-v.hv_20):null;}
+
+/* --- dealer exposure (summary + levels) --- */
+function renderDealer(sum,lev){
+  const el=$('#dealer');
+  const ex=(sum&&!sum.status&&sum.exposure)||null;
+  const L=(lev&&!lev.status&&lev.levels)||null;
+  if(!ex&&!L){el.innerHTML=errBox(sum&&sum.status?sum:lev);return;}
+  const S=(sum&&sum.price&&(sum.price.mid??sum.price.last)) ?? (lev&&lev.underlying_price) ?? null;
+  const flip=(L&&L.gamma_flip)??(ex&&ex.gamma_flip);
+  const cw=(L&&L.call_wall)??(ex&&ex.call_wall);
+  const pw=(L&&L.put_wall)??(ex&&ex.put_wall);
+  const magnet=(L&&L.zero_dte_magnet);
+  const mp=ex&&ex.max_pain, hoi=ex&&ex.highest_oi_strike;
+  const interp=ex&&ex.interpretation;
+  ST.data.walls={S,cw,pw,flip};
+  const rung=(lab,val,cls,sub)=>`<div class="rung"><div class="lab">${lab}</div><div class="val ${cls||''}">${val==null?'—':f(val,2)}${sub?`<small>${sub}</small>`:''}</div></div>`;
+  el.innerHTML=`
+    <div class="mgrid" style="margin-top:0">
+      <div class="mc"><div class="k">Net GEX</div><div class="v ${ex&&ex.net_gex>=0?'up':'dn'}">${ex?bn(ex.net_gex):'—'}</div></div>
+      <div class="mc"><div class="k">Net DEX</div><div class="v">${ex&&ex.net_dex!=null?bn(ex.net_dex):'—'}</div></div>
+      <div class="mc"><div class="k">Net VEX</div><div class="v">${ex&&ex.net_vex!=null?bn(ex.net_vex):'—'}</div></div>
+      <div class="mc"><div class="k">Regime</div><div class="v" style="font-size:11px">${ex&&ex.regime?ex.regime.replace('_',' '):'—'}</div></div>
+    </div>
+    <div class="ladder">
+      ${rung('🔴 Call Wall <b>resistenza</b>', cw, 'dn', dist(cw,S))}
+      ${rung('🟡 Gamma Flip <b>soglia regime</b>', flip, 'gd', dist(flip,S))}
+      ${rung('🟢 Put Wall <b>supporto</b>', pw, 'up', dist(pw,S))}
+      ${rung('🎯 Max Pain', mp, 'mut', dist(mp,S))}
+      ${magnet!=null?rung('🧲 0DTE Magnet', magnet, 'bl', dist(magnet,S)):''}
+      ${hoi!=null?rung('📌 Strike max OI', hoi, 'mut', dist(hoi,S)):''}
+    </div>
+    ${wallMap(S,cw,pw,flip)}
+    <div class="note">${interp&&interp.gamma?('🧲 '+interp.gamma):(S!=null&&flip!=null?(S>=flip?'Sopra il Gamma Flip: dealer lunghi di gamma, regime di pinning / bassa vol.':'Sotto il Gamma Flip: dealer corti di gamma, movimenti amplificati.'):'')}</div>`;
+}
+function wallMap(S,cw,pw,flip){
+  const vals=[S,cw,pw,flip].filter(x=>x!=null);if(vals.length<2||S==null)return '';
+  let lo=Math.min(...vals),hi=Math.max(...vals);const pad=(hi-lo)*0.15||1;lo-=pad;hi+=pad;const rng=hi-lo;
+  const x=v=>((v-lo)/rng*100);
+  const mk=(v,col,capTop,capBot)=>v==null?'':`<div class="mk" style="left:${x(v).toFixed(1)}%;background:${col}"><span class="cap" style="color:${col}">${capTop}</span><span class="cap2" style="color:${col}">${f(v,0)}</span></div>`;
+  return `<div class="wallmap">
+    ${mk(pw,'var(--green)','Put Wall','')}
+    ${mk(flip,'var(--gold)','Flip','')}
+    ${mk(cw,'var(--red)','Call Wall','')}
+    <div class="mk" style="left:${x(S).toFixed(1)}%;background:#fff;width:2px"><span class="cap" style="color:#fff;font-weight:800">SPOT</span><span class="cap2" style="color:#fff">${f(S,0)}</span></div>
+  </div>`;
+}
+
+/* --- GEX per strike (chart, parsing difensivo) --- */
+function normGex(j){
+  if(!j||j.status)return null;
+  let arr=j.by_strike||j.strikes||j.gex||j.data||j.levels||(Array.isArray(j)?j:null);
+  if(!Array.isArray(arr))return null;
+  return arr.map(r=>({
+    strike:+(r.strike??r.k??r.price??r.Strike),
+    gex:+(r.net_gex??r.gex??r.total_gex??r.value??((r.call_gex||0)+(r.put_gex||0))),
+  })).filter(r=>!isNaN(r.strike)&&!isNaN(r.gex)).sort((a,b)=>a.strike-b.strike);
+}
+function renderGex(j,S){
+  const cv=$('#gexChart'),note=$('#gexNote');
+  const rows=normGex(j);
+  const ctx=cv.getContext('2d');
+  const W=cv.clientWidth||600,H=210;cv.width=W*devicePixelRatio;cv.height=H*devicePixelRatio;cv.style.height=H+'px';ctx.scale(devicePixelRatio,devicePixelRatio);
+  ctx.clearRect(0,0,W,H);
+  if(!rows||!rows.length){note.innerHTML=j&&j.status?errBox(j):'<div class="note">Dati GEX per strike non disponibili per questo simbolo/piano.</div>';return;}
+  note.innerHTML='';
+  // limita agli strike più rilevanti attorno allo spot
+  let data=rows;
+  if(S!=null){data=rows.filter(r=>r.strike>=S*0.85&&r.strike<=S*1.15);if(data.length<6)data=rows;}
+  if(data.length>40){const step=Math.ceil(data.length/40);data=data.filter((_,i)=>i%step===0);}
+  const maxAbs=Math.max(...data.map(r=>Math.abs(r.gex)))||1;
+  const padL=6,padR=6,padT=10,padB=22;const bw=(W-padL-padR)/data.length;const midY=padT+(H-padT-padB)/2;
+  ctx.font='9px JetBrains Mono';
+  // zero line
+  ctx.strokeStyle='rgba(150,170,205,.25)';ctx.beginPath();ctx.moveTo(padL,midY);ctx.lineTo(W-padR,midY);ctx.stroke();
+  data.forEach((r,i)=>{
+    const h=(Math.abs(r.gex)/maxAbs)*((H-padT-padB)/2);
+    const xx=padL+i*bw;const pos=r.gex>=0;
+    ctx.fillStyle=pos?'rgba(35,209,139,.8)':'rgba(255,77,94,.8)';
+    if(pos)ctx.fillRect(xx+1,midY-h,bw-2,h);else ctx.fillRect(xx+1,midY,bw-2,h);
+    // spot marker
+    if(S!=null&&i<data.length-1&&r.strike<=S&&data[i+1].strike>=S){
+      ctx.strokeStyle='#fff';ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(xx+bw,padT);ctx.lineTo(xx+bw,H-padB);ctx.stroke();ctx.setLineDash([]);
+    }
+  });
+  // etichette strike (ogni ~6)
+  ctx.fillStyle='#5f7193';ctx.textAlign='center';
+  const lstep=Math.ceil(data.length/8);
+  data.forEach((r,i)=>{if(i%lstep===0){const xx=padL+i*bw+bw/2;ctx.fillText(String(Math.round(r.strike)),xx,H-6);}});
+  note.innerHTML='<div class="note">🟢 gamma positiva (stabilizza) · 🔴 gamma negativa (amplifica) · linea bianca = spot. Picchi = muri dove l\'hedging dei dealer concentra supporto/resistenza.</div>';
+}
+
+/* --- narrativa --- */
+function renderNarr(j){
+  const el=$('#narr');
+  if(!j||j.status){el.innerHTML=errBox(j);return;}
+  const txt=j.narrative||j.text||j.summary||j.analysis||j.commentary||(typeof j==='string'?j:null);
+  if(!txt){el.innerHTML='<div class="note">Narrativa non disponibile per questo simbolo/piano.</div>';return;}
+  el.innerHTML='<div class="narr">'+String(txt).replace(/</g,'&lt;')+'</div>';
+}
+
+/* --- volatilità --- */
+function renderVol(j){
+  const el=$('#vol');
+  if(!j||j.status){el.innerHTML=errBox(j);return;}
+  const v=j.volatility||{},mac=j.macro||{},ts=mac.vix_term_structure;
+  const vrp=v.vrp!=null?v.vrp:vrpCalc(v);
+  el.innerHTML=`
+    <div class="mgrid" style="margin-top:0">
+      <div class="mc"><div class="k">ATM IV</div><div class="v">${f(v.atm_iv,1)}<small>%</small></div></div>
+      <div class="mc"><div class="k">HV 20g</div><div class="v">${f(v.hv_20,1)}<small>%</small></div></div>
+      <div class="mc"><div class="k">VRP</div><div class="v ${vrp>=0?'up':'dn'}">${vrp!=null?f(vrp,1):'—'}</div></div>
+      <div class="mc"><div class="k">Skew 25Δ</div><div class="v">${v.skew_25d!=null?f(v.skew_25d,1):'—'}</div></div>
+    </div>
+    <div class="note" style="margin-top:12px">${vrp!=null?(vrp>=0?'IV &gt; HV: <b>premio di volatilità positivo</b> — le opzioni scontano più movimento del realizzato (favorevole a chi vende vol).':'IV &lt; HV: <b>premio negativo</b> — il realizzato supera l\'implicita (attenzione a vendere vol).'):'VRP = IV atm − HV 20g.'}</div>
+    ${ts&&ts.levels?termChart(ts):''}`;
+}
+function termChart(ts){
+  const L=ts.levels;const items=[['9d',L.vix9d],['1m',L.vix],['3m',L.vix3m],['6m',L.vix6m]].filter(x=>x[1]!=null);
+  if(!items.length)return '';
+  const mx=Math.max(...items.map(x=>x[1]));
+  return `<div class="ph" style="border-top:1px solid var(--line);margin-top:12px;padding-left:0;padding-right:0">Struttura a termine VIX <span class="sp"></span><span class="tag ${ts.structure==='backwardation'?'dn':'up'}">${ts.structure||''}</span></div>
+    <div class="term">${items.map(([k,vv])=>`<div class="b"><div class="bv">${f(vv,1)}</div><div class="bar" style="height:${(vv/mx*100).toFixed(0)}%"></div><div class="bk">${k}</div></div>`).join('')}</div>`;
+}
+
+/* --- flow (parsing difensivo) --- */
+function renderFlow(j){
+  const el=$('#flow');
+  if(!j||j.status){el.innerHTML=errBox(j);return;}
+  // prova campi noti; altrimenti mostra i primi scalari utili
+  const rows=[];
+  const put=(k,v)=>{if(v!=null&&v!=='')rows.push([k,v]);};
+  const sent=j.sentiment||j.bias||j.direction;
+  put('Sentiment', sent);
+  put('Net premium', j.net_premium!=null?bn(j.net_premium):(j.premium!=null?bn(j.premium):null));
+  put('Call premium', j.call_premium!=null?bn(j.call_premium):null);
+  put('Put premium', j.put_premium!=null?bn(j.put_premium):null);
+  put('Call/Put ratio', j.call_put_ratio!=null?f(j.call_put_ratio,2):(j.pc_ratio!=null?f(j.pc_ratio,2):null));
+  put('Bullish flow', j.bullish_pct!=null?f(j.bullish_pct,0)+'%':null);
+  put('Bearish flow', j.bearish_pct!=null?f(j.bearish_pct,0)+'%':null);
+  put('Contratti', j.total_contracts!=null?(j.total_contracts).toLocaleString('en-US'):null);
+  if(!rows.length){
+    // fallback generico: elenca scalari di primo livello
+    Object.keys(j).slice(0,10).forEach(k=>{const v=j[k];if(v!=null&&(typeof v==='number'||typeof v==='string')&&k!=='status')rows.push([k.replace(/_/g,' '),typeof v==='number'?f(v,2):v]);});
+  }
+  if(!rows.length){el.innerHTML='<div class="note">Flow non disponibile per questo simbolo/piano.</div>';return;}
+  const badge=sent?(/bull|call|long|positiv/i.test(sent)?'<span class="badge g">'+sent+'</span>':/bear|put|short|negativ/i.test(sent)?'<span class="badge r">'+sent+'</span>':'<span class="badge m">'+sent+'</span>'):'';
+  el.innerHTML=(badge?'<div style="margin-bottom:10px">'+badge+'</div>':'')+
+    '<div class="ladder">'+rows.filter(r=>r[0]!=='Sentiment').map(([k,v])=>`<div class="rung"><div class="lab">${k}</div><div class="val" style="font-size:12px">${v}</div></div>`).join('')+'</div>';
+}
+
+/* --- universo / screener (pubblico) --- */
+let UNI=[];let UFILTER='all';
+async function loadUniverse(){
+  const el=$('#uni');
+  try{
+    const r=await fetch(FA_BASE+'/universe?limit=1000');const j=await r.json();
+    UNI=(j&&j.symbols)||[];
+    $('#uniTag').textContent=(j&&j.count?j.count:UNI.length)+' simboli';
+    renderUniverse();
+  }catch(e){el.innerHTML='<div class="err">⚠ Universo non raggiungibile.</div>';}
+}
+function renderUniverse(){
+  const el=$('#uni');
+  if(!UNI.length){el.innerHTML='<div class="note">Nessun simbolo.</div>';return;}
+  let list=UNI.slice();
+  if(UFILTER==='t1')list=list.filter(s=>s.tier===1);
+  else if(UFILTER==='0dte')list=list.filter(s=>s.has_0dte);
+  const chip=(id,lab)=>`<button class="uchip ${UFILTER===id?'on':''}" data-uf="${id}">${lab}</button>`;
+  const rowsHtml=list.slice(0,60).map(s=>`<tr data-sym="${s.symbol}">
+      <td class="sym">${s.symbol}</td>
+      <td><span class="badge ${s.tier===1?'b':'m'}">Tier ${s.tier}</span></td>
+      <td>${s.is_pre_warmed?'<span class="badge g">warm</span>':'<span class="badge m">cold</span>'}</td>
+      <td>${s.has_0dte?'<span class="badge g">0DTE</span>':'<span class="mut">—</span>'}</td>
+    </tr>`).join('');
+  el.innerHTML=`<div class="uchips">${chip('all','Tutti')}${chip('t1','Tier 1')}${chip('0dte','0DTE')}</div>
+    <div style="max-height:360px;overflow:auto"><table class="utable"><thead><tr><th>Simbolo</th><th>Tier</th><th>Dati</th><th>0DTE</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>
+    <div class="note">${list.length} simboli · clic su una riga per analizzarlo. La lista è pubblica (non richiede key).</div>`;
+  el.querySelectorAll('[data-uf]').forEach(b=>b.onclick=()=>{UFILTER=b.dataset.uf;renderUniverse();});
+  el.querySelectorAll('tr[data-sym]').forEach(tr=>tr.onclick=()=>{go(tr.dataset.sym);});
+}
+
+/* ================= LOAD ================= */
+async function loadAll(sym){
+  sym=(sym||'').toUpperCase().trim();if(!sym)return;ST.sym=sym;$('#symIn').value=sym;
+  Storage.set('lse_last',sym);
+  if(!FA){
+    ['#snap','#dealer','#narr','#vol','#flow'].forEach(id=>$(id).innerHTML='<div class="err">⚠ Inserisci la tua FlashAlpha key in alto per i dati di '+sym+'.</div>');
+    $('#gexNote').innerHTML='';toast('Inserisci la FlashAlpha key');return;
+  }
+  ['#snap','#dealer','#narr','#vol','#flow'].forEach(id=>$(id).innerHTML='<div class="loading">FlashAlpha… '+sym+'</div>');
+  // il summary alimenta snapshot, macro, dealer(parziale) e volatilità → caricalo per primo
+  const sum=await faGet('/exposure/summary/'+sym);
+  if(sum&&sum.macro)renderMacro(sum.macro);
+  renderSnap(sum);renderVol(sum);
+  // il resto in parallelo
+  const [lev,gex,narr,flow]=await Promise.all([
+    faGet('/exposure/levels/'+sym),
+    faGet('/exposure/gex/'+sym),
+    faGet('/exposure/narrative/'+sym),
+    faGet('/flow/summary/'+sym),
+  ]);
+  renderDealer(sum,lev);
+  const S=(sum&&sum.price&&(sum.price.mid??sum.price.last))??(lev&&lev.underlying_price)??null;
+  renderGex(gex,S);
+  renderNarr(narr);
+  renderFlow(flow);
+}
+function go(sym){loadAll(sym);window.scrollTo({top:0,behavior:'smooth'});}
+
+/* ================= INIT ================= */
+function saveKey(){FA=$('#faKey').value.trim();Storage.set('fa_apikey',FA);dot();$('#setup').classList.toggle('hide',!!FA);toast(FA?'FlashAlpha key salvata':'key rimossa');if(FA)loadAll(ST.sym);}
+(function init(){
+  // import key/simbolo da URL: #fa=...&sym=...
+  const q=new URLSearchParams(location.hash.replace(/^#/,''));
+  if(q.get('fa')){Storage.set('fa_apikey',q.get('fa').trim());}
+  FA=Storage.get('fa_apikey')||'';
+  if(FA)$('#faKey').value=FA;
+  dot();$('#setup').classList.toggle('hide',!!FA);
+  ST.sym=(q.get('sym')||Storage.get('lse_last')||'SPY').toUpperCase();
+  $('#symIn').value=ST.sym;
+  $('#symGo').onclick=()=>loadAll($('#symIn').value);
+  $('#symIn').addEventListener('keydown',e=>{if(e.key==='Enter')loadAll($('#symIn').value);});
+  $('#faSave').onclick=saveKey;
+  $('#faKey').addEventListener('keydown',e=>{if(e.key==='Enter')saveKey();});
+  loadUniverse();
+  loadAll(ST.sym);
+})();
+</script>
+</body>
+</html>
