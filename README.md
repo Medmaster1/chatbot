@@ -28,6 +28,7 @@ Tutto in **HTML/CSS/JS puro** (app single-file), pubblicato su **GitHub Pages**.
 | Confluence Helper | `confluence-helper.html` | Checklist top-down multi-timeframe con scoring di confluenza |
 | Equity / Stocks | `equity.html` | Analista azioni: fondamentali, earnings, rating, gamma, Investability Score |
 | TradingView | `tradingview.html` | Grafico avanzato real-time + ticker tape, analisi tecnica, info simbolo e calendario economico (widget free TradingView) su metalli, energia, indici, FX e crypto |
+| London Strategic Edge | `london-strategic-edge.html` | Market intelligence: dealer gamma exposure (GEX/DEX/VEX), muri call/put, gamma flip, IV/HV/VRP, options flow, narrativa GEX, screener universo e regime VIX. Ispirato a londonstrategicedge.com, dati reali **FlashAlpha** (`lab.flashalpha.com`, key nel browser) |
 
 ---
 
@@ -41,6 +42,7 @@ Tutto in **HTML/CSS/JS puro** (app single-file), pubblicato su **GitHub Pages**.
 | Macro: tassi, CPI, curva, real yield | FRED (`api.stlouisfed.org`) | gratuita |
 | Prezzi (energia, FX, indici) | Yahoo Finance | nessuna (via proxy CORS) |
 | Posizionamento | CFTC COT (`publicreporting.cftc.gov`) | nessuna |
+| Opzioni / gamma exposure (GEX/DEX/VEX), IV/HV/VRP, flow | FlashAlpha (`lab.flashalpha.com/v1`) | key personale (`X-Api-Key`) — usata da Equity, Market Analysis e London Strategic Edge |
 
 Le chiavi si inseriscono nella barra in alto di ogni terminal e restano **solo nel browser**
 (`localStorage`). Si possono anche importare dal link: `…/macro-energy.html#agsi=...&eia=...&fred=...&proxy=...`
