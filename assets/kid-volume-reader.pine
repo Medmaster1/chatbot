@@ -2,7 +2,7 @@
 indicator("KID Volume Reader — Assorbimenti [VSA]", shorttitle="KID-VOL", overlay=true, max_boxes_count=100, max_labels_count=200)
 
 // ============================================================
-//  KID / DIGITAL WEALTH — Volume Reader & Absorption v1.1
+//  KID / DIGITAL WEALTH — Volume Reader & Absorption v1.2
 //  Lettura volumi stile VSA/order-flow proxy:
 //  · Volume relativo + percentile + classificazione candele
 //  · Delta proxy (buy/sell pressure) e delta cumulativo
@@ -10,18 +10,24 @@ indicator("KID Volume Reader — Assorbimenti [VSA]", shorttitle="KID-VOL", over
 //    - ABS↑ vendite assorbite (stopping volume sui minimi)
 //    - ABS↓ acquisti assorbiti (buying climax sui massimi)
 //  · Zone di assorbimento estese fino a mitigazione o scadenza
+//  · TEST delle zone: retest a basso volume (segnale operativo)
+//  · Divergenza delta cumulativo / prezzo (assorbimento nascosto)
+//  · Score qualità A/B/C sulle label ABS
+//  · No Demand / No Supply (contesto trend EMA)
 //  Nota: senza dati tick, il delta è stimato dalla posizione
 //  della chiusura nel range (proxy affidabile, non order flow reale)
 //
-//  v1.1 — correzioni:
-//  · barre a range zero contate come delta neutro (prima: 100% sell)
-//  · guard divisione per zero su media volume nulla
-//  · mutua esclusione ABS↑/ABS↓ sulla stessa barra
-//  · cooldown anti-grappolo tra segnali
-//  · scadenza temporale delle zone
-//  · soglie hardcoded esposte come input
-//  · toggle visuale effort separato dalla logica (alert sempre attivi)
-//  · etichetta timeframe corretta in dashboard, alert con placeholder
+//  v1.2 — novità:
+//  · TEST↑/TEST↓: ritorno nella zona con volume ≤ soglia e chiusura
+//    a favore → conferma dell'assorbimento (stile "test" VSA)
+//  · DIV+/DIV−: prezzo su nuovo estremo ma delta cumulativo che non
+//    conferma e pendenza contraria → pressione in esaurimento
+//  · Label ABS con grading A/B/C (volume, wick, delta, contesto EMA)
+//  · NS/ND: barra contro-trend a volume e range in contrazione,
+//    filtrata dalla EMA di contesto
+//  v1.1 — correzioni: delta neutro su barre a range zero, guard
+//  divisioni per zero, mutua esclusione ABS, cooldown segnali,
+//  scadenza zone, soglie come input, alert con placeholder
 // ============================================================
 
 // ---------------- INPUTS ----------------
@@ -44,6 +50,17 @@ zoneMaxAge = input.int(300, "Durata massima zona (barre)", minval=20, group="Ass
 showEffort = input.bool(true, "Segnala effort vs result (◆)", group="Assorbimenti")
 effortSprd = input.int(40,  "Effort: spread massimo (pct)", minval=10, maxval=70, group="Assorbimenti")
 
+showTests  = input.bool(true, "Segnala test delle zone (TEST)", group="Test zone")
+testVolTh  = input.int(30, "Volume massimo test (pct)", minval=5, maxval=60, group="Test zone")
+testMinAge = input.int(3,  "Barre minime dopo l'assorbimento", minval=1, group="Test zone")
+
+showDiv    = input.bool(true, "Segnala divergenza delta (DIV)", group="Divergenza delta")
+divLen     = input.int(30, "Lookback divergenza (barre)", minval=10, group="Divergenza delta")
+
+showNDNS   = input.bool(true, "Segnala No Demand / No Supply", group="Segnali VSA")
+ndnsVolTh  = input.int(25,  "Volume massimo ND/NS (pct)", minval=5, maxval=50, group="Segnali VSA")
+trendLen   = input.int(200, "EMA di contesto trend", minval=50, group="Segnali VSA")
+
 cdLen      = input.int(20, "Pendenza delta cumulativo (barre)", minval=5, group="Dashboard")
 bpBand     = input.int(5,  "Banda neutra buy pressure (±%)", minval=1, maxval=20, group="Dashboard")
 showDash   = input.bool(true, "Mostra dashboard", group="Dashboard")
@@ -64,6 +81,7 @@ relVol   = volSma > 0 ? volume / volSma : na
 volPct   = ta.percentrank(volume, pctLen)
 rng      = high - low
 rngSafe  = rng == 0 ? syminfo.mintick : rng
+rngSma   = ta.sma(rng, volLen)
 sprdPct  = ta.percentrank(rng, pctLen)
 
 // classificazione candela per volume
@@ -81,6 +99,9 @@ cumDelta   = ta.cum(deltaProxy)
 cdSlope    = cumDelta - cumDelta[cdLen]
 buyVolSma  = ta.sma(buyVolume, volLen)
 buyPress   = volSma > 0 ? buyVolSma / volSma * 100 : na
+
+// EMA di contesto: usata dal grading ABS e dai filtri ND/NS
+emaTrend = ta.ema(close, trendLen)
 
 // ---------------- ASSORBIMENTI ----------------
 bodyPct   = math.abs(close - open) / rngSafe
@@ -115,20 +136,60 @@ if absBuy or absSell
 // (showEffort governa solo il display: l'alert resta sempre attivo)
 effortDiv = volPct >= absVolTh and sprdPct <= effortSprd and not absBuy and not absSell and barstate.isconfirmed
 
+// ---------------- SCORE QUALITÀ ABS ----------------
+// grading composito: intensità volume, dominanza della wick,
+// delta cumulativo concorde, vicinanza alla EMA di contesto
+f_grade(bool isBuy) =>
+    s = volPct >= 95 ? 2 : 1
+    s += (isBuy ? lowWick : highWick) >= 0.60 ? 1 : 0
+    s += (isBuy ? cdSlope > 0 : cdSlope < 0) ? 1 : 0
+    s += not na(emaTrend) and math.abs(close - emaTrend) / close <= 0.02 ? 1 : 0
+    s >= 4 ? "A" : s >= 3 ? "B" : "C"
+
+// ---------------- DIVERGENZA DELTA / PREZZO ----------------
+// prezzo su nuovo estremo ma delta cumulativo che non conferma,
+// con pendenza contraria → la pressione non segue il prezzo
+pxNewLow  = low  <= ta.lowest(low,  divLen)[1]
+pxNewHigh = high >= ta.highest(high, divLen)[1]
+cdNewLow  = cumDelta <= ta.lowest(cumDelta,  divLen)[1]
+cdNewHigh = cumDelta >= ta.highest(cumDelta, divLen)[1]
+
+var int lastDivBar = na
+canDiv  = na(lastDivBar) or bar_index - lastDivBar >= signalGap
+divBull = pxNewLow  and not cdNewLow  and cdSlope > 0 and canDiv and barstate.isconfirmed
+divBear = pxNewHigh and not cdNewHigh and cdSlope < 0 and canDiv and barstate.isconfirmed
+
+if divBull or divBear
+    lastDivBar := bar_index
+
+// ---------------- NO DEMAND / NO SUPPLY ----------------
+// barra contro-trend con volume e range in contrazione:
+// NS = ribasso senza offerta sopra la EMA (forza) ·
+// ND = rialzo senza domanda sotto la EMA (debolezza)
+lowerVol    = volume < volume[1] and volume < volume[2]
+narrowBar   = rng < rngSma
+noSupplyRaw = close < close[1] and lowerVol and volPct <= ndnsVolTh and narrowBar and close > emaTrend
+noDemandRaw = close > close[1] and lowerVol and volPct <= ndnsVolTh and narrowBar and close < emaTrend
+noSupply    = noSupplyRaw and not noSupplyRaw[1] and barstate.isconfirmed
+noDemand    = noDemandRaw and not noDemandRaw[1] and barstate.isconfirmed
+
 // ---------------- ZONE DI ASSORBIMENTO ----------------
 var array<box> zones     = array.new<box>()
 var array<int> zoneDir   = array.new<int>()   // 1 = bullish (supporto) · -1 = bearish (resistenza)
-var array<int> zoneBirth = array.new<int>()   // barra di creazione, per la scadenza
+var array<int> zoneBirth = array.new<int>()   // barra di creazione, per scadenza ed età minima test
+var array<int> zoneTest  = array.new<int>()   // barra dell'ultimo test, -1 = mai testata
 
 f_addZone(float top, float bot, color col, int dir) =>
     b = box.new(bar_index, top, bar_index + 1, bot, border_color=col, border_width=1, bgcolor=color.new(col, 85), extend=extend.none)
     array.push(zones, b)
     array.push(zoneDir, dir)
     array.push(zoneBirth, bar_index)
+    array.push(zoneTest, -1)
     if array.size(zones) > maxZones
         box.delete(array.shift(zones))
         array.shift(zoneDir)
         array.shift(zoneBirth)
+        array.shift(zoneTest)
 
 // nota: absBuy/absSell includono barstate.isconfirmed, quindi le zone
 // nascono solo a barra chiusa (nessun repaint intrabar)
@@ -137,7 +198,10 @@ if showZones and absBuy
 if showZones and absSell
     f_addZone(high, math.max(open, close), cNeg, -1)
 
-// estendi le zone attive, rimuovi quelle mitigate o scadute
+// estendi le zone attive, rimuovi quelle mitigate o scadute,
+// rileva i TEST: ritorno in zona con volume basso e chiusura a favore
+testBull = false
+testBear = false
 if barstate.isconfirmed and array.size(zones) > 0
     for i = array.size(zones) - 1 to 0
         b = array.get(zones, i)
@@ -153,12 +217,33 @@ if barstate.isconfirmed and array.size(zones) > 0
             array.remove(zones, i)
             array.remove(zoneDir, i)
             array.remove(zoneBirth, i)
+            array.remove(zoneTest, i)
         else
             box.set_right(b, bar_index + 1)
+            age    = bar_index - array.get(zoneBirth, i)
+            lastT  = array.get(zoneTest, i)
+            freshT = lastT < 0 or bar_index - lastT >= signalGap
+            inZone = low <= zTop and high >= zBot
+            if inZone and age >= testMinAge and freshT and volPct <= testVolTh
+                if d == 1 and clv >= 0.5 and close >= zBot
+                    testBull := true
+                    array.set(zoneTest, i, bar_index)
+                if d == -1 and clv <= 0.5 and close <= zTop
+                    testBear := true
+                    array.set(zoneTest, i, bar_index)
 
 // ---------------- VISUAL ----------------
-plotshape(absBuy,  title="Assorbimento vendite", style=shape.labelup,   location=location.belowbar, color=cPos, textcolor=color.new(#04120C, 0), size=size.small, text="ABS↑")
-plotshape(absSell, title="Assorbimento acquisti", style=shape.labeldown, location=location.abovebar, color=cNeg, textcolor=color.new(#160405, 0), size=size.small, text="ABS↓")
+if absBuy
+    label.new(bar_index, low, "ABS↑ " + f_grade(true), style=label.style_label_up, color=cPos, textcolor=color.new(#04120C, 0), size=size.small, tooltip="Vol " + str.tostring(volPct, "#") + "° pct · CLV " + str.tostring(clv, "#.##"))
+if absSell
+    label.new(bar_index, high, "ABS↓ " + f_grade(false), style=label.style_label_down, color=cNeg, textcolor=color.new(#160405, 0), size=size.small, tooltip="Vol " + str.tostring(volPct, "#") + "° pct · CLV " + str.tostring(clv, "#.##"))
+
+plotshape(showTests and testBull, title="Test zona bullish",  style=shape.triangleup,   location=location.belowbar, color=cPos, size=size.tiny, text="TEST", textcolor=cPos)
+plotshape(showTests and testBear, title="Test zona bearish",  style=shape.triangledown, location=location.abovebar, color=cNeg, size=size.tiny, text="TEST", textcolor=cNeg)
+plotshape(showDiv and divBull,    title="Divergenza bullish", style=shape.circle,       location=location.belowbar, color=cPos, size=size.tiny, text="DIV+", textcolor=cPos)
+plotshape(showDiv and divBear,    title="Divergenza bearish", style=shape.circle,       location=location.abovebar, color=cNeg, size=size.tiny, text="DIV−", textcolor=cNeg)
+plotshape(showNDNS and noSupply,  title="No Supply",          style=shape.xcross,       location=location.belowbar, color=cMut, size=size.tiny, text="NS", textcolor=cMut)
+plotshape(showNDNS and noDemand,  title="No Demand",          style=shape.xcross,       location=location.abovebar, color=cWarn, size=size.tiny, text="ND", textcolor=cWarn)
 plotshape(showEffort and effortDiv, title="Effort vs Result", style=shape.diamond, location=location.abovebar, color=cGold, size=size.tiny)
 barcolor(paintBars and volUltra ? cGold : na, title="Candele volume ULTRA")
 
@@ -171,7 +256,7 @@ if showDash and barstate.islast
     volClass = volUltra ? "🟡 ULTRA" : volHigh ? "🟢 ALTO" : volLow ? "🔴 BASSO" : "⚪ NORMALE"
     cdTxt  = cdSlope > 0 ? "▲ IN SALITA" : cdSlope < 0 ? "▼ IN DISCESA" : "— FLAT"
     cdCol  = cdSlope > 0 ? cPos : cdSlope < 0 ? cNeg : cMut
-    lastAbs = absBuy ? "ABS↑ questa barra" : absSell ? "ABS↓ questa barra" : str.tostring(array.size(zones)) + " zone attive"
+    lastAbs = absBuy ? "ABS↑ questa barra" : absSell ? "ABS↓ questa barra" : testBull ? "TEST↑ questa barra" : testBear ? "TEST↓ questa barra" : str.tostring(array.size(zones)) + " zone attive"
     table.cell(dash, 0, 0, "KID VOLUME READER", text_color=cGold, bgcolor=cNavy2, text_size=size.small)
     table.cell(dash, 1, 0, syminfo.ticker + " · " + f_tfLabel(), text_color=cMut, bgcolor=cNavy2, text_size=size.small)
     table.cell(dash, 0, 1, "Volume relativo", text_color=cTxt, text_size=size.tiny)
@@ -189,9 +274,15 @@ if showDash and barstate.islast
     table.cell(dash, 0, 7, "Spread (range) pct", text_color=cTxt, text_size=size.tiny)
     table.cell(dash, 1, 7, str.tostring(sprdPct, "#") + "° pct", text_color=cTxt, text_size=size.tiny)
     table.cell(dash, 0, 8, "Assorbimenti", text_color=cTxt, text_size=size.tiny)
-    table.cell(dash, 1, 8, lastAbs, text_color=absBuy ? cPos : absSell ? cNeg : cMut, text_size=size.tiny)
+    table.cell(dash, 1, 8, lastAbs, text_color=absBuy or testBull ? cPos : absSell or testBear ? cNeg : cMut, text_size=size.tiny)
 
 // ---------------- ALERT ----------------
 alertcondition(absBuy,    title="KID VOL — Assorbimento vendite",  message="KID Volume Reader: ABS UP su {{ticker}} {{interval}} @ {{close}} — vendite assorbite sui minimi con volume estremo")
 alertcondition(absSell,   title="KID VOL — Assorbimento acquisti", message="KID Volume Reader: ABS DOWN su {{ticker}} {{interval}} @ {{close}} — acquisti assorbiti sui massimi con volume estremo")
+alertcondition(testBull,  title="KID VOL — Test zona bullish",     message="KID Volume Reader: TEST UP su {{ticker}} {{interval}} @ {{close}} — retest zona di assorbimento con volume in contrazione")
+alertcondition(testBear,  title="KID VOL — Test zona bearish",     message="KID Volume Reader: TEST DOWN su {{ticker}} {{interval}} @ {{close}} — retest zona di distribuzione con volume in contrazione")
+alertcondition(divBull,   title="KID VOL — Divergenza delta bullish", message="KID Volume Reader: DIV+ su {{ticker}} {{interval}} @ {{close}} — nuovo minimo di prezzo senza conferma del delta cumulativo")
+alertcondition(divBear,   title="KID VOL — Divergenza delta bearish", message="KID Volume Reader: DIV- su {{ticker}} {{interval}} @ {{close}} — nuovo massimo di prezzo senza conferma del delta cumulativo")
+alertcondition(noSupply,  title="KID VOL — No Supply",             message="KID Volume Reader: NO SUPPLY su {{ticker}} {{interval}} @ {{close}} — ribasso senza offerta sopra la EMA di contesto")
+alertcondition(noDemand,  title="KID VOL — No Demand",             message="KID Volume Reader: NO DEMAND su {{ticker}} {{interval}} @ {{close}} — rialzo senza domanda sotto la EMA di contesto")
 alertcondition(effortDiv, title="KID VOL — Effort vs Result",      message="KID Volume Reader: {{ticker}} {{interval}} — volume estremo con range compresso, possibile assorbimento in corso")
