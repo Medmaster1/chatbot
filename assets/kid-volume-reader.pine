@@ -1,0 +1,197 @@
+//@version=6
+indicator("KID Volume Reader — Assorbimenti [VSA]", shorttitle="KID-VOL", overlay=true, max_boxes_count=100, max_labels_count=200)
+
+// ============================================================
+//  KID / DIGITAL WEALTH — Volume Reader & Absorption v1.1
+//  Lettura volumi stile VSA/order-flow proxy:
+//  · Volume relativo + percentile + classificazione candele
+//  · Delta proxy (buy/sell pressure) e delta cumulativo
+//  · ASSORBIMENTI: alto volume + progresso prezzo minimo
+//    - ABS↑ vendite assorbite (stopping volume sui minimi)
+//    - ABS↓ acquisti assorbiti (buying climax sui massimi)
+//  · Zone di assorbimento estese fino a mitigazione o scadenza
+//  Nota: senza dati tick, il delta è stimato dalla posizione
+//  della chiusura nel range (proxy affidabile, non order flow reale)
+//
+//  v1.1 — correzioni:
+//  · barre a range zero contate come delta neutro (prima: 100% sell)
+//  · guard divisione per zero su media volume nulla
+//  · mutua esclusione ABS↑/ABS↓ sulla stessa barra
+//  · cooldown anti-grappolo tra segnali
+//  · scadenza temporale delle zone
+//  · soglie hardcoded esposte come input
+//  · toggle visuale effort separato dalla logica (alert sempre attivi)
+//  · etichetta timeframe corretta in dashboard, alert con placeholder
+// ============================================================
+
+// ---------------- INPUTS ----------------
+volLen     = input.int(20,  "Media volume (barre)", minval=5, group="Volumi")
+pctLen     = input.int(100, "Lookback percentile",  minval=30, group="Volumi")
+ultraTh    = input.int(90,  "Soglia volume ULTRA (pct)", minval=50, maxval=99, group="Volumi")
+highTh     = input.int(70,  "Soglia volume ALTO (pct)",  minval=40, maxval=95, group="Volumi")
+paintBars  = input.bool(true, "Colora candele a volume ULTRA", group="Volumi")
+
+absVolTh   = input.int(85,  "Volume minimo assorbimento (pct)", minval=60, maxval=99, group="Assorbimenti")
+extremeLen = input.int(15,  "Lookback estremi (min/max locali)", minval=5, group="Assorbimenti")
+wickMin    = input.float(0.45, "Wick minimo (% del range)", step=0.05, minval=0.2, maxval=0.8, group="Assorbimenti")
+bodyMax    = input.float(0.45, "Body massimo (% del range)", step=0.05, minval=0.1, maxval=0.8, group="Assorbimenti")
+clvStrong  = input.float(0.62, "Chiusura forte (CLV ≥)",  step=0.01, minval=0.5,  maxval=0.95, group="Assorbimenti")
+clvWeak    = input.float(0.38, "Chiusura debole (CLV ≤)", step=0.01, minval=0.05, maxval=0.5,  group="Assorbimenti")
+signalGap  = input.int(5,   "Distanza minima tra segnali (barre)", minval=0, group="Assorbimenti")
+showZones  = input.bool(true, "Disegna zone di assorbimento", group="Assorbimenti")
+maxZones   = input.int(6,   "Zone attive massime", minval=1, maxval=20, group="Assorbimenti")
+zoneMaxAge = input.int(300, "Durata massima zona (barre)", minval=20, group="Assorbimenti")
+showEffort = input.bool(true, "Segnala effort vs result (◆)", group="Assorbimenti")
+effortSprd = input.int(40,  "Effort: spread massimo (pct)", minval=10, maxval=70, group="Assorbimenti")
+
+cdLen      = input.int(20, "Pendenza delta cumulativo (barre)", minval=5, group="Dashboard")
+bpBand     = input.int(5,  "Banda neutra buy pressure (±%)", minval=1, maxval=20, group="Dashboard")
+showDash   = input.bool(true, "Mostra dashboard", group="Dashboard")
+
+// ---------------- PALETTE KID ----------------
+cNavy  = color.new(#0E1830, 0)
+cNavy2 = color.new(#101D3A, 0)
+cGold  = color.new(#E8C55A, 0)
+cPos   = color.new(#2DD4A7, 0)
+cNeg   = color.new(#E5484D, 0)
+cWarn  = color.new(#E8A33D, 0)
+cTxt   = color.new(#E7EDF7, 0)
+cMut   = color.new(#8FA0BC, 0)
+
+// ---------------- LETTURA VOLUMI ----------------
+volSma   = ta.sma(volume, volLen)
+relVol   = volSma > 0 ? volume / volSma : na
+volPct   = ta.percentrank(volume, pctLen)
+rng      = high - low
+rngSafe  = rng == 0 ? syminfo.mintick : rng
+sprdPct  = ta.percentrank(rng, pctLen)
+
+// classificazione candela per volume
+volUltra = volPct >= ultraTh
+volHigh  = volPct >= highTh and not volUltra
+volLow   = volPct <= 100 - highTh
+
+// delta proxy: posizione della chiusura nel range → stima buy/sell
+// su barra a range zero il delta è neutro (clv = 0.5), non 100% sell
+clv        = rng == 0 ? 0.5 : (close - low) / rng
+buyVolume  = volume * clv
+sellVolume = volume * (1 - clv)
+deltaProxy = buyVolume - sellVolume
+cumDelta   = ta.cum(deltaProxy)
+cdSlope    = cumDelta - cumDelta[cdLen]
+buyVolSma  = ta.sma(buyVolume, volLen)
+buyPress   = volSma > 0 ? buyVolSma / volSma * 100 : na
+
+// ---------------- ASSORBIMENTI ----------------
+bodyPct   = math.abs(close - open) / rngSafe
+lowWick   = (math.min(open, close) - low)  / rngSafe
+highWick  = (high - math.max(open, close)) / rngSafe
+atLow     = low  <= ta.lowest(low,  extremeLen)[1]
+atHigh    = high >= ta.highest(high, extremeLen)[1]
+
+// cooldown: evita grappoli di segnali su barre consecutive
+var int lastAbsBar = na
+canSignal = na(lastAbsBar) or bar_index - lastAbsBar >= signalGap
+
+// ABS↑ — vendite assorbite: volume estremo su nuovo minimo locale,
+// wick inferiore lunga o chiusura forte, corpo compresso
+absCond1  = lowWick >= wickMin or clv >= clvStrong
+absBuyRaw = volPct >= absVolTh and atLow and absCond1 and bodyPct <= bodyMax
+
+// ABS↓ — acquisti assorbiti: volume estremo su nuovo massimo locale,
+// wick superiore lunga o chiusura debole, corpo compresso
+absCond2   = highWick >= wickMin or clv <= clvWeak
+absSellRaw = volPct >= absVolTh and atHigh and absCond2 and bodyPct <= bodyMax
+
+// mutua esclusione: se una barra a range ampio soddisfa entrambe le
+// condizioni, decide la posizione della chiusura nel range
+absBuy  = absBuyRaw  and (not absSellRaw or clv >= 0.5) and canSignal and barstate.isconfirmed
+absSell = absSellRaw and (not absBuyRaw  or clv <  0.5) and canSignal and barstate.isconfirmed
+
+if absBuy or absSell
+    lastAbsBar := bar_index
+
+// effort vs result: sforzo (volume) estremo, risultato (range) scarso
+// (showEffort governa solo il display: l'alert resta sempre attivo)
+effortDiv = volPct >= absVolTh and sprdPct <= effortSprd and not absBuy and not absSell and barstate.isconfirmed
+
+// ---------------- ZONE DI ASSORBIMENTO ----------------
+var array<box> zones     = array.new<box>()
+var array<int> zoneDir   = array.new<int>()   // 1 = bullish (supporto) · -1 = bearish (resistenza)
+var array<int> zoneBirth = array.new<int>()   // barra di creazione, per la scadenza
+
+f_addZone(float top, float bot, color col, int dir) =>
+    b = box.new(bar_index, top, bar_index + 1, bot, border_color=col, border_width=1, bgcolor=color.new(col, 85), extend=extend.none)
+    array.push(zones, b)
+    array.push(zoneDir, dir)
+    array.push(zoneBirth, bar_index)
+    if array.size(zones) > maxZones
+        box.delete(array.shift(zones))
+        array.shift(zoneDir)
+        array.shift(zoneBirth)
+
+// nota: absBuy/absSell includono barstate.isconfirmed, quindi le zone
+// nascono solo a barra chiusa (nessun repaint intrabar)
+if showZones and absBuy
+    f_addZone(math.min(open, close), low, cPos, 1)
+if showZones and absSell
+    f_addZone(high, math.max(open, close), cNeg, -1)
+
+// estendi le zone attive, rimuovi quelle mitigate o scadute
+if barstate.isconfirmed and array.size(zones) > 0
+    for i = array.size(zones) - 1 to 0
+        b = array.get(zones, i)
+        d = array.get(zoneDir, i)
+        zTop = box.get_top(b)
+        zBot = box.get_bottom(b)
+        // zona rotta = chiusura pieno-corpo oltre il lato che la invalida
+        brokenBull = d == 1  and close < zBot and open < zBot
+        brokenBear = d == -1 and close > zTop and open > zTop
+        expired    = bar_index - array.get(zoneBirth, i) > zoneMaxAge
+        if brokenBull or brokenBear or expired
+            box.delete(b)
+            array.remove(zones, i)
+            array.remove(zoneDir, i)
+            array.remove(zoneBirth, i)
+        else
+            box.set_right(b, bar_index + 1)
+
+// ---------------- VISUAL ----------------
+plotshape(absBuy,  title="Assorbimento vendite", style=shape.labelup,   location=location.belowbar, color=cPos, textcolor=color.new(#04120C, 0), size=size.small, text="ABS↑")
+plotshape(absSell, title="Assorbimento acquisti", style=shape.labeldown, location=location.abovebar, color=cNeg, textcolor=color.new(#160405, 0), size=size.small, text="ABS↓")
+plotshape(showEffort and effortDiv, title="Effort vs Result", style=shape.diamond, location=location.abovebar, color=cGold, size=size.tiny)
+barcolor(paintBars and volUltra ? cGold : na, title="Candele volume ULTRA")
+
+// ---------------- DASHBOARD KID ----------------
+f_tfLabel() =>
+    timeframe.isminutes ? timeframe.period + "m" : timeframe.period
+
+var table dash = showDash ? table.new(position.top_right, 2, 9, bgcolor=cNavy, border_width=1, border_color=color.new(#E8C55A, 80)) : na
+if showDash and barstate.islast
+    volClass = volUltra ? "🟡 ULTRA" : volHigh ? "🟢 ALTO" : volLow ? "🔴 BASSO" : "⚪ NORMALE"
+    cdTxt  = cdSlope > 0 ? "▲ IN SALITA" : cdSlope < 0 ? "▼ IN DISCESA" : "— FLAT"
+    cdCol  = cdSlope > 0 ? cPos : cdSlope < 0 ? cNeg : cMut
+    lastAbs = absBuy ? "ABS↑ questa barra" : absSell ? "ABS↓ questa barra" : str.tostring(array.size(zones)) + " zone attive"
+    table.cell(dash, 0, 0, "KID VOLUME READER", text_color=cGold, bgcolor=cNavy2, text_size=size.small)
+    table.cell(dash, 1, 0, syminfo.ticker + " · " + f_tfLabel(), text_color=cMut, bgcolor=cNavy2, text_size=size.small)
+    table.cell(dash, 0, 1, "Volume relativo", text_color=cTxt, text_size=size.tiny)
+    table.cell(dash, 1, 1, str.tostring(relVol, "#.##") + "× media " + str.tostring(volLen), text_color=relVol >= 1.5 ? cGold : cTxt, text_size=size.tiny)
+    table.cell(dash, 0, 2, "Percentile volume", text_color=cTxt, text_size=size.tiny)
+    table.cell(dash, 1, 2, str.tostring(volPct, "#") + "° pct", text_color=cTxt, text_size=size.tiny)
+    table.cell(dash, 0, 3, "Classe candela", text_color=cTxt, text_size=size.tiny)
+    table.cell(dash, 1, 3, volClass, text_color=cTxt, text_size=size.tiny)
+    table.cell(dash, 0, 4, "Delta proxy (barra)", text_color=cTxt, text_size=size.tiny)
+    table.cell(dash, 1, 4, (deltaProxy >= 0 ? "+" : "") + str.tostring(deltaProxy, format.volume), text_color=deltaProxy >= 0 ? cPos : cNeg, text_size=size.tiny)
+    table.cell(dash, 0, 5, "Buy pressure (media)", text_color=cTxt, text_size=size.tiny)
+    table.cell(dash, 1, 5, str.tostring(buyPress, "#.#") + "%", text_color=buyPress >= 50 + bpBand ? cPos : buyPress <= 50 - bpBand ? cNeg : cWarn, text_size=size.tiny)
+    table.cell(dash, 0, 6, "Delta cumulativo (" + str.tostring(cdLen) + "b)", text_color=cTxt, text_size=size.tiny)
+    table.cell(dash, 1, 6, cdTxt, text_color=cdCol, text_size=size.tiny)
+    table.cell(dash, 0, 7, "Spread (range) pct", text_color=cTxt, text_size=size.tiny)
+    table.cell(dash, 1, 7, str.tostring(sprdPct, "#") + "° pct", text_color=cTxt, text_size=size.tiny)
+    table.cell(dash, 0, 8, "Assorbimenti", text_color=cTxt, text_size=size.tiny)
+    table.cell(dash, 1, 8, lastAbs, text_color=absBuy ? cPos : absSell ? cNeg : cMut, text_size=size.tiny)
+
+// ---------------- ALERT ----------------
+alertcondition(absBuy,    title="KID VOL — Assorbimento vendite",  message="KID Volume Reader: ABS UP su {{ticker}} {{interval}} @ {{close}} — vendite assorbite sui minimi con volume estremo")
+alertcondition(absSell,   title="KID VOL — Assorbimento acquisti", message="KID Volume Reader: ABS DOWN su {{ticker}} {{interval}} @ {{close}} — acquisti assorbiti sui massimi con volume estremo")
+alertcondition(effortDiv, title="KID VOL — Effort vs Result",      message="KID Volume Reader: {{ticker}} {{interval}} — volume estremo con range compresso, possibile assorbimento in corso")
