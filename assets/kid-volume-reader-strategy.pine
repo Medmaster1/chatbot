@@ -1,0 +1,224 @@
+//@version=6
+strategy("KID Volume Reader — Strategy [VSA]", shorttitle="KID-VOL-S", overlay=true, initial_capital=10000, default_qty_type=strategy.percent_of_equity, default_qty_value=10, commission_type=strategy.commission.percent, commission_value=0.05, slippage=2, pyramiding=0, max_boxes_count=100, max_labels_count=200)
+
+// ============================================================
+//  KID / DIGITAL WEALTH — Volume Reader Strategy v1.0
+//  Conversione in strategia del KID Volume Reader v1.2 (VSA).
+//  Impianto stile template MACD: segnale → strategy.entry con
+//  reverse automatico sul segnale opposto. In più, opzionali:
+//  · scelta dei segnali d'ingresso (ABS / TEST / DIV)
+//  · filtro grade minimo sugli ABS (A/B/C)
+//  · direzione (entrambe / solo long / solo short)
+//  · stop loss e take profit ATR ancorati al segnale
+//  · finestra temporale di backtest
+//  Nota: i segnali nascono a barra confermata, gli ordini si
+//  riempiono all'apertura della barra successiva (non-repaint)
+// ============================================================
+
+// ---------------- INPUTS STRATEGIA ----------------
+dirMode    = input.string("Entrambe", "Direzione operativa", options=["Entrambe", "Solo Long", "Solo Short"], group="Strategia")
+useAbs     = input.bool(true,  "Entra su ABS (assorbimento)", group="Strategia")
+useTest    = input.bool(true,  "Entra su TEST (retest zona)", group="Strategia")
+useDivE    = input.bool(false, "Entra su DIV (divergenza delta)", group="Strategia")
+minGrade   = input.string("C", "Grade minimo ABS", options=["A", "B", "C"], group="Strategia")
+useAtrExit = input.bool(true,  "Usa stop/target ATR", group="Strategia")
+atrLen     = input.int(14,   "Periodo ATR", minval=5, group="Strategia")
+slMult     = input.float(2.0, "Stop loss (× ATR)",   step=0.25, minval=0.5, group="Strategia")
+tpMult     = input.float(3.0, "Take profit (× ATR)", step=0.25, minval=0.5, group="Strategia")
+startDate  = input.time(timestamp("1 Jan 2018"), "Inizio backtest", group="Strategia")
+endDate    = input.time(timestamp("1 Jan 2030"), "Fine backtest",   group="Strategia")
+
+// ---------------- INPUTS INDICATORE ----------------
+volLen     = input.int(20,  "Media volume (barre)", minval=5, group="Volumi")
+pctLen     = input.int(100, "Lookback percentile",  minval=30, group="Volumi")
+ultraTh    = input.int(90,  "Soglia volume ULTRA (pct)", minval=50, maxval=99, group="Volumi")
+highTh     = input.int(70,  "Soglia volume ALTO (pct)",  minval=40, maxval=95, group="Volumi")
+paintBars  = input.bool(true, "Colora candele a volume ULTRA", group="Volumi")
+
+absVolTh   = input.int(85,  "Volume minimo assorbimento (pct)", minval=60, maxval=99, group="Assorbimenti")
+extremeLen = input.int(15,  "Lookback estremi (min/max locali)", minval=5, group="Assorbimenti")
+wickMin    = input.float(0.45, "Wick minimo (% del range)", step=0.05, minval=0.2, maxval=0.8, group="Assorbimenti")
+bodyMax    = input.float(0.45, "Body massimo (% del range)", step=0.05, minval=0.1, maxval=0.8, group="Assorbimenti")
+clvStrong  = input.float(0.62, "Chiusura forte (CLV ≥)",  step=0.01, minval=0.5,  maxval=0.95, group="Assorbimenti")
+clvWeak    = input.float(0.38, "Chiusura debole (CLV ≤)", step=0.01, minval=0.05, maxval=0.5,  group="Assorbimenti")
+signalGap  = input.int(5,   "Distanza minima tra segnali (barre)", minval=0, group="Assorbimenti")
+showZones  = input.bool(true, "Disegna zone di assorbimento", group="Assorbimenti")
+maxZones   = input.int(6,   "Zone attive massime", minval=1, maxval=20, group="Assorbimenti")
+zoneMaxAge = input.int(300, "Durata massima zona (barre)", minval=20, group="Assorbimenti")
+
+testVolTh  = input.int(30, "Volume massimo test (pct)", minval=5, maxval=60, group="Test zone")
+testMinAge = input.int(3,  "Barre minime dopo l'assorbimento", minval=1, group="Test zone")
+
+divLen     = input.int(30, "Lookback divergenza (barre)", minval=10, group="Divergenza delta")
+
+trendLen   = input.int(200, "EMA di contesto trend", minval=50, group="Contesto")
+cdLen      = input.int(20,  "Pendenza delta cumulativo (barre)", minval=5, group="Contesto")
+
+// ---------------- PALETTE KID ----------------
+cPos   = color.new(#2DD4A7, 0)
+cNeg   = color.new(#E5484D, 0)
+cGold  = color.new(#E8C55A, 0)
+
+// ---------------- LETTURA VOLUMI ----------------
+volSma   = ta.sma(volume, volLen)
+volPct   = ta.percentrank(volume, pctLen)
+rng      = high - low
+rngSafe  = rng == 0 ? syminfo.mintick : rng
+
+volUltra = volPct >= ultraTh
+
+// delta proxy: posizione della chiusura nel range → stima buy/sell
+// su barra a range zero il delta è neutro (clv = 0.5)
+clv        = rng == 0 ? 0.5 : (close - low) / rng
+buyVolume  = volume * clv
+sellVolume = volume * (1 - clv)
+deltaProxy = buyVolume - sellVolume
+cumDelta   = ta.cum(deltaProxy)
+cdSlope    = cumDelta - cumDelta[cdLen]
+
+// EMA di contesto: usata dal grading ABS
+emaTrend = ta.ema(close, trendLen)
+
+// ---------------- ASSORBIMENTI ----------------
+bodyPct   = math.abs(close - open) / rngSafe
+lowWick   = (math.min(open, close) - low)  / rngSafe
+highWick  = (high - math.max(open, close)) / rngSafe
+atLow     = low  <= ta.lowest(low,  extremeLen)[1]
+atHigh    = high >= ta.highest(high, extremeLen)[1]
+
+var int lastAbsBar = na
+canSignal = na(lastAbsBar) or bar_index - lastAbsBar >= signalGap
+
+absCond1  = lowWick >= wickMin or clv >= clvStrong
+absBuyRaw = volPct >= absVolTh and atLow and absCond1 and bodyPct <= bodyMax
+
+absCond2   = highWick >= wickMin or clv <= clvWeak
+absSellRaw = volPct >= absVolTh and atHigh and absCond2 and bodyPct <= bodyMax
+
+absBuy  = absBuyRaw  and (not absSellRaw or clv >= 0.5) and canSignal and barstate.isconfirmed
+absSell = absSellRaw and (not absBuyRaw  or clv <  0.5) and canSignal and barstate.isconfirmed
+
+if absBuy or absSell
+    lastAbsBar := bar_index
+
+// ---------------- SCORE QUALITÀ ABS ----------------
+f_score(bool isBuy) =>
+    s = volPct >= 95 ? 2 : 1
+    s += (isBuy ? lowWick : highWick) >= 0.60 ? 1 : 0
+    s += (isBuy ? cdSlope > 0 : cdSlope < 0) ? 1 : 0
+    s += not na(emaTrend) and math.abs(close - emaTrend) / close <= 0.02 ? 1 : 0
+    s
+
+f_grade(int s) => s >= 4 ? "A" : s >= 3 ? "B" : "C"
+
+// grade minimo per operare: C accetta tutto, B esclude C, A solo A
+f_gradeOk(int s) => minGrade == "C" or (minGrade == "B" and s >= 3) or (minGrade == "A" and s >= 4)
+
+// ---------------- DIVERGENZA DELTA / PREZZO ----------------
+pxNewLow  = low  <= ta.lowest(low,  divLen)[1]
+pxNewHigh = high >= ta.highest(high, divLen)[1]
+cdNewLow  = cumDelta <= ta.lowest(cumDelta,  divLen)[1]
+cdNewHigh = cumDelta >= ta.highest(cumDelta, divLen)[1]
+
+var int lastDivBar = na
+canDiv  = na(lastDivBar) or bar_index - lastDivBar >= signalGap
+divBull = pxNewLow  and not cdNewLow  and cdSlope > 0 and canDiv and barstate.isconfirmed
+divBear = pxNewHigh and not cdNewHigh and cdSlope < 0 and canDiv and barstate.isconfirmed
+
+if divBull or divBear
+    lastDivBar := bar_index
+
+// ---------------- ZONE DI ASSORBIMENTO + TEST ----------------
+var array<box> zones     = array.new<box>()
+var array<int> zoneDir   = array.new<int>()
+var array<int> zoneBirth = array.new<int>()
+var array<int> zoneTest  = array.new<int>()
+
+f_addZone(float top, float bot, color col, int dir) =>
+    b = box.new(bar_index, top, bar_index + 1, bot, border_color=col, border_width=1, bgcolor=color.new(col, 85), extend=extend.none)
+    array.push(zones, b)
+    array.push(zoneDir, dir)
+    array.push(zoneBirth, bar_index)
+    array.push(zoneTest, -1)
+    if array.size(zones) > maxZones
+        box.delete(array.shift(zones))
+        array.shift(zoneDir)
+        array.shift(zoneBirth)
+        array.shift(zoneTest)
+
+if showZones and absBuy
+    f_addZone(math.min(open, close), low, cPos, 1)
+if showZones and absSell
+    f_addZone(high, math.max(open, close), cNeg, -1)
+
+testBull = false
+testBear = false
+if barstate.isconfirmed and array.size(zones) > 0
+    for i = array.size(zones) - 1 to 0
+        b = array.get(zones, i)
+        d = array.get(zoneDir, i)
+        zTop = box.get_top(b)
+        zBot = box.get_bottom(b)
+        brokenBull = d == 1  and close < zBot and open < zBot
+        brokenBear = d == -1 and close > zTop and open > zTop
+        expired    = bar_index - array.get(zoneBirth, i) > zoneMaxAge
+        if brokenBull or brokenBear or expired
+            box.delete(b)
+            array.remove(zones, i)
+            array.remove(zoneDir, i)
+            array.remove(zoneBirth, i)
+            array.remove(zoneTest, i)
+        else
+            box.set_right(b, bar_index + 1)
+            age    = bar_index - array.get(zoneBirth, i)
+            lastT  = array.get(zoneTest, i)
+            freshT = lastT < 0 or bar_index - lastT >= signalGap
+            inZone = low <= zTop and high >= zBot
+            if inZone and age >= testMinAge and freshT and volPct <= testVolTh
+                if d == 1 and clv >= 0.5 and close >= zBot
+                    testBull := true
+                    array.set(zoneTest, i, bar_index)
+                if d == -1 and clv <= 0.5 and close <= zTop
+                    testBear := true
+                    array.set(zoneTest, i, bar_index)
+
+// ---------------- LOGICA STRATEGIA ----------------
+inWindow   = time >= startDate and time <= endDate
+allowLong  = dirMode != "Solo Short"
+allowShort = dirMode != "Solo Long"
+
+absScoreBuy  = f_score(true)
+absScoreSell = f_score(false)
+
+longSig  = (useAbs and absBuy  and f_gradeOk(absScoreBuy))  or (useTest and testBull) or (useDivE and divBull)
+shortSig = (useAbs and absSell and f_gradeOk(absScoreSell)) or (useTest and testBear) or (useDivE and divBear)
+
+longTag  = absBuy  ? "ABS↑ "  + f_grade(absScoreBuy)  : testBull ? "TEST↑" : "DIV+"
+shortTag = absSell ? "ABS↓ " + f_grade(absScoreSell) : testBear ? "TEST↓" : "DIV−"
+
+atr = ta.atr(atrLen)
+
+// ingressi stile template: strategy.entry con reverse automatico
+// sul segnale opposto; stop/target ATR ancorati alla chiusura segnale
+if inWindow and allowLong and longSig
+    strategy.entry("KID-L", strategy.long, comment=longTag)
+    if useAtrExit
+        strategy.exit("KID-L-X", from_entry="KID-L", stop=close - atr * slMult, limit=close + atr * tpMult, comment_loss="SL", comment_profit="TP")
+
+if inWindow and allowShort and shortSig
+    strategy.entry("KID-S", strategy.short, comment=shortTag)
+    if useAtrExit
+        strategy.exit("KID-S-X", from_entry="KID-S", stop=close + atr * slMult, limit=close - atr * tpMult, comment_loss="SL", comment_profit="TP")
+
+// direzione filtrata e niente stop ATR: il segnale opposto chiude
+// comunque la posizione (altrimenti resterebbe aperta per sempre)
+if strategy.position_size > 0 and shortSig and not allowShort
+    strategy.close("KID-L", comment="Exit segnale opposto")
+if strategy.position_size < 0 and longSig and not allowLong
+    strategy.close("KID-S", comment="Exit segnale opposto")
+
+// ---------------- VISUAL ----------------
+plotshape(longSig,  title="Segnale long",  style=shape.triangleup,   location=location.belowbar, color=cPos, size=size.tiny)
+plotshape(shortSig, title="Segnale short", style=shape.triangledown, location=location.abovebar, color=cNeg, size=size.tiny)
+barcolor(paintBars and volUltra ? cGold : na, title="Candele volume ULTRA")
+plot(useAtrExit and strategy.position_size != 0 ? strategy.position_avg_price : na, title="Prezzo medio posizione", color=cGold, style=plot.style_linebr, linewidth=1)
