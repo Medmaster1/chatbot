@@ -49,6 +49,21 @@ ASSETS = [
     ("Bitcoin",                    0.10, "BTC-USD",  "USD", 0.35, 0.00),
     ("China Internet (KWEB)",      0.07, "KWEB",     "USD", 0.75, 0.70),
 ]
+
+# Allocazione rivista: -3 Momentum, +2 Quality, +5 ex-USA, -3 Min Vol,
+# BTC dimezzato, -3 China, +7% Global Aggregate Bond EUR-hedged.
+# Proxy bond: Xtrackers Global Government Bond EUR Hedged (DBZB, dal 2008,
+# TER 0,25%) per iShares Core Global Aggregate EUR Hedged (AGGH, TER 0,10%).
+ASSETS_REVISED = [
+    ("MSCI World Momentum",        0.22, "IWMO.L",   "USD", 0.25, 0.25),
+    ("Quality Aristocrats",        0.22, "IWQU.L",   "USD", 0.35, 0.30),
+    ("World ex-USA",               0.15, "VEA",      "USD", 0.15, 0.05),
+    ("S&P 500 Min Volatility",     0.15, "SPMV.L",   "USD", 0.20, 0.20),
+    ("Oro fisico",                 0.10, "IGLN.L",   "USD", 0.12, 0.12),
+    ("Bitcoin",                    0.05, "BTC-USD",  "USD", 0.35, 0.00),
+    ("China Internet (KWEB)",      0.04, "KWEB",     "USD", 0.75, 0.70),
+    ("Global Agg Bond EUR-hedged", 0.07, "DBZB.DE",  "EUR", 0.10, 0.25),
+]
 BENCHMARKS = [
     ("CSSPX - iShares Core S&P 500", "CSSPX.MI", "EUR"),
     ("SWDA - iShares Core MSCI World", "SWDA.MI", "EUR"),
@@ -200,39 +215,48 @@ def garch11(returns):
                 current_vol_ann=math.sqrt(h * 12.0))
 
 
-def main():
-    months = month_range(START, END)[1:]  # 120 mesi: lug 2016 - giu 2026
-    fx = load_series("EURUSD_X")
-
-    weights = [a[1] for a in ASSETS]
-    asset_rets = []
-    for name, w, fname, ccy, ter_t, ter_p in ASSETS:
+def portfolio_returns(assets, months, fx):
+    rets = []
+    for name, w, fname, ccy, ter_t, ter_p in assets:
         s = load_series(fname)
         if ccy == "USD":
             s = to_eur(s, fx)
         r = monthly_returns(s, months)
         r = r + (ter_p - ter_t) / 100.0 / 12.0  # applica il delta TER
-        asset_rets.append(r)
+        rets.append(r)
+    return rets
 
-    port_values, invested, port_twr = simulate(asset_rets, weights, months)
+
+def main():
+    months = month_range(START, END)[1:]  # 120 mesi: lug 2016 - giu 2026
+    fx = load_series("EURUSD_X")
 
     results = {
         "months": ["%d-%02d" % ym for ym in months],
-        "invested": invested.round(2).tolist(),
+        "invested": None,
         "series": {},
         "metrics": {},
         "annual": {},
         "weighted_ter": round(sum(a[1] * a[4] for a in ASSETS), 4),
+        "weighted_ter_revised": round(sum(a[1] * a[4] for a in ASSETS_REVISED), 4),
     }
-    results["series"]["Portafoglio"] = port_values.round(2).tolist()
-    results["metrics"]["Portafoglio"] = metrics(port_twr)
-    results["annual"]["Portafoglio"] = annual_returns(port_twr, months)
-
     cashflows = [(0, 10000.0)] + [(i + 1, contribution(y, m))
                                   for i, (y, m) in enumerate(months)]
-    results["metrics"]["Portafoglio"]["irr"] = irr_annual(cashflows, port_values[-1])
-    results["metrics"]["Portafoglio"]["final"] = float(port_values[-1])
-    results["metrics"]["Portafoglio"]["invested"] = float(invested[-1])
+
+    port_twrs = {}
+    for key, assets in [("Portafoglio", ASSETS), ("Rivisto", ASSETS_REVISED)]:
+        weights = [a[1] for a in assets]
+        assert abs(sum(weights) - 1.0) < 1e-9, key
+        rets = portfolio_returns(assets, months, fx)
+        values, invested, twr = simulate(rets, weights, months)
+        results["invested"] = invested.round(2).tolist()
+        results["series"][key] = values.round(2).tolist()
+        results["metrics"][key] = metrics(twr)
+        results["metrics"][key]["irr"] = irr_annual(cashflows, values[-1])
+        results["metrics"][key]["final"] = float(values[-1])
+        results["metrics"][key]["invested"] = float(invested[-1])
+        results["annual"][key] = annual_returns(twr, months)
+        port_twrs[key] = twr
 
     bench_twr = {}
     for label, fname, ccy in BENCHMARKS:
@@ -249,7 +273,8 @@ def main():
         bench_twr[key] = twr
 
     results["garch"] = {
-        "Portafoglio": garch11(port_twr),
+        "Portafoglio": garch11(port_twrs["Portafoglio"]),
+        "Rivisto": garch11(port_twrs["Rivisto"]),
         "CSSPX": garch11(bench_twr["CSSPX"]),
         "SWDA": garch11(bench_twr["SWDA"]),
     }
@@ -262,20 +287,20 @@ def main():
         f.write(";\n")
 
     m = results["metrics"]
-    print(f"TER ponderato portafoglio: {results['weighted_ter']:.3f}%")
+    print(f"TER ponderato: originale {results['weighted_ter']:.3f}% | rivisto {results['weighted_ter_revised']:.3f}%")
     print(f"{'':22s}{'Finale EUR':>12s}{'Versato':>10s}{'CAGR':>8s}{'IRR':>8s}"
           f"{'Vol':>8s}{'Sharpe':>8s}{'MaxDD':>8s}")
-    for k in ["Portafoglio", "CSSPX", "SWDA"]:
+    for k in ["Portafoglio", "Rivisto", "CSSPX", "SWDA"]:
         x = m[k]
         print(f"{k:22s}{x['final']:12,.0f}{x['invested']:10,.0f}"
               f"{x['cagr']*100:7.2f}%{x['irr']*100:7.2f}%"
               f"{x['vol']*100:7.2f}%{x['sharpe']:8.2f}{x['maxdd']*100:7.1f}%")
     print("\nRendimenti annuali (TWR):")
     years = sorted(results["annual"]["Portafoglio"])
-    print("Anno  " + "".join(f"{k:>13s}" for k in ["Portafoglio", "CSSPX", "SWDA"]))
+    print("Anno  " + "".join(f"{k:>13s}" for k in ["Portafoglio", "Rivisto", "CSSPX", "SWDA"]))
     for y in years:
         row = "".join(f"{results['annual'][k][y]*100:12.2f}%"
-                      for k in ["Portafoglio", "CSSPX", "SWDA"])
+                      for k in ["Portafoglio", "Rivisto", "CSSPX", "SWDA"])
         print(f"{y}  {row}")
     print("\nGARCH(1,1) su rendimenti mensili:")
     for k, g in results["garch"].items():

@@ -8,7 +8,7 @@
 <script src="./backtest/results.js"></script>
 <style>
 :root{--gold:#e7b54a;--green:#23d18b;--blue:#48a0ff;
-  --s-port:#c08a1f;--s-csspx:#3987e5;--s-swda:#149463;
+  --s-port:#c08a1f;--s-riv:#d55181;--s-csspx:#3987e5;--s-swda:#149463;
   --surface:#0a111f;--ink:#e8eefb;--mut:#7d8db0;--grid:#1b2436}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'JetBrains Mono',monospace;background:
@@ -30,7 +30,7 @@ ul,ol{padding-left:22px;margin:8px 0}
 .kpi{background:linear-gradient(180deg,#0a111f,#080d18);border:1px solid rgba(150,170,205,.18);border-radius:12px;padding:14px 16px}
 .kpi .l{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:#5f7193;margin-bottom:6px}
 .kpi .v{font-size:19px;font-weight:800;color:#fff}
-.kpi .v.gold{color:var(--gold)} .kpi .v.up{color:var(--green)}
+.kpi .v.gold{color:var(--gold)} .kpi .v.up{color:var(--green)} .kpi .v.riv{color:var(--s-riv)}
 .kpi .d{font-size:10.5px;color:#8294b4;margin-top:4px}
 .chartbox{position:relative;height:460px}
 table{width:100%;border-collapse:collapse;font-size:12px;margin:10px 0}
@@ -64,7 +64,8 @@ tr.hl td{color:#fff;font-weight:700;background:rgba(231,181,74,.05)}
 <h1>Portfolio Backtest — Multi-Factor vs CSSPX / SWDA</h1>
 <div class="sub">Backtest 10 anni · luglio 2016 → giugno 2026 · dati mensili Yahoo Finance (total return, EUR) ·
 capitale iniziale 10.000 € · PAC 500 €/mese indicizzato +5%/anno · extra 500 € a marzo e dicembre ·
-ribilanciamento annuale a gennaio · TER ponderato sottratto dai rendimenti</div>
+ribilanciamento annuale a gennaio · TER ponderato sottratto dai rendimenti ·
+include il <b style="color:var(--s-riv)">portafoglio rivisto</b> (Momentum 22 · Quality 22 · ex-USA 15 · Min Vol 15 · Oro 10 · BTC 5 · China 4 · Bond EUR-hedged 7)</div>
 
 <div class="kpis" id="kpis"></div>
 
@@ -90,7 +91,8 @@ i drawdown intramensili reali sono piu' profondi (es. marzo 2020).</div></div>
 (pochi cluster di volatilita' osservabili): i parametri vanno letti come indicativi. La persistenza (&alpha;+&beta;)
 del portafoglio e' piu' alta dei benchmark per effetto della coda Bitcoin/China tech: dopo uno shock la
 volatilita' attesa resta elevata piu' a lungo. La vol condizionata attuale sotto quella di lungo periodo
-indica un regime di volatilita' compressa a fine periodo.</div></div>
+indica un regime di volatilita' compressa a fine periodo. Il portafoglio rivisto riporta persistenza
+e volatilita' di lungo periodo in linea con i benchmark: dimezzare BTC/China elimina gran parte dei cluster di shock.</div></div>
 
 <h2>Composizione — TER e allocazione</h2>
 <div class="panel tbl-scroll">
@@ -103,7 +105,7 @@ indica un regime di volatilita' compressa a fine periodo.</div></div>
 <tr><td>iShares Physical Gold ETC</td><td>IE00B4ND3602</td><td>10%</td><td>0,12%</td><td>0,0120%</td><td>strumento reale (IGLN)</td></tr>
 <tr><td>Bitcoin ETP</td><td>—</td><td>10%</td><td>0,35%*</td><td>0,0350%</td><td>BTC-USD spot + TER ipotizzato</td></tr>
 <tr><td>KraneShares CSI China Internet</td><td>IE00BFXR7892</td><td>7%</td><td>0,75%</td><td>0,0525%</td><td>KWEB USA (dal 2013, TER 0,70%)</td></tr>
-<tr class="hl"><td>TER medio ponderato</td><td></td><td>100%</td><td></td><td>0,283%</td><td></td></tr>
+<tr class="hl"><td>TER medio ponderato</td><td></td><td>100%</td><td></td><td>0,283%</td><td>portafoglio rivisto: 0,251%</td></tr>
 </table>
 <div class="note">* TER ipotizzato per un ETP Bitcoin fisico a basso costo (es. WisdomTree Core / equivalente).
 Ai proxy e' stato applicato il delta di TER rispetto allo strumento target, quindi il portafoglio simulato
@@ -129,9 +131,15 @@ Criticita' strutturali e correttivi proposti:</p>
 <tr><td>China Internet</td><td>7%</td><td>4%</td><td style="text-align:left">TER 0,75%, drawdown -70% (2021-22), rischio regolatorio/geopolitico: da tenere come satellite tattico, non strutturale</td></tr>
 <tr><td>Global Aggregate Bond EUR-hedged <span class="tag b">nuovo</span></td><td>0%</td><td>7%</td><td style="text-align:left">il piano non ha alcun ammortizzatore di liquidita'/duration: con tassi EUR positivi un 7% obbligazionario migliora lo Sharpe atteso e finanzia i ribilanciamenti nei crash</td></tr>
 </table>
-<div class="note">La proposta riduce il TER ponderato a ~0,26%, la quota USA effettiva da ~70% a ~62%
-e la vol attesa di ~2,5 punti, cedendo circa 0,8-1,2 punti di CAGR atteso. Con orizzonte &gt;15 anni e alta
-tolleranza alle perdite, l'allocazione originale resta difendibile; sotto i 10 anni la proposta domina in termini risk-adjusted.</div>
+<div class="note"><b style="color:#fff">Risultato del backtest della proposta (serie
+<span style="color:var(--s-riv)">Portafoglio rivisto</span> nel grafico):</b> montante 241.541 € contro
+317.715 € dell'originale ma con volatilità 12,5% (−4,3 punti), Max Drawdown −14,9% (vs −16,9%),
+Sharpe identico (1,31) e TER ponderato 0,251%. Il divario di montante nasce quasi tutto dal
+dimezzamento di Bitcoin negli anni 2017 e 2020-21: a parità di rendimento corretto per il rischio,
+la versione rivista consegna lo stesso Sharpe con un quarto di volatilità in meno e batte comunque
+CSSPX di ~15.000 €. La quota USA effettiva scende da ~70% a ~62%. Con orizzonte &gt;15 anni e alta
+tolleranza alle perdite l'allocazione originale resta difendibile; sotto i 10 anni la rivista domina
+in termini risk-adjusted.</div>
 </div>
 
 <h2>La lettura del "Top 1%" — cosa direbbe un PM quantitativo</h2>
@@ -174,7 +182,7 @@ e' che il top 1% decide le reazioni prima dello shock, non durante.»</p>
 <div class="panel">
 <ul>
 <li>Dati: Yahoo Finance, barre mensili adjusted close (dividendi reinvestiti), scaricati il 12/07/2026; serie USD convertite in EUR con EURUSD di fine mese. Snapshot dei dati in <code>backtest/data/</code>, motore in <code>backtest/portfolio_backtest.py</code> (riproducibile).</li>
-<li>Proxy per strumenti senza 10 anni di storia: Quality Aristocrats → iShares World Quality (IWQU); World ex-USA → Vanguard VEA (include Canada/Korea: approssimazione); KraneShares UCITS → KWEB USA; Bitcoin → prezzo spot + TER ipotizzato 0,35%. Ai proxy e' applicato il delta TER verso lo strumento target.</li>
+<li>Proxy per strumenti senza 10 anni di storia: Quality Aristocrats → iShares World Quality (IWQU); World ex-USA → Vanguard VEA (include Canada/Korea: approssimazione); KraneShares UCITS → KWEB USA; Bitcoin → prezzo spot + TER ipotizzato 0,35%; Global Aggregate Bond EUR-hedged (portafoglio rivisto, target iShares AGGH TER 0,10%) → Xtrackers Global Government Bond EUR Hedged (DBZB, dal 2008: solo governativi, approssimazione conservativa dell'Aggregate). Ai proxy e' applicato il delta TER verso lo strumento target.</li>
 <li>PAC versato a inizio mese ai pesi target; rata 500 € indicizzata +5% a ogni gennaio (2026: 814 €/mese); extra 500 € a marzo e dicembre; ribilanciamento totale ai pesi target a gennaio.</li>
 <li>Non inclusi: spread bid-ask, commissioni di negoziazione, fiscalita', tracking difference oltre il TER, slippage del ribilanciamento.</li>
 <li>Il breakdown settoriale usa i pesi settoriali correnti dei fondi (stime da factsheet): la composizione storica era diversa.</li>
@@ -187,29 +195,30 @@ non sono indicativi di quelli futuri. Le performance simulate con proxy possono 
 
 <script>
 const D = window.BACKTEST_DATA;
-const C = {Portafoglio:getComputedStyle(document.documentElement).getPropertyValue('--s-port').trim(),
-           CSSPX:getComputedStyle(document.documentElement).getPropertyValue('--s-csspx').trim(),
-           SWDA:getComputedStyle(document.documentElement).getPropertyValue('--s-swda').trim()};
+const cssVar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const C = {Portafoglio:cssVar('--s-port'), Rivisto:cssVar('--s-riv'),
+           CSSPX:cssVar('--s-csspx'), SWDA:cssVar('--s-swda')};
 const eur = v => v.toLocaleString('it-IT',{maximumFractionDigits:0})+' €';
 const pct = (v,d=2) => (v*100).toLocaleString('it-IT',{minimumFractionDigits:d,maximumFractionDigits:d})+'%';
 
 // KPI
-const mp = D.metrics.Portafoglio;
+const mp = D.metrics.Portafoglio, mr = D.metrics.Rivisto;
 document.getElementById('kpis').innerHTML = [
- ['Montante finale', eur(mp.final), 'gold', 'portafoglio · 30/06/2026'],
+ ['Montante finale', eur(mp.final), 'gold', 'portafoglio originale · 30/06/2026'],
+ ['Montante rivisto', eur(mr.final), 'riv', 'CAGR '+pct(mr.cagr)+' · vol '+pct(mr.vol,1)],
  ['Capitale versato', eur(mp.invested), '', '10k iniziali + PAC + extra'],
  ['CAGR (TWR)', pct(mp.cagr), 'up', 'vs CSSPX '+pct(D.metrics.CSSPX.cagr)+' · SWDA '+pct(D.metrics.SWDA.cagr)],
- ['IRR investitore', pct(mp.irr), 'up', 'money-weighted'],
- ['Sharpe', mp.sharpe.toFixed(2), '', 'rf 1,0% · mensile ann.'],
- ['Max Drawdown', pct(mp.maxdd,1), '', 'su chiusure mensili'],
- ['Volatilità', pct(mp.vol,1), '', 'dev. standard ann.'],
- ['TER ponderato', pct(D.weighted_ter/100,3).replace('%','')+'%', '', 'sottratto dai rendimenti'],
+ ['IRR investitore', pct(mp.irr), 'up', 'money-weighted · rivisto '+pct(mr.irr)],
+ ['Sharpe', mp.sharpe.toFixed(2), '', 'rf 1,0% · rivisto '+mr.sharpe.toFixed(2)],
+ ['Max Drawdown', pct(mp.maxdd,1), '', 'mensile · rivisto '+pct(mr.maxdd,1)],
+ ['TER ponderato', pct(D.weighted_ter/100,3).replace('%','')+'%', '', 'rivisto '+pct(D.weighted_ter_revised/100,3).replace('%','')+'%'],
 ].map(([l,v,cls,d])=>`<div class="kpi"><div class="l">${l}</div><div class="v ${cls}">${v}</div><div class="d">${d}</div></div>`).join('');
 
-const LBL = {Portafoglio:'Portafoglio Multi-Factor', CSSPX:'CSSPX · Core S&P 500', SWDA:'SWDA · Core MSCI World'};
+const LBL = {Portafoglio:'Portafoglio originale', Rivisto:'Portafoglio rivisto (7% bond)',
+             CSSPX:'CSSPX · Core S&P 500', SWDA:'SWDA · Core MSCI World'};
 
 // Metrics table
-const rows = ['Portafoglio','CSSPX','SWDA'];
+const rows = ['Portafoglio','Rivisto','CSSPX','SWDA'];
 document.getElementById('tblMetrics').innerHTML =
  '<tr><th>Strategia</th><th>Montante</th><th>Versato</th><th>CAGR</th><th>IRR</th><th>Volatilità</th><th>Sharpe</th><th>Max DD</th></tr>'+
  rows.map((k,i)=>{const m=D.metrics[k];return `<tr${i==0?' class="hl"':''}><td><span class="dot" style="background:${C[k]}"></span>${LBL[k]}</td>
@@ -230,16 +239,24 @@ document.getElementById('tblGarch').innerHTML =
   <td>${g.alpha.toFixed(3)}</td><td>${g.beta.toFixed(3)}</td><td>${g.persistence.toFixed(3)}</td>
   <td>${pct(g.longrun_vol_ann,1)}</td><td>${pct(g.current_vol_ann,1)}</td></tr>`).join('');
 
-// Sector breakdown (stime look-through, vedi metodologia)
-const SECT = [["Informatica",17.3],["Finanza",12.6],["Oro (materie prime)",10.0],["Cripto (Bitcoin)",10.0],
- ["Industria",9.8],["Beni discrezionali",8.8],["Comunicazioni",8.3],["Salute",8.0],
- ["Beni di consumo primari",5.6],["Materiali",3.2],["Utility",2.5],["Energia",1.8],["Immobiliare",1.7],["Altro",0.4]];
-const SC = {"Oro (materie prime)":"#c08a1f","Cripto (Bitcoin)":"#e7b54a"};
-document.getElementById('sectors').innerHTML = SECT.map(([n,v])=>
- `<div class="row"><div class="lab">${n}</div><div class="track"><div class="fill" style="width:${v/17.3*100}%;background:${SC[n]||'#3987e5'}"></div></div><div class="val">${v.toLocaleString('it-IT',{minimumFractionDigits:1})}%</div></div>`).join('')+
- `<div class="note">Look-through sulle posizioni correnti dei fondi (stime da factsheet, classificazione GICS).
- Il portafoglio azionario e' inoltre ~70% USA. Da notare: Informatica al 17% sottostima l'esposizione reale al tema tech,
- perche' parte di Comunicazioni (Google/Meta/Tencent) e Beni discrezionali (Amazon/Alibaba) e' economicamente tech.</div>`;
+// Sector breakdown (stime look-through, vedi metodologia): [nome, orig %, rivisto %]
+const SECT = [["Informatica",17.3,16.6],["Finanza",12.6,13.0],["Oro (materie prime)",10.0,10.0],
+ ["Cripto (Bitcoin)",10.0,5.0],["Industria",9.8,10.2],["Beni discrezionali",8.8,7.7],
+ ["Comunicazioni",8.3,7.0],["Salute",8.0,8.2],["Obbligazioni",0.0,7.0],
+ ["Beni di consumo primari",5.6,5.7],["Materiali",3.2,3.4],["Utility",2.5,2.5],
+ ["Energia",1.8,1.9],["Immobiliare",1.7,1.6],["Altro",0.4,0.3]];
+const SC = {"Oro (materie prime)":"#c08a1f","Cripto (Bitcoin)":"#e7b54a","Obbligazioni":"#d55181"};
+document.getElementById('sectors').innerHTML =
+ `<div class="row"><div class="lab"></div><div class="track" style="background:none"></div>
+  <div class="val" style="width:120px;font-weight:400;color:#5f7193;font-size:10px">ORIG · RIVISTO</div></div>`+
+ SECT.map(([n,v,r])=>
+ `<div class="row"><div class="lab">${n}</div><div class="track"><div class="fill" style="width:${v/17.3*100}%;background:${SC[n]||'#3987e5'}"></div></div>
+  <div class="val" style="width:120px">${v.toLocaleString('it-IT',{minimumFractionDigits:1})}% · <span style="color:${r>v?'#23d18b':r<v?'#8294b4':'#fff'}">${r.toLocaleString('it-IT',{minimumFractionDigits:1})}%</span></div></div>`).join('')+
+ `<div class="note">Barre: allocazione originale. Seconda colonna: portafoglio rivisto (verde = aumenta, grigio = diminuisce).
+ Look-through sulle posizioni correnti dei fondi (stime da factsheet, classificazione GICS).
+ Il portafoglio azionario originale e' inoltre ~70% USA (~62% nella versione rivista). Da notare: Informatica al 17% sottostima
+ l'esposizione reale al tema tech, perche' parte di Comunicazioni (Google/Meta/Tencent) e Beni discrezionali (Amazon/Alibaba)
+ e' economicamente tech.</div>`;
 
 // Chart (per ultimo: se il CDN di Chart.js non e' raggiungibile, fallback al PNG statico)
 try {
@@ -247,7 +264,7 @@ try {
  new Chart(document.getElementById('chart'), {
   type:'line',
   data:{labels:D.months, datasets:[
-    ...['Portafoglio','CSSPX','SWDA'].map(k=>({label:LBL[k]+'  ('+eur(D.metrics[k].final)+')',
+    ...rows.map(k=>({label:LBL[k]+'  ('+eur(D.metrics[k].final)+')',
       data:D.series[k], borderColor:C[k], borderWidth:2.2, pointRadius:0, pointHitRadius:8, tension:.15})),
     {label:'Capitale versato ('+eur(mp.invested)+')', data:D.invested, borderColor:'#7d8db0',
      borderDash:[5,4], borderWidth:1.4, pointRadius:0, pointHitRadius:8}
