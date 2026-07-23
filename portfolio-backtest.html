@@ -101,15 +101,15 @@ e volatilita' di lungo periodo in linea con i benchmark: dimezzare BTC/China eli
 <tr><td>iShares MSCI World Momentum</td><td>IE00BP3QZ825</td><td>25%</td><td>0,25%</td><td>0,0625%</td><td>fondo reale (IWMO)</td></tr>
 <tr><td>SPDR S&amp;P Developed Quality Aristocrats</td><td>IE000IISJT64</td><td>20%</td><td>0,35%</td><td>0,0700%</td><td>iShares World Quality (IWQU, dal 2014)</td></tr>
 <tr><td>Xtrackers MSCI World ex USA</td><td>IE0006WW1TQ4</td><td>10%</td><td>0,15%</td><td>0,0150%</td><td>Vanguard FTSE Dev. ex-US (VEA)</td></tr>
-<tr><td>iShares Edge S&amp;P 500 Min Volatility</td><td>IE00B6SPMN59</td><td>18%</td><td>0,20%</td><td>0,0360%</td><td>fondo reale (SPMV)</td></tr>
+<tr><td>iShares Edge MSCI World Min Volatility</td><td>IE00B8FHGS14</td><td>18%</td><td>0,30%</td><td>0,0540%</td><td>fondo reale (MVOL, dal 2012)</td></tr>
 <tr><td>iShares Physical Gold ETC</td><td>IE00B4ND3602</td><td>10%</td><td>0,12%</td><td>0,0120%</td><td>strumento reale (IGLN)</td></tr>
 <tr><td>Bitcoin ETP</td><td>—</td><td>10%</td><td>0,35%*</td><td>0,0350%</td><td>BTC-USD spot + TER ipotizzato</td></tr>
 <tr><td>KraneShares CSI China Internet</td><td>IE00BFXR7892</td><td>7%</td><td>0,75%</td><td>0,0525%</td><td>KWEB USA (dal 2013, TER 0,70%)</td></tr>
-<tr class="hl"><td>TER medio ponderato</td><td></td><td>100%</td><td></td><td>0,283%</td><td>portafoglio rivisto: 0,251%</td></tr>
+<tr class="hl"><td>TER medio ponderato</td><td></td><td>100%</td><td></td><td>0,301%</td><td>portafoglio rivisto: 0,266%</td></tr>
 </table>
 <div class="note">* TER ipotizzato per un ETP Bitcoin fisico a basso costo (es. WisdomTree Core / equivalente).
 Ai proxy e' stato applicato il delta di TER rispetto allo strumento target, quindi il portafoglio simulato
-paga esattamente lo 0,283% annuo. In piu' andrebbero considerati spread bid-ask e costi di transazione
+paga esattamente lo 0,301% annuo. In piu' andrebbero considerati spread bid-ask e costi di transazione
 del ribilanciamento (~0,05-0,10%/anno, non inclusi).</div></div>
 
 <h2>Breakdown settoriale (stima, look-through)</h2>
@@ -124,20 +124,20 @@ Criticita' strutturali e correttivi proposti:</p>
 <tr><th>Voce</th><th>Attuale</th><th>Proposta</th><th style="text-align:left">Razionale</th></tr>
 <tr><td>MSCI World Momentum</td><td>25%</td><td>22%</td><td style="text-align:left">resta il motore, ma 25% concentra il rischio di crash del fattore (es. rotazioni stile 2016/2021)</td></tr>
 <tr><td>Quality Aristocrats</td><td>20%</td><td>22%</td><td style="text-align:left">il fattore piu' robusto nei drawdown; merita il ruolo di core difensivo insieme al Min Vol</td></tr>
-<tr><td>World ex-USA</td><td>10%</td><td>15%</td><td style="text-align:left">il portafoglio e' ~70% USA in look-through: la diversificazione geografica reale e' bassa; valutare anche una quota EM</td></tr>
-<tr><td>S&amp;P 500 Min Volatility</td><td>18%</td><td>15%</td><td style="text-align:left">sovrappone USA large-cap gia' presenti in Momentum/Quality; ridurre per liberare spazio ex-USA</td></tr>
+<tr><td>World ex-USA</td><td>10%</td><td>15%</td><td style="text-align:left">l'azionario e' ~55% USA in look-through: aumentare ex-USA riduce ancora la concentrazione e apre a una quota EM</td></tr>
+<tr><td>MSCI World Min Volatility</td><td>18%</td><td>15%</td><td style="text-align:left">gia' globale e difensivo (TER 0,30%): riduzione marginale per liberare spazio a ex-USA e alla nuova sleeve obbligazionaria</td></tr>
 <tr><td>Oro fisico</td><td>10%</td><td>10%</td><td style="text-align:left">confermato: unico vero diversificatore nel 2022 insieme al dollaro</td></tr>
 <tr><td>Bitcoin</td><td>10%</td><td>5%</td><td style="text-align:left">10% di un asset con vol ~70% domina il rischio totale (~35-40% del rischio del portafoglio); 5% mantiene la convessita' dimezzando la coda</td></tr>
 <tr><td>China Internet</td><td>7%</td><td>4%</td><td style="text-align:left">TER 0,75%, drawdown -70% (2021-22), rischio regolatorio/geopolitico: da tenere come satellite tattico, non strutturale</td></tr>
 <tr><td>Global Aggregate Bond EUR-hedged <span class="tag b">nuovo</span></td><td>0%</td><td>7%</td><td style="text-align:left">il piano non ha alcun ammortizzatore di liquidita'/duration: con tassi EUR positivi un 7% obbligazionario migliora lo Sharpe atteso e finanzia i ribilanciamenti nei crash</td></tr>
 </table>
 <div class="note"><b style="color:#fff">Risultato del backtest della proposta (serie
-<span style="color:var(--s-riv)">Portafoglio rivisto</span> nel grafico):</b> montante 241.541 € contro
-317.715 € dell'originale ma con volatilità 12,5% (−4,3 punti), Max Drawdown −14,9% (vs −16,9%),
-Sharpe identico (1,31) e TER ponderato 0,251%. Il divario di montante nasce quasi tutto dal
+<span style="color:var(--s-riv)">Portafoglio rivisto</span> nel grafico):</b> montante 233.802 € contro
+305.279 € dell'originale ma con volatilità 12,1% (−4,3 punti), Max Drawdown −14,6% (vs −17,3%),
+Sharpe identico (1,30) e TER ponderato 0,266%. Il divario di montante nasce quasi tutto dal
 dimezzamento di Bitcoin negli anni 2017 e 2020-21: a parità di rendimento corretto per il rischio,
 la versione rivista consegna lo stesso Sharpe con un quarto di volatilità in meno e batte comunque
-CSSPX di ~15.000 €. La quota USA effettiva scende da ~70% a ~62%. Con orizzonte &gt;15 anni e alta
+CSSPX (226.199 €). La quota USA sull'azionario scende da ~55% a ~53%. Con orizzonte &gt;15 anni e alta
 tolleranza alle perdite l'allocazione originale resta difendibile; sotto i 10 anni la rivista domina
 in termini risk-adjusted.</div>
 </div>
@@ -148,15 +148,16 @@ in termini risk-adjusted.</div>
 e i Magnifici 7 fanno il decennio migliore della storia. Il mio lavoro e' chiederti cosa succede
 nelle altre storie.»</i></p></div>
 <h3>1. Attribuzione, non rendimento <span class="tag r">punto chiave</span></h3>
-<p>Dei ~24% di CAGR, una quota sproporzionata viene dal 10% di Bitcoin (+120% del portafoglio nel solo 2017)
-e dal beta USA. Un istituzionale non giudica la strategia dal montante, ma dall'attribuzione: tolto BTC,
+<p>Dei ~23% di CAGR, una quota sproporzionata viene dal 10% di Bitcoin (+120% del portafoglio nel solo 2017)
+e dal beta azionario. Un istituzionale non giudica la strategia dal montante, ma dall'attribuzione: tolto BTC,
 il portafoglio fa circa il rendimento di CSSPX con piu' costi e piu' parti in movimento.
 Se la tesi e' "factor investing", il backtest non la dimostra: dimostra "ho tenuto crypto per 10 anni".</p>
 <h3>2. Rischio di concentrazione nascosto</h3>
 <p>Momentum + Quality + Min Vol sembrano tre scommesse diverse ma oggi condividono gli stessi titoli
-USA mega-cap: la correlazione tra le sleeve azionarie e' 0,85-0,95. In look-through il portafoglio e'
-~70% USA e ~17% Informatica <b>prima</b> di contare che Momentum oggi e' esso stesso pieno di tech.
-La "diversificazione" e' in gran parte cosmetica.</p>
+mega-cap: la correlazione tra le sleeve azionarie e' 0,85-0,95. Il passaggio al World Min Vol aiuta
+(l'azionario scende a ~55% USA), ma resta ~16% Informatica <b>prima</b> di contare che Momentum e Quality
+oggi sono essi stessi pieni di tech: buona parte della "diversificazione fattoriale" e' in realta' lo stesso
+paniere di mega-cap comprato tre volte.</p>
 <h3>3. Il rischio si misura in contributi, non in pesi</h3>
 <p>Bitcoin pesa il 10% del capitale ma, con volatilita' ~70% contro ~14% dell'azionario, contribuisce
 al 35-40% della varianza totale. Un risk manager dimensionerebbe BTC in risk parity:
@@ -240,23 +241,23 @@ document.getElementById('tblGarch').innerHTML =
   <td>${pct(g.longrun_vol_ann,1)}</td><td>${pct(g.current_vol_ann,1)}</td></tr>`).join('');
 
 // Sector breakdown (stime look-through, vedi metodologia): [nome, orig %, rivisto %]
-const SECT = [["Informatica",17.3,16.6],["Finanza",12.6,13.0],["Oro (materie prime)",10.0,10.0],
- ["Cripto (Bitcoin)",10.0,5.0],["Industria",9.8,10.2],["Beni discrezionali",8.8,7.7],
- ["Comunicazioni",8.3,7.0],["Salute",8.0,8.2],["Obbligazioni",0.0,7.0],
- ["Beni di consumo primari",5.6,5.7],["Materiali",3.2,3.4],["Utility",2.5,2.5],
- ["Energia",1.8,1.9],["Immobiliare",1.7,1.6],["Altro",0.4,0.3]];
+const SECT = [["Informatica",16.4,15.9],["Finanza",12.4,12.8],["Oro (materie prime)",10.0,10.0],
+ ["Cripto (Bitcoin)",10.0,5.0],["Industria",9.8,10.2],["Comunicazioni",8.9,7.5],
+ ["Beni discrezionali",8.8,7.7],["Salute",7.8,8.0],["Obbligazioni",0.0,7.0],
+ ["Beni di consumo primari",5.4,5.6],["Materiali",3.2,3.4],["Utility",2.7,2.6],
+ ["Energia",1.8,1.9],["Immobiliare",1.7,1.6],["Altro",1.1,0.9]];
 const SC = {"Oro (materie prime)":"#c08a1f","Cripto (Bitcoin)":"#e7b54a","Obbligazioni":"#d55181"};
 document.getElementById('sectors').innerHTML =
  `<div class="row"><div class="lab"></div><div class="track" style="background:none"></div>
   <div class="val" style="width:120px;font-weight:400;color:#5f7193;font-size:10px">ORIG · RIVISTO</div></div>`+
  SECT.map(([n,v,r])=>
- `<div class="row"><div class="lab">${n}</div><div class="track"><div class="fill" style="width:${v/17.3*100}%;background:${SC[n]||'#3987e5'}"></div></div>
+ `<div class="row"><div class="lab">${n}</div><div class="track"><div class="fill" style="width:${v/16.4*100}%;background:${SC[n]||'#3987e5'}"></div></div>
   <div class="val" style="width:120px">${v.toLocaleString('it-IT',{minimumFractionDigits:1})}% · <span style="color:${r>v?'#23d18b':r<v?'#8294b4':'#fff'}">${r.toLocaleString('it-IT',{minimumFractionDigits:1})}%</span></div></div>`).join('')+
  `<div class="note">Barre: allocazione originale. Seconda colonna: portafoglio rivisto (verde = aumenta, grigio = diminuisce).
  Look-through sulle posizioni correnti dei fondi (stime da factsheet, classificazione GICS).
- Il portafoglio azionario originale e' inoltre ~70% USA (~62% nella versione rivista). Da notare: Informatica al 17% sottostima
- l'esposizione reale al tema tech, perche' parte di Comunicazioni (Google/Meta/Tencent) e Beni discrezionali (Amazon/Alibaba)
- e' economicamente tech.</div>`;
+ Con il Min Vol su indice <b>MSCI World</b> (globale), l'azionario del portafoglio originale e' ~55% USA (~53% nella versione rivista):
+ meno concentrato di quanto sembri. Da notare: Informatica al 16% sottostima l'esposizione reale al tema tech, perche' parte di
+ Comunicazioni (Google/Meta/Tencent) e Beni discrezionali (Amazon/Alibaba) e' economicamente tech.</div>`;
 
 // Chart (per ultimo: se il CDN di Chart.js non e' raggiungibile, fallback al PNG statico)
 try {

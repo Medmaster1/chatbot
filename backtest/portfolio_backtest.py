@@ -25,6 +25,10 @@ Proxy usati dove lo strumento target non ha 10 anni di storia:
     ex-US (VEA, TER 0,05%)
   - Bitcoin ETP -> BTC-USD spot, con TER ipotizzato 0,35%
   - KraneShares CSI China Internet UCITS (2018) -> KWEB USA (TER 0,70%)
+
+Lo sleeve Min Volatility usa il fondo reale iShares Edge MSCI World Minimum
+Volatility (IE00B8FHGS14 / MVOL.L, TER 0,30%), quotato dal 2012: 10 anni di
+storia effettiva, nessun proxy.
 """
 import json
 import math
@@ -44,7 +48,7 @@ ASSETS = [
     ("MSCI World Momentum",        0.25, "IWMO.L",   "USD", 0.25, 0.25),
     ("Quality Aristocrats",        0.20, "IWQU.L",   "USD", 0.35, 0.30),
     ("World ex-USA",               0.10, "VEA",      "USD", 0.15, 0.05),
-    ("S&P 500 Min Volatility",     0.18, "SPMV.L",   "USD", 0.20, 0.20),
+    ("MSCI World Min Volatility",  0.18, "MVOL.L",   "USD", 0.30, 0.30),
     ("Oro fisico",                 0.10, "IGLN.L",   "USD", 0.12, 0.12),
     ("Bitcoin",                    0.10, "BTC-USD",  "USD", 0.35, 0.00),
     ("China Internet (KWEB)",      0.07, "KWEB",     "USD", 0.75, 0.70),
@@ -58,7 +62,7 @@ ASSETS_REVISED = [
     ("MSCI World Momentum",        0.22, "IWMO.L",   "USD", 0.25, 0.25),
     ("Quality Aristocrats",        0.22, "IWQU.L",   "USD", 0.35, 0.30),
     ("World ex-USA",               0.15, "VEA",      "USD", 0.15, 0.05),
-    ("S&P 500 Min Volatility",     0.15, "SPMV.L",   "USD", 0.20, 0.20),
+    ("MSCI World Min Volatility",  0.15, "MVOL.L",   "USD", 0.30, 0.30),
     ("Oro fisico",                 0.10, "IGLN.L",   "USD", 0.12, 0.12),
     ("Bitcoin",                    0.05, "BTC-USD",  "USD", 0.35, 0.00),
     ("China Internet (KWEB)",      0.04, "KWEB",     "USD", 0.75, 0.70),

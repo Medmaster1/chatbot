@@ -1,9 +1,10 @@
 # Portfolio Backtest 10Y — Multi-Factor vs CSSPX / SWDA
 
 Backtest riproducibile (lug 2016 → giu 2026) del portafoglio multi-factor
-(Momentum 25%, Quality 20%, World ex-USA 10%, Min Vol 18%, Oro 10%, Bitcoin 10%,
-China Internet 7%) contro CSSPX e SWDA, con PAC 500 €/mese indicizzato +5%/anno,
-extra 500 € a marzo/dicembre, ribilanciamento annuale a gennaio e TER ponderato.
+(Momentum 25%, Quality 20%, World ex-USA 10%, MSCI World Min Vol 18%, Oro 10%,
+Bitcoin 10%, China Internet 7%) contro CSSPX e SWDA, con PAC 500 €/mese indicizzato
++5%/anno, extra 500 € a marzo/dicembre, ribilanciamento annuale a gennaio e TER
+ponderato **0,301%** (montante finale 305.279 €, CAGR 23,4%, Sharpe 1,30).
 
 Include anche il **portafoglio rivisto** (Momentum 22, Quality 22, ex-USA 15,
 Min Vol 15, Oro 10, Bitcoin 5, China 4, Global Aggregate Bond EUR-hedged 7 —
