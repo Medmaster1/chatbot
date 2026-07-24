@@ -23,7 +23,6 @@ Proxy usati dove lo strumento target non ha 10 anni di storia:
     Quality (IWQU.L, TER 0,30%)
   - Xtrackers World ex USA (IE0006WW1TQ4, 2023) -> Vanguard FTSE Developed
     ex-US (VEA, TER 0,05%)
-  - Bitcoin ETP -> BTC-USD spot, con TER ipotizzato 0,35%
   - KraneShares CSI China Internet UCITS (2018) -> KWEB USA (TER 0,70%)
 
 Lo sleeve Min Volatility usa il fondo reale iShares Edge MSCI World Minimum
@@ -45,28 +44,27 @@ RF_ANNUAL = 0.010   # risk-free medio EUR per lo Sharpe
 
 # (nome, peso, file proxy, valuta, TER target %, TER proxy %)
 ASSETS = [
-    ("MSCI World Momentum",        0.25, "IWMO.L",   "USD", 0.25, 0.25),
+    ("MSCI World Momentum",        0.30, "IWMO.L",   "USD", 0.25, 0.25),
     ("Quality Aristocrats",        0.20, "IWQU.L",   "USD", 0.35, 0.30),
-    ("World ex-USA",               0.10, "VEA",      "USD", 0.15, 0.05),
+    ("World ex-USA",               0.15, "VEA",      "USD", 0.15, 0.05),
     ("MSCI World Min Volatility",  0.18, "MVOL.L",   "USD", 0.30, 0.30),
     ("Oro fisico",                 0.10, "IGLN.L",   "USD", 0.12, 0.12),
-    ("Bitcoin",                    0.10, "BTC-USD",  "USD", 0.35, 0.00),
     ("China Internet (KWEB)",      0.07, "KWEB",     "USD", 0.75, 0.70),
 ]
 
-# Allocazione rivista: -3 Momentum, +2 Quality, +5 ex-USA, -3 Min Vol,
-# BTC dimezzato, -3 China, +7% Global Aggregate Bond EUR-hedged.
+# Allocazione rivista: -5 Momentum (30% concentra il rischio del fattore),
+# +2 Quality, Min Vol -2, -3 China, +8% Global Aggregate Bond EUR-hedged
+# (il piano non ha alcun ammortizzatore di liquidita'/duration).
 # Proxy bond: Xtrackers Global Government Bond EUR Hedged (DBZB, dal 2008,
 # TER 0,25%) per iShares Core Global Aggregate EUR Hedged (AGGH, TER 0,10%).
 ASSETS_REVISED = [
-    ("MSCI World Momentum",        0.22, "IWMO.L",   "USD", 0.25, 0.25),
+    ("MSCI World Momentum",        0.25, "IWMO.L",   "USD", 0.25, 0.25),
     ("Quality Aristocrats",        0.22, "IWQU.L",   "USD", 0.35, 0.30),
     ("World ex-USA",               0.15, "VEA",      "USD", 0.15, 0.05),
-    ("MSCI World Min Volatility",  0.15, "MVOL.L",   "USD", 0.30, 0.30),
+    ("MSCI World Min Volatility",  0.16, "MVOL.L",   "USD", 0.30, 0.30),
     ("Oro fisico",                 0.10, "IGLN.L",   "USD", 0.12, 0.12),
-    ("Bitcoin",                    0.05, "BTC-USD",  "USD", 0.35, 0.00),
     ("China Internet (KWEB)",      0.04, "KWEB",     "USD", 0.75, 0.70),
-    ("Global Agg Bond EUR-hedged", 0.07, "DBZB.DE",  "EUR", 0.10, 0.25),
+    ("Global Agg Bond EUR-hedged", 0.08, "DBZB.DE",  "EUR", 0.10, 0.25),
 ]
 BENCHMARKS = [
     ("CSSPX - iShares Core S&P 500", "CSSPX.MI", "EUR"),

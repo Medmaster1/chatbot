@@ -1,14 +1,18 @@
 # Portfolio Backtest 10Y — Multi-Factor vs CSSPX / SWDA
 
 Backtest riproducibile (lug 2016 → giu 2026) del portafoglio multi-factor
-(Momentum 25%, Quality 20%, World ex-USA 10%, MSCI World Min Vol 18%, Oro 10%,
-Bitcoin 10%, China Internet 7%) contro CSSPX e SWDA, con PAC 500 €/mese indicizzato
+**senza Bitcoin** (Momentum 30%, Quality 20%, World ex-USA 15%, MSCI World Min Vol
+18%, Oro 10%, China Internet 7%) contro CSSPX e SWDA, con PAC 500 €/mese indicizzato
 +5%/anno, extra 500 € a marzo/dicembre, ribilanciamento annuale a gennaio e TER
-ponderato **0,301%** (montante finale 305.279 €, CAGR 23,4%, Sharpe 1,30).
+ponderato **0,286%**.
 
-Include anche il **portafoglio rivisto** (Momentum 22, Quality 22, ex-USA 15,
-Min Vol 15, Oro 10, Bitcoin 5, China 4, Global Aggregate Bond EUR-hedged 7 —
-proxy Xtrackers DBZB), simulato con le stesse regole.
+Risultato chiave: senza Bitcoin il portafoglio rende **meno dei benchmark in assoluto**
+(189.827 € vs 226.199 € di CSSPX, CAGR 11,5%) ma con la volatilità più bassa (10,2%),
+il **miglior Sharpe (1,02)** e il drawdown più contenuto (−14,4%).
+
+Include anche il **portafoglio rivisto** (Momentum 25, Quality 22, ex-USA 15,
+Min Vol 16, Oro 10, China 4, Global Aggregate Bond EUR-hedged 8 — proxy Xtrackers
+DBZB), simulato con le stesse regole.
 
 - `portfolio_backtest.py` — motore di simulazione (richiede `numpy`, `scipy`).
   Legge gli snapshot in `data/` e scrive `results.json` + `results.js`.
