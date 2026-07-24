@@ -65,8 +65,8 @@ tr.hl td{color:#fff;font-weight:700;background:rgba(231,181,74,.05)}
 <div class="sub">Backtest 10 anni · luglio 2016 → giugno 2026 · dati mensili Yahoo Finance (total return, EUR) ·
 capitale iniziale 10.000 € · PAC 500 €/mese indicizzato +5%/anno · extra 500 € a marzo e dicembre ·
 ribilanciamento annuale a gennaio · TER ponderato sottratto dai rendimenti ·
-<b style="color:var(--s-port)">target quality-tilt</b>: Momentum 25 · Quality 30 · ex-USA 15 · Min Vol 20 · Oro 10 (5 sleeve, 90% azionario + 10% oro) —
-confrontato con una <b style="color:var(--s-riv)">versione rivista</b> (Quality 25 · Min Vol 17 · Oro 8 · +10% Bond EUR-hedged) e con i benchmark</div>
+<b style="color:var(--s-port)">target aggressivo</b>: Momentum 40 · Quality 30 · ex-USA 20 · Oro 10 (4 sleeve, 90% azionario + 10% oro, nessun asset difensivo) —
+confrontato con una <b style="color:var(--s-riv)">versione rivista</b> (Momentum 30 · Quality 28 · ex-USA 20 · Oro 12 · +10% Bond EUR-hedged) e con i benchmark</div>
 
 <div class="kpis" id="kpis"></div>
 
@@ -89,94 +89,93 @@ i drawdown intramensili reali sono piu' profondi (es. marzo 2020).</div></div>
 <h2>Volatilità GARCH(1,1)</h2>
 <div class="panel tbl-scroll"><table id="tblGarch"></table>
 <div class="note">Stima MLE su 120 rendimenti mensili. Con dati mensili il modello e' identificato debolmente
-(pochi cluster di volatilita' osservabili): i parametri vanno letti come indicativi. La volatilita' di lungo periodo
-del target (~10,4%) e' <b>nettamente sotto quella dei benchmark</b> (CSSPX ~14%, SWDA ~13%): il quality-tilt e il Min Vol
-funzionano da stabilizzatore. La persistenza (&alpha;+&beta;) e' la piu' bassa dei quattro (0,42): dopo uno shock la
-volatilita' rientra in fretta. La versione rivista con il 10% obbligazionario abbassa la vol di lungo periodo a ~9,6%.
-La vol condizionata attuale sotto quella di lungo periodo indica un regime compresso a fine periodo.</div></div>
+(pochi cluster di volatilita' osservabili): i parametri vanno letti come indicativi. Anche con il 40% Momentum la
+volatilita' di lungo periodo del target (~11,4%) resta <b>sotto quella dei benchmark</b> (CSSPX ~14%, SWDA ~13%):
+l'oro, l'ex-USA e il Quality bilanciano la spinta aggressiva del Momentum. La vol condizionata attuale (~11,7%) e'
+in linea con quella di lungo periodo. La versione rivista con il 10% obbligazionario abbassa la vol di lungo periodo
+a ~9,9%.</div></div>
 
 <h2>Composizione — TER e allocazione</h2>
 <div class="panel tbl-scroll">
 <table>
 <tr><th>Strumento</th><th>ISIN</th><th>Peso</th><th>TER</th><th>TER × Peso</th><th>Proxy usato nel backtest</th></tr>
-<tr><td>iShares MSCI World Momentum</td><td>IE00BP3QZ825</td><td>25%</td><td>0,25%</td><td>0,0625%</td><td>fondo reale (IWMO)</td></tr>
+<tr><td>iShares MSCI World Momentum</td><td>IE00BP3QZ825</td><td>40%</td><td>0,25%</td><td>0,1000%</td><td>fondo reale (IWMO)</td></tr>
 <tr><td>SPDR S&amp;P Developed Quality Aristocrats</td><td>IE000IISJT64</td><td>30%</td><td>0,35%</td><td>0,1050%</td><td>iShares World Quality (IWQU, dal 2014)</td></tr>
-<tr><td>Xtrackers MSCI World ex USA</td><td>IE0006WW1TQ4</td><td>15%</td><td>0,15%</td><td>0,0225%</td><td>Vanguard FTSE Dev. ex-US (VEA)</td></tr>
-<tr><td>iShares Edge MSCI World Min Volatility</td><td>IE00B8FHGS14</td><td>20%</td><td>0,30%</td><td>0,0600%</td><td>fondo reale (MVOL, dal 2012)</td></tr>
+<tr><td>Xtrackers MSCI World ex USA</td><td>IE0006WW1TQ4</td><td>20%</td><td>0,15%</td><td>0,0300%</td><td>Vanguard FTSE Dev. ex-US (VEA)</td></tr>
 <tr><td>iShares Physical Gold ETC</td><td>IE00B4ND3602</td><td>10%</td><td>0,12%</td><td>0,0120%</td><td>strumento reale (IGLN)</td></tr>
-<tr class="hl"><td>TER medio ponderato</td><td></td><td>100%</td><td></td><td>0,262%</td><td>versione rivista: 0,243%</td></tr>
+<tr class="hl"><td>TER medio ponderato</td><td></td><td>100%</td><td></td><td>0,247%</td><td>versione rivista: 0,227%</td></tr>
 </table>
 <div class="note">Ai proxy e' stato applicato il delta di TER rispetto allo strumento target, quindi il portafoglio simulato
-paga esattamente lo 0,262% annuo (≈ 26,20 € l'anno ogni 10.000 € investiti). In piu' andrebbero considerati spread
+paga esattamente lo 0,247% annuo (≈ 24,70 € l'anno ogni 10.000 € investiti). In piu' andrebbero considerati spread
 bid-ask e costi di transazione del ribilanciamento (~0,05-0,10%/anno, non inclusi).
-Questo target e' un <b>quality-tilt difensivo</b>: niente Bitcoin, China ne' obbligazioni — 90% azionario (di cui meta' in fattori difensivi, Quality + Min Vol) + 10% oro.</div></div>
+Questo target e' <b>aggressivo</b>: niente Bitcoin, China, Min Vol ne' obbligazioni — 90% azionario con il <b>40% concentrato sul solo fattore Momentum</b> + 10% oro.</div></div>
 
 <h2>Breakdown settoriale (stima, look-through)</h2>
 <div class="panel bars" id="sectors"></div>
 
 <h2>Modifiche suggerite all'allocazione</h2>
 <div class="panel">
-<p>Il target e' un <b>quality-tilt difensivo</b> molto ben costruito: nel backtest ha il <b>miglior Sharpe dei
-quattro (1,03)</b> e la volatilità piu' bassa. Non c'e' un problema di rischio da correggere. La proposta
-(<span style="color:var(--s-riv)">Rivisto</span> nel grafico) affronta due gap strutturali: la <b>concentrazione
-sul Quality al 30%</b> e l'<b>assenza di un asset di funding</b>.</p>
+<p>Questa e' l'allocazione <b>piu' aggressiva e piu' redditizia</b> che hai testato: nel backtest ha il <b>miglior
+Sharpe dei quattro (1,07)</b>, quasi aggancia CSSPX sul montante e batte SWDA. La spinta arriva dal <b>40% di
+Momentum</b>, che in questo decennio e' stato il fattore vincente. Il problema non e' la performance passata — e'
+la <b>concentrazione</b>: 40% su un singolo fattore e zero asset difensivi/di funding. La proposta
+(<span style="color:var(--s-riv)">Rivisto</span> nel grafico) modera senza snaturare.</p>
 <table>
 <tr><th>Voce</th><th>Target</th><th>Proposta</th><th style="text-align:left">Razionale della modifica</th></tr>
-<tr><td>MSCI World Momentum</td><td>25%</td><td>25%</td><td style="text-align:left">confermato: e' il motore di rendimento, gia' dimensionato correttamente</td></tr>
-<tr><td>Quality Aristocrats</td><td>30%</td><td>25%</td><td style="text-align:left">30% e' il singolo fattore piu' pesante: robusto, ma concentrare cosi' tanto su un fattore espone a un suo periodo di sottoperformance. A 25% resta l'ancora difensiva senza dominare</td></tr>
-<tr><td>World ex-USA</td><td>15%</td><td>15%</td><td style="text-align:left">confermato: l'azionario e' ~58% USA, la quota ex-USA e' adeguata</td></tr>
-<tr><td>MSCI World Min Volatility</td><td>20%</td><td>17%</td><td style="text-align:left">Quality 30 + Min Vol 20 = 50% in due fattori difensivi che si sovrappongono; ridurre il Min Vol evita il doppio conteggio della "difesa"</td></tr>
-<tr><td>Oro fisico</td><td>10%</td><td>8%</td><td style="text-align:left">confermato come diversificatore; leggera riduzione per finanziare la sleeve bond</td></tr>
+<tr><td>MSCI World Momentum</td><td>40%</td><td>30%</td><td style="text-align:left">40% e' una concentrazione estrema su un fattore che va a strappi: nelle inversioni brusche (2009, 2016, gen 2021) il Momentum puo' perdere 30-50% relativo in poche settimane. A 30% resta chiaramente il motore, ma non e' piu' un single-bet</td></tr>
+<tr><td>Quality Aristocrats</td><td>30%</td><td>28%</td><td style="text-align:left">confermato quasi intatto: e' il contrappeso robusto al Momentum</td></tr>
+<tr><td>World ex-USA</td><td>20%</td><td>20%</td><td style="text-align:left">confermato: buona diversificazione geografica (azionario ~55% USA)</td></tr>
+<tr><td>Oro fisico</td><td>10%</td><td>12%</td><td style="text-align:left">unico diversificatore; leggero aumento per compensare la riduzione di beta azionario</td></tr>
 <tr><td>Global Aggregate Bond EUR-hedged <span class="tag b">nuovo</span></td><td>0%</td><td>10%</td><td style="text-align:left">il portafoglio non ha alcun asset da vendere nei crash per ribilanciare; con tassi EUR positivi un 10% obbligazionario da' il buffer di funding e la duration che oggi manca del tutto</td></tr>
 </table>
-<div class="note"><b style="color:#fff">Risultato del backtest della proposta:</b> montante 183.792 € contro
-196.735 € del target, volatilità 9,7% (−0,8 punti), Max Drawdown −13,8% (vs −15,3%), <b>ma Sharpe 0,99 — piu' basso
-del target (1,03)</b> — e TER 0,243%. <b>In-sample la proposta peggiora il risultato:</b> in un decennio rialzista i
-bond hanno frenato piu' di quanto abbiano stabilizzato. Il valore della modifica e' <b>puramente forward-looking</b> —
-avere duration e un asset da vendere nel prossimo vero bear market (leva che questo campione 2016-2026 non premia).
-<b>Onestamente: se il criterio e' il backtest, il target cosi' com'e' vince.</b> La proposta ha senso solo se dai peso
-alla robustezza in scenari che questi 10 anni non contengono. Entrambe restano <b>sotto</b> CSSPX e SWDA sul montante.</div>
+<div class="note"><b style="color:#fff">Risultato del backtest della proposta:</b> montante 197.912 € contro
+217.593 € del target, volatilità 10,0% (−1,4 punti), Max Drawdown −13,4% (vs −15,4%), Sharpe 1,06 (≈ 1,07)
+e TER 0,227%. <b>In-sample la proposta cede ~20.000 € di montante per uno Sharpe quasi identico</b> e un
+drawdown piu' contenuto: il taglio del Momentum e i bond riducono il rendimento nel decennio in cui il Momentum
+ha vinto. Il valore e' <b>forward-looking</b> — se il fattore Momentum entra in una fase di crash (che questo
+campione 2016-2026 non contiene), il 40% diventa una zavorra e il buffer obbligazionario diventa prezioso.
+<b>Il target aggressivo cosi' com'e' massimizza il backtest; la proposta compra assicurazione contro il rischio
+di concentrazione.</b> Entrambe restano poco sotto CSSPX sul montante e sopra SWDA.</div>
 </div>
 
 <h2>La lettura del "Top 1%" — cosa direbbe un PM quantitativo</h2>
 <div class="panel">
-<div class="quote"><p><i>«Questo e' il portafoglio piu' pulito che mi hai mostrato: quality-tilt, costi bassi,
-niente crypto ne' scommesse esotiche. Ha anche il miglior Sharpe dei quattro. E ha comunque reso, in 10 anni,
-<b>meno</b> di un banale ETF sull'S&P 500. Questo e' il punto su cui devi essere onesto con te stesso.»</i></p></div>
-<h3>1. La domanda giusta: rendimento o Sharpe? <span class="tag r">punto chiave</span></h3>
-<p>Il target fa 11,8% di CAGR contro 14,9% di CSSPX: ha lasciato sul tavolo ~29.000 € su 197.000 in dieci anni.
-Ma lo ha fatto con <b>volatilità 10,5% contro 14,5%</b> e drawdown −15,3% contro −17,7%, per cui lo <b>Sharpe (1,03)
-e' il migliore dei quattro</b>. La domanda non e' "va bene o no", e': <b>vuoi il rendimento massimo o il miglior
-rendimento per unita' di rischio?</b> Se la risposta e' la seconda, questo portafoglio e' costruito molto bene.
-Se e' la prima, stai pagando fattori e oro per battere il mercato e in questo campione non ci sei riuscito.</p>
-<h3>2. La concentrazione ora e' sul Quality (30%)</h3>
-<p>Rispetto alle versioni precedenti hai spostato peso sul Quality, che al <b>30% e' il singolo sleeve piu' grande</b>.
-E' la scelta piu' difendibile che potessi fare — il Quality e' il fattore piu' robusto nei drawdown — ma resta
-concentrazione su un fattore: se il Quality attraversa un periodo di sottoperformance (come 2010-2013 relativo),
-un terzo del portafoglio va nella stessa direzione. Con Min Vol al 20%, <b>metà del capitale e' in due fattori
-difensivi correlati</b>: e' questo, non il Momentum, il vero addensamento di rischio ora.</p>
+<div class="quote"><p><i>«Ora si ragiona. Questo e' il portafoglio piu' redditizio che mi hai mostrato: quasi aggancia
+l'S&P 500 e ha il miglior Sharpe dei quattro. Ma hai messo il 40% su un solo fattore. Hai vinto la mano —
+la domanda del mio mestiere e': era bravura o era il decennio giusto?»</i></p></div>
+<h3>1. Il 40% Momentum e' il rischio, non il merito <span class="tag r">punto chiave</span></h3>
+<p>Il target fa 13,4% di CAGR — a un soffio da CSSPX (14,9%) e sopra SWDA — con <b>volatilità 11,5% contro 14,5%</b>
+e il <b>miglior Sharpe dei quattro (1,07)</b>. Ottimo. Ma quasi tutto l'extra-rendimento rispetto a un World arriva
+dal 40% di Momentum, e il Momentum ha appena vissuto il suo miglior decennio (i Magnifici 7 <b>sono</b> il trade
+Momentum). Un istituzionale non guarda il risultato, guarda la <b>ripetibilità</b>: 40% su un fattore che storicamente
+ha crash improvvisi e profondi e' una scommessa direzionale, non una diversificazione multi-factor.</p>
+<h3>2. Il crash-risk del Momentum e' asimmetrico</h3>
+<p>Il Momentum non scende "come il mercato": nelle inversioni brusche perde <b>di piu'</b> e in fretta. Nel rimbalzo
+del 2009 il fattore perse ~50% relativo in pochi mesi; la rotazione value di fine 2020/inizio 2021 lo colpi' di nuovo.
+Con il 40% del capitale li' sopra, un episodio del genere ti costa 15-20 punti mentre il mercato sale: e' il classico
+rischio che non si vede finche' non esplode. Questo backtest, per pura fortuna di campione, non ne contiene uno grave.</p>
 <h3>3. La diversificazione fattoriale e' in parte illusoria</h3>
-<p>Momentum + Quality + Min Vol sembrano tre scommesse diverse ma condividono gli stessi titoli mega-cap:
-la correlazione tra le sleeve azionarie e' 0,85-0,95. Il portafoglio e' ~19% Informatica <b>prima</b> di contare
-che Momentum e Quality sono essi stessi pieni di tech. Buona parte della "diversificazione" e' lo stesso paniere
-comprato con tre etichette diverse; i veri decorrelatori sono solo l'oro (10%) e, in parte, l'ex-USA.</p>
+<p>Momentum + Quality condividono oggi gli stessi titoli mega-cap USA: la correlazione tra le due sleeve azionarie
+principali e' 0,85-0,95. Il portafoglio e' <b>~21% Informatica e ~17% Finanza</b> in look-through, prima di contare
+che il Momentum e' esso stesso pieno di tech. I veri decorrelatori sono solo l'oro (10%) e l'ex-USA (20%): il resto
+e' un'unica scommessa pro-ciclica sul mega-cap growth.</p>
 <h3>4. Cosa manca al piano</h3>
 <ul>
-<li><b>Un asset di funding <span class="tag r">aperto</span></b> — zero obbligazioni/cash significa che nei crash non hai nulla da vendere per ribilanciare comprando azioni sui minimi. La versione rivista aggiunge un 10% di bond proprio per questo, ma nel backtest 2016-2026 (privo di un vero bear market) la mossa <b>abbassa</b> lo Sharpe: e' un'assicurazione che paghi ora e incassi solo in un regime che questi 10 anni non contengono.</li>
-<li><b>Bande di ribilanciamento:</b> l'indicizzazione del PAC al 5% e' ottima disciplina; un istituzionale aggiungerebbe soglie (±20% relativo) invece del solo gennaio fisso, per catturare la mean reversion quando serve.</li>
-<li><b>Stress test fuori campione:</b> il 2016-2026 non contiene un decennio perso stile 2000-2009. In quel regime Quality, Min Vol e oro avrebbero brillato e questo portafoglio avrebbe probabilmente <b>battuto</b> l'S&P 500 — il rovescio esatto di quanto visto qui. Il backtest e' figlio del suo campione.</li>
+<li><b>Un asset di funding <span class="tag r">aperto</span></b> — zero obbligazioni/cash: nei crash non hai nulla da vendere per ribilanciare comprando azioni sui minimi. Con il 40% Momentum questo conta doppio, perche' e' proprio dopo un crash del fattore che il ribilanciamento genererebbe piu' valore. La versione rivista aggiunge un 10% di bond per questo.</li>
+<li><b>Bande di ribilanciamento:</b> con una sleeve al 40% che va a strappi, il solo gennaio fisso non basta; soglie (±20% relativo) taglierebbero il Momentum quando corre troppo e lo ricomprerebbero dopo un crash.</li>
+<li><b>Stress test fuori campione:</b> il 2016-2026 e' stato il decennio ideale per Momentum e USA growth. In un regime 2000-2009 questo stesso portafoglio, con il 40% Momentum, avrebbe probabilmente <b>sottoperformato</b> pesantemente. Il backtest e' figlio del suo campione — e questo campione e' particolarmente generoso con la tua scommessa.</li>
 <li><b>Fiscalita' italiana:</b> il ribilanciamento annuale sull'oro (ETC) genera plusvalenze al 26% non compensabili con minusvalenze da ETF: il costo fiscale reale del ribilanciamento e' superiore a quello simulato.</li>
 </ul>
 <h3>5. Il verdetto</h3>
-<p>«Struttura eccellente per un portafoglio retail: quality-tilt coerente, costi allo 0,262%, disciplina di accumulo,
-un vero diversificatore (oro), zero rumore speculativo. Ha il miglior Sharpe dei quattro — e non e' un caso, e'
-costruito per quello. Ma va chiamato col suo nome: e' un <b>portafoglio difensivo</b> che in un decennio toro-USA
-ha reso meno del mercato. Io farei due sole cose: (1) alleggerirei il Quality dal 30 al 25% per non concentrare
-metà del capitale in due fattori difensivi; (2) aggiungerei un 10% di duration EUR — sapendo che <b>peggiora il
-backtest</b> ma ti protegge nel regime che questi 10 anni non hanno mostrato. E soprattutto deciderei <b>ora</b>,
-consapevolmente, che ho scelto la via dello Sharpe e del sonno tranquillo, non quella del montante massimo — cosi'
-non mi pentiro' tra cinque anni guardando chi ha solo comprato l'S&P 500. La differenza tra il top 1% e gli altri
-non e' l'allocazione: e' aver deciso in anticipo quale metrica conta davvero.»</p>
+<p>«Il miglior risultato che mi hai portato, e non per caso: hai preso piu' rischio di fattore e in questo decennio
+sei stato pagato. Costi bassi (0,247%), disciplina, un diversificatore (oro), zero crypto. Ma il 40% di Momentum non
+e' un portafoglio multi-factor, e' una <b>scommessa concentrata su un fattore</b> travestita da diversificazione.
+Io farei due mosse: (1) Momentum dal 40 al 30% — resti aggressivo ma non all-in su una singola anomalia; (2) un 10%
+di duration EUR come paracadute e buffer di ribilanciamento. Costa ~20.000 € di montante nel backtest e lascia lo
+Sharpe quasi invariato (1,06 vs 1,07): stai comprando assicurazione contro l'unico scenario che questi 10 anni non
+ti hanno mostrato — un crash del Momentum. La differenza tra il top 1% e gli altri non e' aver indovinato il fattore
+giusto: e' sapere <b>quanto</b> del proprio patrimonio si puo' mettere su una singola scommessa senza rovinarsi se
+sbaglia.»</p>
 </div>
 
 <h2>Metodologia e limiti</h2>
@@ -187,7 +186,7 @@ non e' l'allocazione: e' aver deciso in anticipo quale metrica conta davvero.»<
 <li>PAC versato a inizio mese ai pesi target; rata 500 € indicizzata +5% a ogni gennaio (2026: 814 €/mese); extra 500 € a marzo e dicembre; ribilanciamento totale ai pesi target a gennaio.</li>
 <li>Non inclusi: spread bid-ask, commissioni di negoziazione, fiscalita', tracking difference oltre il TER, slippage del ribilanciamento.</li>
 <li>Il breakdown settoriale usa i pesi settoriali correnti dei fondi (stime da factsheet): la composizione storica era diversa.</li>
-<li>La serie "portafoglio rivisto" (Quality 25, Min Vol 17, Oro 8, +10% Global Aggregate Bond EUR-hedged) e' la proposta di modifica, simulata con le stesse regole per confronto diretto.</li>
+<li>La serie "portafoglio rivisto" (Momentum 30, Quality 28, ex-USA 20, Oro 12, +10% Global Aggregate Bond EUR-hedged) e' la proposta di modifica, simulata con le stesse regole per confronto diretto.</li>
 </ul>
 </div>
 
@@ -207,17 +206,17 @@ const pct = (v,d=2) => (v*100).toLocaleString('it-IT',{minimumFractionDigits:d,m
 // KPI
 const mp = D.metrics.Portafoglio, mr = D.metrics.Rivisto;
 document.getElementById('kpis').innerHTML = [
- ['Montante finale', eur(mp.final), 'gold', 'target quality-tilt · 30/06/2026'],
+ ['Montante finale', eur(mp.final), 'gold', 'target aggressivo · 30/06/2026'],
  ['Sharpe (il migliore)', mp.sharpe.toFixed(2), 'up', 'vs CSSPX '+D.metrics.CSSPX.sharpe.toFixed(2)+' · SWDA '+D.metrics.SWDA.sharpe.toFixed(2)],
  ['Capitale versato', eur(mp.invested), '', '10k iniziali + PAC + extra'],
- ['CAGR (TWR)', pct(mp.cagr), '', 'sotto CSSPX '+pct(D.metrics.CSSPX.cagr)+' · SWDA '+pct(D.metrics.SWDA.cagr)],
+ ['CAGR (TWR)', pct(mp.cagr), '', 'sotto CSSPX '+pct(D.metrics.CSSPX.cagr)+' · sopra SWDA '+pct(D.metrics.SWDA.cagr)],
  ['Volatilità (la più bassa)', pct(mp.vol,1), 'up', 'vs CSSPX '+pct(D.metrics.CSSPX.vol,1)+' · SWDA '+pct(D.metrics.SWDA.vol,1)],
  ['Max Drawdown', pct(mp.maxdd,1), '', 'mensile · il piu\' contenuto dei 4'],
  ['Montante rivisto', eur(mr.final), 'riv', 'con 10% bond · Sharpe '+mr.sharpe.toFixed(2)],
  ['TER ponderato', pct(D.weighted_ter/100,3).replace('%','')+'%', '', 'rivisto '+pct(D.weighted_ter_revised/100,3).replace('%','')+'%'],
 ].map(([l,v,cls,d])=>`<div class="kpi"><div class="l">${l}</div><div class="v ${cls}">${v}</div><div class="d">${d}</div></div>`).join('');
 
-const LBL = {Portafoglio:'Portafoglio target (quality-tilt)', Rivisto:'Portafoglio rivisto (10% bond)',
+const LBL = {Portafoglio:'Portafoglio target (aggressivo)', Rivisto:'Portafoglio rivisto (10% bond)',
              CSSPX:'CSSPX · Core S&P 500', SWDA:'SWDA · Core MSCI World'};
 
 // Metrics table
@@ -243,22 +242,22 @@ document.getElementById('tblGarch').innerHTML =
   <td>${pct(g.longrun_vol_ann,1)}</td><td>${pct(g.current_vol_ann,1)}</td></tr>`).join('');
 
 // Sector breakdown (stime look-through): [nome, target %, rivisto %]
-const SECT = [["Informatica",19.1,17.5],["Finanza",15.0,14.1],["Industria",12.2,11.1],
- ["Salute",10.1,8.9],["Oro (materie prime)",10.0,8.0],["Obbligazioni",0.0,10.0],
- ["Beni discrezionali",7.2,6.6],["Comunicazioni",7.0,6.4],["Beni di consumo primari",7.0,6.2],
- ["Materiali",4.1,3.7],["Utility",3.2,2.9],["Energia",2.2,2.1],["Immobiliare",1.9,1.7],["Altro",1.1,0.9]];
+const SECT = [["Informatica",21.5,18.0],["Finanza",16.9,14.5],["Industria",13.0,11.4],
+ ["Oro (materie prime)",10.0,12.0],["Obbligazioni",0.0,10.0],["Salute",8.3,7.5],
+ ["Beni discrezionali",7.8,6.7],["Comunicazioni",7.0,5.9],["Beni di consumo primari",5.6,5.1],
+ ["Materiali",4.1,3.7],["Energia",2.4,2.2],["Utility",1.9,1.7],["Immobiliare",1.1,1.0],["Altro",0.4,0.3]];
 const SC = {"Oro (materie prime)":"#c08a1f","Obbligazioni":"#d55181"};
 document.getElementById('sectors').innerHTML =
  `<div class="row"><div class="lab"></div><div class="track" style="background:none"></div>
   <div class="val" style="width:120px;font-weight:400;color:#5f7193;font-size:10px">TARGET · RIVISTO</div></div>`+
  SECT.map(([n,v,r])=>
- `<div class="row"><div class="lab">${n}</div><div class="track"><div class="fill" style="width:${v/19.1*100}%;background:${SC[n]||'#3987e5'}"></div></div>
+ `<div class="row"><div class="lab">${n}</div><div class="track"><div class="fill" style="width:${v/21.5*100}%;background:${SC[n]||'#3987e5'}"></div></div>
   <div class="val" style="width:120px">${v.toLocaleString('it-IT',{minimumFractionDigits:1})}% · <span style="color:${r>v?'#23d18b':r<v?'#8294b4':'#fff'}">${r.toLocaleString('it-IT',{minimumFractionDigits:1})}%</span></div></div>`).join('')+
  `<div class="note">Barre: allocazione target. Seconda colonna: versione rivista (verde = la rivista aumenta il settore,
  grigio = riduce). Look-through sulle posizioni correnti dei fondi (stime da factsheet, GICS). Il target e' 90% azionario
- + 10% oro; l'azionario e' ~58% USA. Il tilt difensivo si vede: Salute 10% e Beni di consumo primari 7% sono sovrappesati
- (effetto Quality + Min Vol). Da notare: Informatica al 19% sottostima l'esposizione reale al tema tech, perche' parte di
- Comunicazioni (Google/Meta/Tencent) e Beni discrezionali (Amazon/Alibaba) e' economicamente tech.</div>`;
+ + 10% oro; l'azionario e' ~55% USA. Con il 40% Momentum il portafoglio e' molto pro-ciclico: Informatica 21%, Finanza 17%
+ e Industria 13% pesano quasi il 52% — e Informatica al 21% sottostima ancora il tema tech, perche' parte di Comunicazioni
+ (Google/Meta/Tencent) e Beni discrezionali (Amazon/Alibaba) e' economicamente tech.</div>`;
 
 // Chart (per ultimo: se il CDN di Chart.js non e' raggiungibile, fallback al PNG statico)
 try {

@@ -43,27 +43,25 @@ END = (2026, 6)     # ultimo mese completo
 RF_ANNUAL = 0.010   # risk-free medio EUR per lo Sharpe
 
 # (nome, peso, file proxy, valuta, TER target %, TER proxy %)
-# Allocazione TARGET (richiesta): quality-tilt difensivo a 5 sleeve, senza
-# China/Bitcoin/obbligazioni. 90% azionario + 10% oro.
+# Allocazione TARGET (richiesta): aggressiva, momentum-heavy a 4 sleeve.
+# 90% azionario (di cui 40% Momentum) + 10% oro. Nessun asset difensivo.
 ASSETS = [
-    ("MSCI World Momentum",        0.25, "IWMO.L",   "USD", 0.25, 0.25),
+    ("MSCI World Momentum",        0.40, "IWMO.L",   "USD", 0.25, 0.25),
     ("Quality Aristocrats",        0.30, "IWQU.L",   "USD", 0.35, 0.30),
-    ("World ex-USA",               0.15, "VEA",      "USD", 0.15, 0.05),
-    ("MSCI World Min Volatility",  0.20, "MVOL.L",   "USD", 0.30, 0.30),
+    ("World ex-USA",               0.20, "VEA",      "USD", 0.15, 0.05),
     ("Oro fisico",                 0.10, "IGLN.L",   "USD", 0.12, 0.12),
 ]
 
-# Modifiche suggerite: Quality -5 (de-concentra il fattore dominante),
-# Min Vol -3 (riduce il doppio conteggio difensivo), Oro -2, +10% Global
-# Aggregate Bond EUR-hedged come buffer di funding/duration.
+# Modifiche suggerite: Momentum -10 (40% e' una concentrazione estrema su un
+# singolo fattore), Quality -2, Oro +2, +10% Global Aggregate Bond EUR-hedged
+# come buffer di funding/duration.
 # Proxy bond: Xtrackers Global Government Bond EUR Hedged (DBZB, dal 2008,
 # TER 0,25%) per iShares Core Global Aggregate EUR Hedged (AGGH, TER 0,10%).
 ASSETS_REVISED = [
-    ("MSCI World Momentum",        0.25, "IWMO.L",   "USD", 0.25, 0.25),
-    ("Quality Aristocrats",        0.25, "IWQU.L",   "USD", 0.35, 0.30),
-    ("World ex-USA",               0.15, "VEA",      "USD", 0.15, 0.05),
-    ("MSCI World Min Volatility",  0.17, "MVOL.L",   "USD", 0.30, 0.30),
-    ("Oro fisico",                 0.08, "IGLN.L",   "USD", 0.12, 0.12),
+    ("MSCI World Momentum",        0.30, "IWMO.L",   "USD", 0.25, 0.25),
+    ("Quality Aristocrats",        0.28, "IWQU.L",   "USD", 0.35, 0.30),
+    ("World ex-USA",               0.20, "VEA",      "USD", 0.15, 0.05),
+    ("Oro fisico",                 0.12, "IGLN.L",   "USD", 0.12, 0.12),
     ("Global Agg Bond EUR-hedged", 0.10, "DBZB.DE",  "EUR", 0.10, 0.25),
 ]
 BENCHMARKS = [
