@@ -43,21 +43,12 @@ END = (2026, 6)     # ultimo mese completo
 RF_ANNUAL = 0.010   # risk-free medio EUR per lo Sharpe
 
 # (nome, peso, file proxy, valuta, TER target %, TER proxy %)
-ASSETS = [
-    ("MSCI World Momentum",        0.30, "IWMO.L",   "USD", 0.25, 0.25),
-    ("Quality Aristocrats",        0.20, "IWQU.L",   "USD", 0.35, 0.30),
-    ("World ex-USA",               0.15, "VEA",      "USD", 0.15, 0.05),
-    ("MSCI World Min Volatility",  0.18, "MVOL.L",   "USD", 0.30, 0.30),
-    ("Oro fisico",                 0.10, "IGLN.L",   "USD", 0.12, 0.12),
-    ("China Internet (KWEB)",      0.07, "KWEB",     "USD", 0.75, 0.70),
-]
-
-# Allocazione rivista: -5 Momentum (30% concentra il rischio del fattore),
-# +2 Quality, Min Vol -2, -3 China, +8% Global Aggregate Bond EUR-hedged
-# (il piano non ha alcun ammortizzatore di liquidita'/duration).
+# Allocazione ADOTTATA (modifiche eseguite): Momentum ridotto dal 30 al 25%
+# (il fattore piu' esposto a crash), Quality +2, Min Vol -2, China -3,
+# +8% Global Aggregate Bond EUR-hedged come buffer di ribilanciamento.
 # Proxy bond: Xtrackers Global Government Bond EUR Hedged (DBZB, dal 2008,
 # TER 0,25%) per iShares Core Global Aggregate EUR Hedged (AGGH, TER 0,10%).
-ASSETS_REVISED = [
+ASSETS = [
     ("MSCI World Momentum",        0.25, "IWMO.L",   "USD", 0.25, 0.25),
     ("Quality Aristocrats",        0.22, "IWQU.L",   "USD", 0.35, 0.30),
     ("World ex-USA",               0.15, "VEA",      "USD", 0.15, 0.05),
@@ -65,6 +56,17 @@ ASSETS_REVISED = [
     ("Oro fisico",                 0.10, "IGLN.L",   "USD", 0.12, 0.12),
     ("China Internet (KWEB)",      0.04, "KWEB",     "USD", 0.75, 0.70),
     ("Global Agg Bond EUR-hedged", 0.08, "DBZB.DE",  "EUR", 0.10, 0.25),
+]
+
+# Allocazione PRECEDENTE (senza le modifiche), tenuta come riferimento nel
+# grafico per mostrare l'effetto delle modifiche eseguite.
+ASSETS_PREV = [
+    ("MSCI World Momentum",        0.30, "IWMO.L",   "USD", 0.25, 0.25),
+    ("Quality Aristocrats",        0.20, "IWQU.L",   "USD", 0.35, 0.30),
+    ("World ex-USA",               0.15, "VEA",      "USD", 0.15, 0.05),
+    ("MSCI World Min Volatility",  0.18, "MVOL.L",   "USD", 0.30, 0.30),
+    ("Oro fisico",                 0.10, "IGLN.L",   "USD", 0.12, 0.12),
+    ("China Internet (KWEB)",      0.07, "KWEB",     "USD", 0.75, 0.70),
 ]
 BENCHMARKS = [
     ("CSSPX - iShares Core S&P 500", "CSSPX.MI", "EUR"),
@@ -240,13 +242,13 @@ def main():
         "metrics": {},
         "annual": {},
         "weighted_ter": round(sum(a[1] * a[4] for a in ASSETS), 4),
-        "weighted_ter_revised": round(sum(a[1] * a[4] for a in ASSETS_REVISED), 4),
+        "weighted_ter_prev": round(sum(a[1] * a[4] for a in ASSETS_PREV), 4),
     }
     cashflows = [(0, 10000.0)] + [(i + 1, contribution(y, m))
                                   for i, (y, m) in enumerate(months)]
 
     port_twrs = {}
-    for key, assets in [("Portafoglio", ASSETS), ("Rivisto", ASSETS_REVISED)]:
+    for key, assets in [("Portafoglio", ASSETS), ("Precedente", ASSETS_PREV)]:
         weights = [a[1] for a in assets]
         assert abs(sum(weights) - 1.0) < 1e-9, key
         rets = portfolio_returns(assets, months, fx)
@@ -276,7 +278,7 @@ def main():
 
     results["garch"] = {
         "Portafoglio": garch11(port_twrs["Portafoglio"]),
-        "Rivisto": garch11(port_twrs["Rivisto"]),
+        "Precedente": garch11(port_twrs["Precedente"]),
         "CSSPX": garch11(bench_twr["CSSPX"]),
         "SWDA": garch11(bench_twr["SWDA"]),
     }
@@ -289,20 +291,20 @@ def main():
         f.write(";\n")
 
     m = results["metrics"]
-    print(f"TER ponderato: originale {results['weighted_ter']:.3f}% | rivisto {results['weighted_ter_revised']:.3f}%")
+    print(f"TER ponderato: adottato {results['weighted_ter']:.3f}% | precedente {results['weighted_ter_prev']:.3f}%")
     print(f"{'':22s}{'Finale EUR':>12s}{'Versato':>10s}{'CAGR':>8s}{'IRR':>8s}"
           f"{'Vol':>8s}{'Sharpe':>8s}{'MaxDD':>8s}")
-    for k in ["Portafoglio", "Rivisto", "CSSPX", "SWDA"]:
+    for k in ["Portafoglio", "Precedente", "CSSPX", "SWDA"]:
         x = m[k]
         print(f"{k:22s}{x['final']:12,.0f}{x['invested']:10,.0f}"
               f"{x['cagr']*100:7.2f}%{x['irr']*100:7.2f}%"
               f"{x['vol']*100:7.2f}%{x['sharpe']:8.2f}{x['maxdd']*100:7.1f}%")
     print("\nRendimenti annuali (TWR):")
     years = sorted(results["annual"]["Portafoglio"])
-    print("Anno  " + "".join(f"{k:>13s}" for k in ["Portafoglio", "Rivisto", "CSSPX", "SWDA"]))
+    print("Anno  " + "".join(f"{k:>13s}" for k in ["Portafoglio", "Precedente", "CSSPX", "SWDA"]))
     for y in years:
         row = "".join(f"{results['annual'][k][y]*100:12.2f}%"
-                      for k in ["Portafoglio", "Rivisto", "CSSPX", "SWDA"])
+                      for k in ["Portafoglio", "Precedente", "CSSPX", "SWDA"])
         print(f"{y}  {row}")
     print("\nGARCH(1,1) su rendimenti mensili:")
     for k, g in results["garch"].items():
