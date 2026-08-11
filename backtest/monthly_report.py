@@ -9,9 +9,10 @@ return), converte in EUR, e stampa:
   - rendimento dell'ultimo mese completo (portafoglio vs CSSPX vs SWDA)
   - tabella mese per mese da feb-2021 in poi
   - rendimento cumulato da fine gennaio 2021
-Convenzione: portafoglio a pesi fissi ribilanciato mensilmente (rendimento
-mensile = media pesata dei rendimenti mensili degli sleeve). Serie proxy dove
-lo strumento UCITS non ha storia (vedi note in fondo).
+Convenzione: portafoglio ai pesi target con RIBILANCIAMENTO ANNUALE (gennaio).
+I pesi driftano durante l'anno e vengono riportati a target ogni gennaio; il
+rendimento mensile e' quello del portafoglio con i pesi correnti (drifted).
+Serie proxy dove lo strumento UCITS non ha storia (vedi note in fondo).
 """
 import json
 import sys
@@ -94,15 +95,22 @@ def main():
 
     rows = []
     prev = BASE
-    cum = {"PORT": 1.0, "CSSPX": 1.0, "SWDA": 1.0}
+    holdings = dict(WEIGHTS)          # valore totale = 1.0 a fine gen-2021
+    cum_c, cum_s = 1.0, 1.0
     for ym in months:
-        pr = sum(WEIGHTS[t] * mret(t, ym, prev) for t in WEIGHTS)
+        if ym[1] == 1:               # gennaio: ribilanciamento annuale ai pesi target
+            tot = sum(holdings.values())
+            holdings = {t: tot * w for t, w in WEIGHTS.items()}
+        start_val = sum(holdings.values())
+        for t in holdings:
+            holdings[t] *= 1 + mret(t, ym, prev)
+        end_val = sum(holdings.values())
+        pr = end_val / start_val - 1
         cr = mret("CSSPX.MI", ym, prev)
         sr = mret("SWDA.MI", ym, prev)
-        cum["PORT"] *= 1 + pr
-        cum["CSSPX"] *= 1 + cr
-        cum["SWDA"] *= 1 + sr
-        rows.append((ym, pr, cr, sr, cum["PORT"] - 1, cum["CSSPX"] - 1, cum["SWDA"] - 1))
+        cum_c *= 1 + cr
+        cum_s *= 1 + sr
+        rows.append((ym, pr, cr, sr, end_val - 1, cum_c - 1, cum_s - 1))
         prev = ym
 
     def pc(x):
@@ -136,7 +144,7 @@ def main():
               f"{pc(cp):>8} {pc(cc):>8} {pc(cs):>8}")
     print("\n  Pesi: MOM 18 · QUAL 17 · MinVol 15 · exUSA 12 · ORO 20 · BTC 12 · CHINA 6")
     print("  Proxy: IWQU(Qual) VEA(exUSA) KWEB(China) BTC-USD(spot). TER ~0,264%.")
-    print("  Portafoglio a pesi fissi, ribilanciato mensilmente. Total return, EUR.")
+    print("  Ribilanciamento ANNUALE (gennaio); pesi drifted infra-anno. Total return, EUR.")
     print("  Non e' consulenza finanziaria. Dati: Yahoo Finance.\n")
 
 
