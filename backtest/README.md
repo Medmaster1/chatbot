@@ -1,32 +1,24 @@
-# Portfolio Backtest 10Y — Multi-Factor vs CSSPX / SWDA
+# Portfolio Backtest 5Y — 7 ETF per battere CSSPX / SWDA
 
-Backtest riproducibile (lug 2016 → giu 2026). Allocazione **target bilanciata**
-a 4 sleeve (Momentum 30%, Quality 30%, World ex-USA 25%, Oro 15% — 85% azionario
-+ 15% oro) contro CSSPX e SWDA, con PAC 500 €/mese indicizzato +5%/anno, extra
-500 € a marzo/dicembre, ribilanciamento annuale a gennaio e TER ponderato **0,236%**
-(il più basso di tutte le versioni testate).
+Backtest riproducibile (lug 2021 → giu 2026) di un'allocazione costruita con i
+7 ETF richiesti (Momentum, Quality, World ex-USA, **S&P 500 Min Vol**, Oro,
+**Bitcoin**, China Internet) con l'obiettivo di **battere un benchmark**, contro
+CSSPX e SWDA. PAC 500 €/mese indicizzato +5%/anno (base 2021), extra 500 € a
+marzo/dicembre, ribilanciamento annuale a gennaio, TER ponderato **0,264%**.
 
-Risultato chiave: è l'allocazione meglio bilanciata testata — **eguaglia il CAGR
-di SWDA (12,93%)** con 2,5 punti di volatilità in meno (10,8%), ha il **miglior
-Sharpe di tutte le versioni (1,10)**, drawdown −14,9%, ed è 2ª sul montante
-(213.582 €) sopra SWDA. Diversificazione geografica reale (azionario ~50% USA)
-e oro al 15% come vero contrappeso.
+Due varianti, entrambe battono **CSSPX e SWDA**:
 
-Include una **versione rivista** (Momentum 28, Quality 27, ex-USA 25, Oro 12,
-+8% Global Aggregate Bond EUR-hedged — proxy Xtrackers DBZB, TER 0,224%): nel
-backtest *abbassa* lo Sharpe a 1,06 (spostare peso dall'oro ai bond costa in
-questo decennio), valore solo forward-looking.
+| | Montante | CAGR | Vol | Sharpe | Max DD |
+|---|---|---|---|---|---|
+| **Aggressivo** (Oro 20, BTC 15) | 81.229 € | 15,6% | 14,5% | 1,01 | −18,8% |
+| **Difensivo** (più Min Vol/Quality) | 78.966 € | 14,6% | 13,1% | 1,03 | −16,1% |
+| CSSPX | 76.875 € | 13,9% | 14,8% | 0,89 | −17,1% |
+| SWDA | 74.471 € | 12,3% | 13,2% | 0,87 | −14,4% |
 
-- `portfolio_backtest.py` — motore di simulazione (richiede `numpy`, `scipy`).
-  Legge gli snapshot in `data/` e scrive `results.json` + `results.js`.
-- `data/*.json` — snapshot Yahoo Finance (barre mensili adjusted close,
-  scaricate il 2026-07-12).
-- `results.json` / `results.js` — output: equity line, metriche (CAGR, IRR,
-  Sharpe, Max DD, volatilità), rendimenti annuali, GARCH(1,1).
-- `equity_line.png` — grafico statico (fallback della pagina report).
+**Attribuzione onesta:** la sovraperformance viene dal 35% non-azionario
+(oro 20% + Bitcoin 15%), non dalla parte factor. La finestra 2021-2026 è stata
+particolarmente favorevole a oro/BTC; i pesi sono ottimizzati a posteriori →
+overfitting, non indicativo del futuro.
 
 Report completo: [`../portfolio-backtest.html`](../portfolio-backtest.html).
-
-Per rigenerare con dati aggiornati: riscaricare gli snapshot (stesso formato
-`{"timestamp": [...], "adjclose": [...]}`) e rilanciare
-`python3 portfolio_backtest.py`.
+Motore: `portfolio_backtest.py` (finestra e allocazioni in cima al file).

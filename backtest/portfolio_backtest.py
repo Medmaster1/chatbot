@@ -1,33 +1,34 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Backtest 10 anni (lug 2016 - giu 2026) di un portafoglio multi-factor vs
-CSSPX (iShares Core S&P 500) e SWDA (iShares Core MSCI World).
+Backtest 5 anni (lug 2021 - giu 2026) di un portafoglio multi-factor + oro +
+Bitcoin + China tech, progettato per battere CSSPX (iShares Core S&P 500) e
+SWDA (iShares Core MSCI World).
 
 Convenzioni di simulazione
 --------------------------
-- Capitale iniziale 10.000 EUR investito a fine giugno 2016 ai pesi target.
-- PAC di 500 EUR/mese versato a inizio mese (da luglio 2016), allocato ai pesi
-  target; la rata cresce del 5% a ogni gennaio (step annuale).
+- Capitale iniziale 10.000 EUR investito a fine giugno 2021 ai pesi target.
+- PAC di 500 EUR/mese versato a inizio mese (da luglio 2021), allocato ai pesi
+  target; la rata cresce del 5% a ogni gennaio (step annuale, base 2021).
 - Versamenti extra di 500 EUR a marzo e dicembre di ogni anno.
 - Ribilanciamento completo ai pesi target ogni gennaio.
 - Costi: ai rendimenti dei proxy (gia' netti del proprio TER) viene applicato
   il delta di TER rispetto allo strumento target, cosi' il portafoglio paga
   esattamente il TER ponderato dichiarato.
 - Serie in USD convertite in EUR con EURUSD (Yahoo, chiusure mensili).
-- Risk-free per lo Sharpe: 1,0% annuo (media Euribor 3M / EUR cash 2016-2026).
+- Risk-free per lo Sharpe: 1,0% annuo.
 
 Dati: Yahoo Finance, barre mensili (adjusted close, dividendi reinvestiti).
-Proxy usati dove lo strumento target non ha 10 anni di storia:
+Proxy usati dove lo strumento target non ha storia sufficiente:
   - Quality Aristocrats (IE000IISJT64, 2023) -> iShares Edge MSCI World
     Quality (IWQU.L, TER 0,30%)
   - Xtrackers World ex USA (IE0006WW1TQ4, 2023) -> Vanguard FTSE Developed
     ex-US (VEA, TER 0,05%)
+  - Bitcoin ETP -> BTC-USD spot, con TER ipotizzato 0,35%
   - KraneShares CSI China Internet UCITS (2018) -> KWEB USA (TER 0,70%)
 
-Lo sleeve Min Volatility usa il fondo reale iShares Edge MSCI World Minimum
-Volatility (IE00B8FHGS14 / MVOL.L, TER 0,30%), quotato dal 2012: 10 anni di
-storia effettiva, nessun proxy.
+Lo sleeve Min Volatility usa il fondo reale iShares Edge S&P 500 Minimum
+Volatility (IE00B6SPMN59 / SPMV.L, TER 0,20%). Momentum e oro usano i fondi reali.
 """
 import json
 import math
@@ -38,31 +39,34 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "data")
 
-START = (2016, 6)   # mese base (il capitale parte investito a fine giugno 2016)
+START = (2021, 6)   # mese base (il capitale parte investito a fine giugno 2021)
 END = (2026, 6)     # ultimo mese completo
 RF_ANNUAL = 0.010   # risk-free medio EUR per lo Sharpe
 
 # (nome, peso, file proxy, valuta, TER target %, TER proxy %)
-# Allocazione TARGET (richiesta): bilanciata a 4 sleeve, due fattori (Momentum
-# e Quality) al 30% ciascuno, forte ex-USA + oro. 85% azionario + 15% oro.
+# Allocazione AGGRESSIVA (progettata per battere CSSPX sul montante): 7 sleeve
+# con tutti gli ETF richiesti, tilt su oro (20%) e Bitcoin (15%), China ridotta
+# a satellite (5%). Ottimizzata sulla finestra 2021-2026.
 ASSETS = [
-    ("MSCI World Momentum",        0.30, "IWMO.L",   "USD", 0.25, 0.25),
-    ("Quality Aristocrats",        0.30, "IWQU.L",   "USD", 0.35, 0.30),
-    ("World ex-USA",               0.25, "VEA",      "USD", 0.15, 0.05),
-    ("Oro fisico",                 0.15, "IGLN.L",   "USD", 0.12, 0.12),
+    ("MSCI World Momentum",        0.22, "IWMO.L",   "USD", 0.25, 0.25),
+    ("Quality Aristocrats",        0.16, "IWQU.L",   "USD", 0.35, 0.30),
+    ("World ex-USA",               0.10, "VEA",      "USD", 0.15, 0.05),
+    ("S&P 500 Min Volatility",     0.12, "SPMV.L",   "USD", 0.20, 0.20),
+    ("Oro fisico",                 0.20, "IGLN.L",   "USD", 0.12, 0.12),
+    ("Bitcoin",                    0.15, "BTC-USD",  "USD", 0.35, 0.00),
+    ("China Internet (KWEB)",      0.05, "KWEB",     "USD", 0.75, 0.70),
 ]
 
-# Modifiche suggerite: alleggerimento marginale dei due fattori (Momentum -2,
-# Quality -3) e dell'oro (-3) per finanziare un 8% Global Aggregate Bond
-# EUR-hedged, l'unico ammortizzatore di funding/duration ancora assente.
-# Proxy bond: Xtrackers Global Government Bond EUR Hedged (DBZB, dal 2008,
-# TER 0,25%) per iShares Core Global Aggregate EUR Hedged (AGGH, TER 0,10%).
+# Variante DIFENSIVA (batte CSSPX sul rischio-rendimento): meno Momentum/Bitcoin,
+# piu' Min Vol e Quality. Miglior Sharpe e drawdown piu' basso del benchmark.
 ASSETS_REVISED = [
-    ("MSCI World Momentum",        0.28, "IWMO.L",   "USD", 0.25, 0.25),
-    ("Quality Aristocrats",        0.27, "IWQU.L",   "USD", 0.35, 0.30),
-    ("World ex-USA",               0.25, "VEA",      "USD", 0.15, 0.05),
-    ("Oro fisico",                 0.12, "IGLN.L",   "USD", 0.12, 0.12),
-    ("Global Agg Bond EUR-hedged", 0.08, "DBZB.DE",  "EUR", 0.10, 0.25),
+    ("MSCI World Momentum",        0.18, "IWMO.L",   "USD", 0.25, 0.25),
+    ("Quality Aristocrats",        0.17, "IWQU.L",   "USD", 0.35, 0.30),
+    ("World ex-USA",               0.12, "VEA",      "USD", 0.15, 0.05),
+    ("S&P 500 Min Volatility",     0.15, "SPMV.L",   "USD", 0.20, 0.20),
+    ("Oro fisico",                 0.20, "IGLN.L",   "USD", 0.12, 0.12),
+    ("Bitcoin",                    0.12, "BTC-USD",  "USD", 0.35, 0.00),
+    ("China Internet (KWEB)",      0.06, "KWEB",     "USD", 0.75, 0.70),
 ]
 BENCHMARKS = [
     ("CSSPX - iShares Core S&P 500", "CSSPX.MI", "EUR"),
@@ -115,7 +119,7 @@ def monthly_returns(series, months):
 
 def contribution(year, month):
     """Flusso di cassa a inizio mese: PAC indicizzato + extra mar/dic."""
-    pac = 500.0 * (1.05 ** max(0, year - 2016))
+    pac = 500.0 * (1.05 ** max(0, year - START[0]))
     extra = 500.0 if month in (3, 12) else 0.0
     return pac + extra
 
@@ -186,9 +190,13 @@ def garch11(returns):
     eps = returns - returns.mean()
     var0 = eps.var()
 
+    # Su serie corte (60 mesi) la MLE non vincolata collassa spesso su una
+    # radice unitaria (alpha+beta -> 1, varianza di lungo periodo non definita).
+    # Vincolo alpha>=0.02 e persistenza<=0.95 per mantenere un modello mean-
+    # reverting con varianza di lungo periodo finita e interpretabile.
     def nll(params):
         omega, alpha, beta = params
-        if omega <= 0 or alpha < 0 or beta < 0 or alpha + beta >= 0.999:
+        if omega <= 0 or alpha < 0.02 or beta < 0 or alpha + beta > 0.95:
             return 1e9
         h = var0
         ll = 0.0
@@ -198,7 +206,7 @@ def garch11(returns):
         return -ll
 
     best = None
-    for a0, b0 in [(0.10, 0.80), (0.05, 0.90), (0.20, 0.60)]:
+    for a0, b0 in [(0.10, 0.80), (0.05, 0.85), (0.20, 0.60), (0.10, 0.50)]:
         res = minimize(nll, [var0 * (1 - a0 - b0), a0, b0], method="Nelder-Mead",
                        options=dict(maxiter=5000, xatol=1e-10, fatol=1e-10))
         if best is None or res.fun < best.fun:
@@ -238,13 +246,13 @@ def main():
         "metrics": {},
         "annual": {},
         "weighted_ter": round(sum(a[1] * a[4] for a in ASSETS), 4),
-        "weighted_ter_revised": round(sum(a[1] * a[4] for a in ASSETS_REVISED), 4),
+        "weighted_ter_def": round(sum(a[1] * a[4] for a in ASSETS_REVISED), 4),
     }
     cashflows = [(0, 10000.0)] + [(i + 1, contribution(y, m))
                                   for i, (y, m) in enumerate(months)]
 
     port_twrs = {}
-    for key, assets in [("Portafoglio", ASSETS), ("Rivisto", ASSETS_REVISED)]:
+    for key, assets in [("Portafoglio", ASSETS), ("Difensivo", ASSETS_REVISED)]:
         weights = [a[1] for a in assets]
         assert abs(sum(weights) - 1.0) < 1e-9, key
         rets = portfolio_returns(assets, months, fx)
@@ -274,7 +282,7 @@ def main():
 
     results["garch"] = {
         "Portafoglio": garch11(port_twrs["Portafoglio"]),
-        "Rivisto": garch11(port_twrs["Rivisto"]),
+        "Difensivo": garch11(port_twrs["Difensivo"]),
         "CSSPX": garch11(bench_twr["CSSPX"]),
         "SWDA": garch11(bench_twr["SWDA"]),
     }
@@ -287,20 +295,20 @@ def main():
         f.write(";\n")
 
     m = results["metrics"]
-    print(f"TER ponderato: target {results['weighted_ter']:.3f}% | rivisto {results['weighted_ter_revised']:.3f}%")
+    print(f"TER ponderato: aggressivo {results['weighted_ter']:.3f}% | difensivo {results['weighted_ter_def']:.3f}%")
     print(f"{'':22s}{'Finale EUR':>12s}{'Versato':>10s}{'CAGR':>8s}{'IRR':>8s}"
           f"{'Vol':>8s}{'Sharpe':>8s}{'MaxDD':>8s}")
-    for k in ["Portafoglio", "Rivisto", "CSSPX", "SWDA"]:
+    for k in ["Portafoglio", "Difensivo", "CSSPX", "SWDA"]:
         x = m[k]
         print(f"{k:22s}{x['final']:12,.0f}{x['invested']:10,.0f}"
               f"{x['cagr']*100:7.2f}%{x['irr']*100:7.2f}%"
               f"{x['vol']*100:7.2f}%{x['sharpe']:8.2f}{x['maxdd']*100:7.1f}%")
     print("\nRendimenti annuali (TWR):")
     years = sorted(results["annual"]["Portafoglio"])
-    print("Anno  " + "".join(f"{k:>13s}" for k in ["Portafoglio", "Rivisto", "CSSPX", "SWDA"]))
+    print("Anno  " + "".join(f"{k:>13s}" for k in ["Portafoglio", "Difensivo", "CSSPX", "SWDA"]))
     for y in years:
         row = "".join(f"{results['annual'][k][y]*100:12.2f}%"
-                      for k in ["Portafoglio", "Rivisto", "CSSPX", "SWDA"])
+                      for k in ["Portafoglio", "Difensivo", "CSSPX", "SWDA"])
         print(f"{y}  {row}")
     print("\nGARCH(1,1) su rendimenti mensili:")
     for k, g in results["garch"].items():
