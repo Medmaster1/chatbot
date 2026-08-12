@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Alert mensile: resoconto dei rendimenti della variante DIFENSIVA (7 ETF) contro
-i benchmark CSSPX e SWDA, con baseline fine gennaio 2021.
+Alert mensile: resoconto dei rendimenti della variante DIFENSIVA SENZA China
+(6 ETF) contro i benchmark CSSPX e SWDA, con baseline fine gennaio 2021.
 
 Scarica dati freschi da Yahoo Finance a ogni esecuzione (barre mensili, total
 return), converte in EUR, e stampa:
@@ -19,17 +19,18 @@ import sys
 import time
 import urllib.request
 
-# Variante difensiva (batte CSSPX e SWDA su montante/CAGR/Sharpe)
+# Variante difensiva SENZA China Internet (6 ETF, pesi renormalizzati /0.94).
+# Batte CSSPX e SWDA su montante/CAGR/Sharpe piu' nettamente della versione con
+# China, con TER piu' basso (KWEB era il piu' caro, 0,75%).
 WEIGHTS = {
-    "IWMO.L":  0.18,   # MSCI World Momentum
-    "IWQU.L":  0.17,   # Quality (proxy World Quality)
-    "SPMV.L":  0.15,   # S&P 500 Min Volatility
-    "VEA":     0.12,   # World ex-USA (proxy VEA)
-    "IGLN.L":  0.20,   # Oro fisico
-    "BTC-USD": 0.12,   # Bitcoin (proxy spot)
-    "KWEB":    0.06,   # China Internet (proxy KWEB USA)
+    "IWMO.L":  0.191,   # MSCI World Momentum
+    "IWQU.L":  0.181,   # Quality (proxy World Quality)
+    "SPMV.L":  0.160,   # S&P 500 Min Volatility
+    "VEA":     0.128,   # World ex-USA (proxy VEA)
+    "IGLN.L":  0.212,   # Oro fisico
+    "BTC-USD": 0.128,   # Bitcoin (proxy spot)
 }
-USD = {"IWMO.L", "IWQU.L", "SPMV.L", "VEA", "IGLN.L", "BTC-USD", "KWEB"}
+USD = {"IWMO.L", "IWQU.L", "SPMV.L", "VEA", "IGLN.L", "BTC-USD"}
 BENCH = {"CSSPX.MI": "CSSPX", "SWDA.MI": "SWDA"}
 BASE = (2021, 1)   # fine gennaio 2021 = baseline
 
@@ -120,7 +121,7 @@ def main():
     lab = f"{MESI[lm]} {ly}"
     lr = rows[-1]
     print("=" * 66)
-    print(f"  ALERT · RESOCONTO RENDIMENTI MENSILI — variante difensiva")
+    print(f"  ALERT · RESOCONTO RENDIMENTI MENSILI — difensiva senza China (6 ETF)")
     print(f"  baseline: fine gennaio 2021   ·   ultimo mese: {lab}")
     print("=" * 66)
     print(f"\n  ULTIMO MESE ({lab}):")
@@ -142,8 +143,8 @@ def main():
         lab_m = f"{MESI[ym[1]]} {str(ym[0])[2:]}"
         print(f"  {lab_m:>9} | {pc(pr):>8} {pc(cr):>8} {pc(sr):>8} | "
               f"{pc(cp):>8} {pc(cc):>8} {pc(cs):>8}")
-    print("\n  Pesi: MOM 18 · QUAL 17 · MinVol 15 · exUSA 12 · ORO 20 · BTC 12 · CHINA 6")
-    print("  Proxy: IWQU(Qual) VEA(exUSA) KWEB(China) BTC-USD(spot). TER ~0,264%.")
+    print("\n  Pesi (senza China): MOM 19.1 · QUAL 18.1 · MinVol 16.0 · exUSA 12.8 · ORO 21.2 · BTC 12.8")
+    print("  Proxy: IWQU(Qual) VEA(exUSA) BTC-USD(spot). TER ~0,232%.")
     print("  Ribilanciamento ANNUALE (gennaio); pesi drifted infra-anno. Total return, EUR.")
     print("  Non e' consulenza finanziaria. Dati: Yahoo Finance.\n")
 
