@@ -31,7 +31,9 @@ WEIGHTS = {
     "BTC-USD": 0.128,   # Bitcoin (proxy spot)
 }
 USD = {"IWMO.L", "IWQU.L", "SPMV.L", "VEA", "IGLN.L", "BTC-USD"}
-BENCH = {"CSSPX.MI": "CSSPX", "SWDA.MI": "SWDA"}
+# benchmark di confronto (ticker Yahoo -> etichetta). IQSA = Invesco Global
+# Active ESG Equity (IE00BJQRDN15, TER 0,30%).
+BENCH = [("CSSPX.MI", "CSSPX"), ("SWDA.MI", "SWDA"), ("IQSA.MI", "IQSA")]
 BASE = (2021, 1)   # fine gennaio 2021 = baseline
 
 MESI = ["", "gen", "feb", "mar", "apr", "mag", "giu",
@@ -76,7 +78,8 @@ def month_seq(start, end):
 
 
 def main():
-    series = {t: fetch(t) for t in list(WEIGHTS) + list(BENCH)}
+    bench_tk = [t for t, _ in BENCH]
+    series = {t: fetch(t) for t in list(WEIGHTS) + bench_tk}
     fx = fetch("EURUSD=X")
 
     # ultimo mese COMPLETO comune a tutte le serie (escludo il mese in corso)
@@ -94,12 +97,13 @@ def main():
     def mret(t, ym, prev):
         return eur(t, ym) / eur(t, prev) - 1.0
 
-    rows = []
+    labels = [lab for _, lab in BENCH]          # es. ["CSSPX","SWDA","IQSA"]
+    rows = []                                    # (ym, pr, [bench monthly], cumP, [bench cum])
     prev = BASE
-    holdings = dict(WEIGHTS)          # valore totale = 1.0 a fine gen-2021
-    cum_c, cum_s = 1.0, 1.0
+    holdings = dict(WEIGHTS)                     # valore totale = 1.0 a fine gen-2021
+    cum_b = {lab: 1.0 for lab in labels}
     for ym in months:
-        if ym[1] == 1:               # gennaio: ribilanciamento annuale ai pesi target
+        if ym[1] == 1:                           # gennaio: ribilanciamento annuale ai pesi target
             tot = sum(holdings.values())
             holdings = {t: tot * w for t, w in WEIGHTS.items()}
         start_val = sum(holdings.values())
@@ -107,11 +111,12 @@ def main():
             holdings[t] *= 1 + mret(t, ym, prev)
         end_val = sum(holdings.values())
         pr = end_val / start_val - 1
-        cr = mret("CSSPX.MI", ym, prev)
-        sr = mret("SWDA.MI", ym, prev)
-        cum_c *= 1 + cr
-        cum_s *= 1 + sr
-        rows.append((ym, pr, cr, sr, end_val - 1, cum_c - 1, cum_s - 1))
+        br = {}
+        for tk, lab in BENCH:
+            r = mret(tk, ym, prev)
+            cum_b[lab] *= 1 + r
+            br[lab] = r
+        rows.append((ym, pr, br, end_val - 1, {lab: cum_b[lab] - 1 for lab in labels}))
         prev = ym
 
     def pc(x):
@@ -119,32 +124,34 @@ def main():
 
     ly, lm = last
     lab = f"{MESI[lm]} {ly}"
-    lr = rows[-1]
-    print("=" * 66)
+    _, lpr, lbr, lcp, lcb = rows[-1]
+    W = 66 + 9 * max(0, len(labels) - 2)
+    print("=" * W)
     print(f"  ALERT · RESOCONTO RENDIMENTI MENSILI — difensiva senza China (6 ETF)")
     print(f"  baseline: fine gennaio 2021   ·   ultimo mese: {lab}")
-    print("=" * 66)
+    print("=" * W)
     print(f"\n  ULTIMO MESE ({lab}):")
-    print(f"    Portafoglio  {pc(lr[1])}     CSSPX {pc(lr[2])}     SWDA {pc(lr[3])}")
-    diff_c = lr[1] - lr[2]
-    diff_s = lr[1] - lr[3]
-    print(f"    vs CSSPX {diff_c * 100:+.2f} pp   ·   vs SWDA {diff_s * 100:+.2f} pp")
+    print("    Portafoglio " + pc(lpr) + "   "
+          + "  ".join(f"{l} {pc(lbr[l])}" for l in labels))
+    print("    " + "  ·  ".join(f"vs {l} {(lpr-lbr[l])*100:+.2f} pp" for l in labels))
     print(f"\n  CUMULATO da fine gen-2021:")
-    print(f"    Portafoglio {pc(lr[4])}   CSSPX {pc(lr[5])}   SWDA {pc(lr[6])}")
-    win_c = "AVANTI" if lr[4] > lr[5] else "INDIETRO"
-    win_s = "AVANTI" if lr[4] > lr[6] else "INDIETRO"
-    print(f"    -> {win_c} su CSSPX ({(lr[4]-lr[5])*100:+.1f} pp) · "
-          f"{win_s} su SWDA ({(lr[4]-lr[6])*100:+.1f} pp)")
+    print("    Portafoglio " + pc(lcp) + "   "
+          + "  ".join(f"{l} {pc(lcb[l])}" for l in labels))
+    print("    -> " + "  ·  ".join(
+        f"{'AVANTI' if lcp > lcb[l] else 'INDIETRO'} su {l} ({(lcp-lcb[l])*100:+.1f} pp)"
+        for l in labels))
 
-    print(f"\n  {'Mese':>9} | {'Port.':>8} {'CSSPX':>8} {'SWDA':>8} | "
-          f"{'cumP':>8} {'cumC':>8} {'cumS':>8}")
-    print("  " + "-" * 62)
-    for ym, pr, cr, sr, cp, cc, cs in rows:
+    head = f"\n  {'Mese':>9} | {'Port.':>8} " + " ".join(f"{l:>8}" for l in labels) \
+           + " | " + f"{'cumP':>8} " + " ".join(f"{'cum'+l[0]:>8}" for l in labels)
+    print(head)
+    print("  " + "-" * (len(head) - 3))
+    for ym, pr, br, cp, cb in rows:
         lab_m = f"{MESI[ym[1]]} {str(ym[0])[2:]}"
-        print(f"  {lab_m:>9} | {pc(pr):>8} {pc(cr):>8} {pc(sr):>8} | "
-              f"{pc(cp):>8} {pc(cc):>8} {pc(cs):>8}")
+        print(f"  {lab_m:>9} | {pc(pr):>8} " + " ".join(f"{pc(br[l]):>8}" for l in labels)
+              + " | " + f"{pc(cp):>8} " + " ".join(f"{pc(cb[l]):>8}" for l in labels))
     print("\n  Pesi (senza China): MOM 19.1 · QUAL 18.1 · MinVol 16.0 · exUSA 12.8 · ORO 21.2 · BTC 12.8")
-    print("  Proxy: IWQU(Qual) VEA(exUSA) BTC-USD(spot). TER ~0,232%.")
+    print("  Benchmark: CSSPX (S&P500) · SWDA (MSCI World) · IQSA (Invesco Global Active ESG).")
+    print("  Proxy: IWQU(Qual) VEA(exUSA) BTC-USD(spot). TER portafoglio ~0,232%.")
     print("  Ribilanciamento ANNUALE (gennaio); pesi drifted infra-anno. Total return, EUR.")
     print("  Non e' consulenza finanziaria. Dati: Yahoo Finance.\n")
 
