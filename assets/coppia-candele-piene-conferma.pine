@@ -1,0 +1,212 @@
+//@version=6
+indicator("Coppia Candele Piene con Conferma", shorttitle="COPPIA-PC", overlay=true, max_labels_count=500, max_lines_count=200, max_boxes_count=200)
+
+// ============================================================
+//  KID / DIGITAL WEALTH — Coppia Candele Piene + Conferma v1.0
+//  Pattern a 3 candele:
+//   1) due candele PIENE consecutive saldate sullo stesso
+//      livello di prezzo:
+//      · giunzione  → chiusura della 1ª = apertura della 2ª
+//      · specchio   → apertura della 1ª = chiusura della 2ª
+//        (la 2ª ripercorre esattamente il corpo della 1ª)
+//   2) la candela SUCCESSIVA conferma rompendo oltre la 2ª:
+//      · se la 2ª è BUY  → chiusura SOPRA la candela BUY
+//      · se la 2ª è SELL → chiusura SOTTO la candela SELL
+//
+//  Il livello condiviso dalla coppia è il perno del pattern e
+//  viene tracciato come linea orizzontale: è lì che si decide
+//  la direzione, ed è il riferimento naturale per lo stop.
+//
+//  Nota: su strumenti continui (forex, CFD, oro) l'apertura di
+//  una barra coincide quasi sempre con la chiusura della barra
+//  precedente, quindi la giunzione è quasi sempre vera: il
+//  filtro che seleziona davvero è lo SPECCHIO.
+//  I segnali si valutano a barra chiusa (nessun repaint).
+// ============================================================
+
+// ---------------- INPUT · CANDELA PIENA ----------------
+minBody   = input.float(70.0, "Corpo minimo (% del range)", minval=10.0, maxval=100.0, step=1.0, group="Candela piena", tooltip="Percentuale minima del corpo rispetto al range totale (high-low).")
+wickMode  = input.string("Solo lato chiusura", "Controllo ombre", options=["Entrambe le ombre", "Solo lato chiusura", "Nessun limite"], group="Candela piena", tooltip="Solo lato chiusura: per una candela rialzista conta l'ombra superiore, per una ribassista l'ombra inferiore.")
+maxWickUp = input.float(15.0, "Ombra superiore massima (%)", minval=0.0, maxval=50.0, step=1.0, group="Candela piena")
+maxWickDn = input.float(15.0, "Ombra inferiore massima (%)", minval=0.0, maxval=50.0, step=1.0, group="Candela piena")
+useAtrFlt = input.bool(false, "Filtra candele troppo piccole (ATR)", group="Candela piena")
+atrLen    = input.int(14,    "Periodo ATR", minval=2, group="Candela piena")
+minAtrMlt = input.float(0.5, "Range minimo (× ATR)", minval=0.1, step=0.1, group="Candela piena")
+
+// ---------------- INPUT · COPPIA ----------------
+useJunct  = input.bool(true, "Richiedi giunzione (chiusura 1ª = apertura 2ª)", group="Coppia", tooltip="Su strumenti continui è quasi sempre vera; utile su azioni e future, dove i gap tra barre esistono.")
+useMirror = input.bool(true, "Richiedi specchio (apertura 1ª = chiusura 2ª)", group="Coppia", tooltip="La seconda candela ripercorre esattamente il corpo della prima. È il filtro che seleziona davvero il pattern. Implica automaticamente che le due candele siano di direzione opposta.")
+pairDir   = input.string("Opposte (inversione)", "Direzione della coppia", options=["Opposte (inversione)", "Stessa direzione", "Indifferente"], group="Coppia")
+tolMode   = input.string("% del range candele", "Tolleranza livelli", options=["% del range candele", "% ATR", "Tick"], group="Coppia", tooltip="Due livelli non coincidono quasi mai al centesimo: la tolleranza definisce quanto possono scostarsi per considerarli allo stesso prezzo.")
+tolVal    = input.float(10.0, "Valore tolleranza", minval=0.0, step=0.5, group="Coppia")
+
+// ---------------- INPUT · CONFERMA ----------------
+confWithin = input.int(1, "Conferma entro N candele", minval=1, maxval=10, group="Conferma", tooltip="1 = deve confermare esattamente la candela successiva, come da definizione del pattern. Valori maggiori concedono più barre alla rottura.")
+refMode    = input.string("Estremo della candela", "Livello da superare", options=["Estremo della candela", "Chiusura della candela"], group="Conferma", tooltip="Estremo: la conferma deve chiudere oltre il massimo (BUY) o il minimo (SELL) della seconda candela. Chiusura: basta superarne la chiusura.")
+confSameDir = input.bool(false, "La candela di conferma deve essere concorde", group="Conferma", tooltip="Richiede che anche la candela di conferma sia rialzista (BUY) o ribassista (SELL).")
+
+// ---------------- INPUT · VISUAL ----------------
+showLabels = input.bool(true, "Mostra etichette", group="Visual")
+showBox    = input.bool(true, "Evidenzia il pattern con un riquadro", group="Visual")
+showLine   = input.bool(true, "Traccia il livello condiviso", group="Visual")
+lineExt    = input.int(20, "Estensione linea (barre)", minval=0, maxval=200, group="Visual")
+showPend   = input.bool(true, "Segna la coppia in attesa di conferma", group="Visual")
+lblSizeStr = input.string("small", "Dimensione etichette", options=["tiny", "small", "normal", "large"], group="Visual")
+showStats  = input.bool(true, "Mostra pannello statistiche", group="Visual")
+cBuy       = input.color(color.new(#2DD4A7, 0), "Colore BUY",  group="Visual")
+cSell      = input.color(color.new(#E5484D, 0), "Colore SELL", group="Visual")
+cBuyTxt    = input.color(color.new(#04120C, 0), "Testo BUY",   group="Visual")
+cSellTxt   = input.color(color.new(#160405, 0), "Testo SELL",  group="Visual")
+
+lblSize = lblSizeStr == "tiny" ? size.tiny : lblSizeStr == "small" ? size.small : lblSizeStr == "normal" ? size.normal : size.large
+cMut    = color.new(#8FA0BC, 0)
+cNavy   = color.new(#0E1830, 0)
+cNavy2  = color.new(#101D3A, 0)
+cGold   = color.new(#E8C55A, 0)
+cTxt    = color.new(#E7EDF7, 0)
+
+// ---------------- CANDELA PIENA ----------------
+rng     = high - low
+rngSafe = rng == 0 ? syminfo.mintick : rng
+bodyPct = math.abs(close - open) / rngSafe * 100
+upWick  = (high - math.max(open, close)) / rngSafe * 100
+dnWick  = (math.min(open, close) - low)  / rngSafe * 100
+
+wickBoth = wickMode == "Entrambe le ombre"
+wickSide = wickMode == "Solo lato chiusura"
+wickOkBuy  = wickBoth ? (upWick <= maxWickUp and dnWick <= maxWickDn) : wickSide ? upWick <= maxWickUp : true
+wickOkSell = wickBoth ? (upWick <= maxWickUp and dnWick <= maxWickDn) : wickSide ? dnWick <= maxWickDn : true
+
+atrVal = ta.atr(atrLen)
+sizeOk = not useAtrFlt or (not na(atrVal) and rng >= atrVal * minAtrMlt)
+bodyOk = rng > 0 and bodyPct >= minBody and sizeOk
+
+fullBuy  = bodyOk and close > open and wickOkBuy
+fullSell = bodyOk and close < open and wickOkSell
+
+// ---------------- COPPIA SALDATA ----------------
+// c1 = candela [1] (prima) · c2 = candela [0] (seconda, corrente)
+c1Buy  = fullBuy[1]
+c1Sell = fullSell[1]
+c2Buy  = fullBuy
+c2Sell = fullSell
+c1Full = c1Buy or c1Sell
+c2Full = c2Buy or c2Sell
+
+// tolleranza sui livelli: due prezzi coincidono se distano meno di tol
+refRange = math.max(rng, nz(rng[1]))
+tol = tolMode == "Tick" ? tolVal * syminfo.mintick : tolMode == "% ATR" ? (na(atrVal) ? na : atrVal * tolVal / 100.0) : refRange * tolVal / 100.0
+
+// giunzione: la prima chiude dove la seconda apre
+junctOk = not useJunct or math.abs(close[1] - open) <= tol
+// specchio: la prima apre dove la seconda chiude (la 2ª ripercorre il corpo della 1ª)
+mirrorOk = not useMirror or math.abs(open[1] - close) <= tol
+
+oppOk  = (c1Buy and c2Sell) or (c1Sell and c2Buy)
+sameOk = (c1Buy and c2Buy) or (c1Sell and c2Sell)
+dirOk  = pairDir == "Opposte (inversione)" ? oppOk : pairDir == "Stessa direzione" ? sameOk : (c1Full and c2Full)
+
+confirmed = barstate.isconfirmed
+pairFound = c1Full and c2Full and junctOk and mirrorOk and dirOk and not na(tol) and confirmed
+
+// ---------------- MACCHINA A STATI DELLA CONFERMA ----------------
+var int   pendBar = na    // bar_index della seconda candela della coppia
+var int   pendDir = 0     // 1 = coppia rialzista (2ª candela BUY) · -1 = ribassista
+var float pendRef = na    // livello che la conferma deve superare
+var float pendLvl = na    // livello condiviso dalla coppia (perno)
+var float pendTop = na
+var float pendBot = na
+var box   pendBox = na
+var line  pendLine = na
+
+var int cntPair = 0
+var int cntBuy  = 0
+var int cntSell = 0
+var int cntExp  = 0
+
+buySig  = false
+sellSig = false
+
+if confirmed
+    // --- 1) verifica la conferma di un pattern già armato ---
+    if not na(pendBar)
+        agePend = bar_index - pendBar
+        if agePend >= 1
+            pendTop := math.max(pendTop, high)
+            pendBot := math.min(pendBot, low)
+            dirCOk = not confSameDir or (pendDir == 1 ? close > open : close < open)
+            hit = pendDir == 1 ? (close > pendRef and dirCOk) : (close < pendRef and dirCOk)
+            if hit
+                if pendDir == 1
+                    buySig := true
+                    cntBuy += 1
+                else
+                    sellSig := true
+                    cntSell += 1
+                col = pendDir == 1 ? cBuy : cSell
+                if showBox and not na(pendBox)
+                    box.set_right(pendBox, bar_index)
+                    box.set_top(pendBox, pendTop)
+                    box.set_bottom(pendBox, pendBot)
+                    box.set_border_color(pendBox, col)
+                    box.set_border_style(pendBox, line.style_solid)
+                    box.set_bgcolor(pendBox, color.new(col, 88))
+                if showLine
+                    pendLine := line.new(pendBar - 1, pendLvl, bar_index + lineExt, pendLvl, color=col, width=1, style=line.style_dotted)
+                pendBar := na
+            else if agePend >= confWithin
+                cntExp += 1
+                if not na(pendBox)
+                    box.delete(pendBox)
+                    pendBox := na
+                pendBar := na
+    // --- 2) arma un nuovo pattern se la coppia si è completata qui ---
+    if pairFound
+        if not na(pendBox)          // una coppia precedente non confermata decade
+            box.delete(pendBox)
+            pendBox := na
+        cntPair += 1
+        pendBar := bar_index
+        pendDir := c2Buy ? 1 : -1
+        pendRef := refMode == "Estremo della candela" ? (c2Buy ? high : low) : close
+        pendLvl := open             // livello di giunzione condiviso dalla coppia
+        pendTop := math.max(high, high[1])
+        pendBot := math.min(low,  low[1])
+        if showBox
+            pendBox := box.new(bar_index - 1, pendTop, bar_index, pendBot, border_color=cMut, border_style=line.style_dashed, border_width=1, bgcolor=color.new(cMut, 92))
+
+// ---------------- ETICHETTE ----------------
+f_tip(string dir) =>
+    dir + "  ·  coppia saldata a " + str.tostring(pendLvl, format.mintick) +
+      "\ngiunzione: chiusura 1ª = apertura 2ª" +
+      (useMirror ? "\nspecchio: apertura 1ª = chiusura 2ª" : "") +
+      "\nconferma: chiusura " + (dir == "BUY" ? "sopra " : "sotto ") + str.tostring(pendRef, format.mintick)
+
+if showLabels and buySig
+    label.new(bar_index, na, "BUY", yloc=yloc.belowbar, style=label.style_label_up, color=cBuy, textcolor=cBuyTxt, size=lblSize, tooltip=f_tip("BUY"))
+if showLabels and sellSig
+    label.new(bar_index, na, "SELL", yloc=yloc.abovebar, style=label.style_label_down, color=cSell, textcolor=cSellTxt, size=lblSize, tooltip=f_tip("SELL"))
+
+plotshape(showPend and pairFound and c2Buy,  title="Coppia rialzista in attesa", style=shape.diamond, location=location.belowbar, color=cMut, size=size.tiny)
+plotshape(showPend and pairFound and c2Sell, title="Coppia ribassista in attesa", style=shape.diamond, location=location.abovebar, color=cMut, size=size.tiny)
+
+// ---------------- STATISTICHE ----------------
+var table stats = showStats ? table.new(position.bottom_right, 2, 5, bgcolor=cNavy, border_width=1, border_color=color.new(#E8C55A, 80)) : na
+if showStats and barstate.islast
+    okRate = cntPair > 0 ? (cntBuy + cntSell) / cntPair * 100 : na
+    table.cell(stats, 0, 0, "COPPIA + CONFERMA", text_color=cGold, bgcolor=cNavy2, text_size=size.tiny)
+    table.cell(stats, 1, 0, str.tostring(minBody, "#") + "% corpo", text_color=cMut, bgcolor=cNavy2, text_size=size.tiny)
+    table.cell(stats, 0, 1, "Coppie rilevate", text_color=cTxt, text_size=size.tiny)
+    table.cell(stats, 1, 1, str.tostring(cntPair), text_color=cntPair > 0 ? cTxt : cSell, text_size=size.tiny)
+    table.cell(stats, 0, 2, "Confermate BUY / SELL", text_color=cTxt, text_size=size.tiny)
+    table.cell(stats, 1, 2, str.tostring(cntBuy) + " / " + str.tostring(cntSell), text_color=cTxt, text_size=size.tiny)
+    table.cell(stats, 0, 3, "Decadute senza conferma", text_color=cTxt, text_size=size.tiny)
+    table.cell(stats, 1, 3, str.tostring(cntExp), text_color=cMut, text_size=size.tiny)
+    table.cell(stats, 0, 4, "Tasso di conferma", text_color=cTxt, text_size=size.tiny)
+    table.cell(stats, 1, 4, na(okRate) ? "—" : str.tostring(okRate, "#") + "%", text_color=cMut, text_size=size.tiny)
+
+// ---------------- ALERT ----------------
+alertcondition(buySig,  title="Coppia piena — conferma BUY",  message="Coppia Candele Piene: BUY confermato su {{ticker}} {{interval}} @ {{close}} — chiusura sopra la coppia saldata")
+alertcondition(sellSig, title="Coppia piena — conferma SELL", message="Coppia Candele Piene: SELL confermato su {{ticker}} {{interval}} @ {{close}} — chiusura sotto la coppia saldata")
+alertcondition(buySig or sellSig, title="Coppia piena — conferma BUY o SELL", message="Coppia Candele Piene: pattern confermato su {{ticker}} {{interval}} @ {{close}}")
+alertcondition(pairFound, title="Coppia piena rilevata (in attesa)", message="Coppia Candele Piene: coppia saldata su {{ticker}} {{interval}} @ {{close}} — in attesa della candela di conferma")
