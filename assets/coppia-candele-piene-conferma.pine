@@ -2,13 +2,14 @@
 indicator("Coppia Candele Piene con Conferma", shorttitle="COPPIA-PC", overlay=true, max_labels_count=500, max_lines_count=200, max_boxes_count=200)
 
 // ============================================================
-//  KID / DIGITAL WEALTH — Coppia Candele Piene + Conferma v1.0
+//  KID / DIGITAL WEALTH — Coppia Candele Piene + Conferma v1.1
 //  Pattern a 3 candele:
-//   1) due candele PIENE consecutive saldate sullo stesso
-//      livello di prezzo:
-//      · giunzione  → chiusura della 1ª = apertura della 2ª
-//      · specchio   → apertura della 1ª = chiusura della 2ª
-//        (la 2ª ripercorre esattamente il corpo della 1ª)
+//   1) due candele consecutive legate sullo stesso livello:
+//      · giunzione → chiusura della 1ª = apertura della 2ª
+//      · legame    → come la 2ª si rapporta al corpo della 1ª:
+//        - SPECCHIO         la 2ª chiude dove la 1ª ha aperto
+//        - ENGULFING        la 2ª chiude oltre l'apertura della 1ª
+//        - SOVRAPPOSIZIONE  la 2ª copre almeno X% del corpo della 1ª
 //   2) la candela SUCCESSIVA conferma rompendo oltre la 2ª:
 //      · se la 2ª è BUY  → chiusura SOPRA la candela BUY
 //      · se la 2ª è SELL → chiusura SOTTO la candela SELL
@@ -17,15 +18,24 @@ indicator("Coppia Candele Piene con Conferma", shorttitle="COPPIA-PC", overlay=t
 //  viene tracciato come linea orizzontale: è lì che si decide
 //  la direzione, ed è il riferimento naturale per lo stop.
 //
+//  v1.1 — lo specchio esatto scarta i casi in cui la seconda
+//  candela SUPERA l'apertura della prima (inversione più forte,
+//  non più debole) e quelli con la prima candela piccola.
+//  Novità:
+//  · modalità legame: engulfing (default), specchio, sovrapposizione
+//  · la 1ª candela può non essere piena; si controlla invece il
+//    suo corpo in rapporto a quello della 2ª (niente doji)
+//  · MODALITÀ DIAGNOSTICA: sotto ogni candela stampa ✓ oppure ✗
+//    con la lettera della condizione che ha fatto fallire la coppia
+//
 //  Nota: su strumenti continui (forex, CFD, oro) l'apertura di
 //  una barra coincide quasi sempre con la chiusura della barra
-//  precedente, quindi la giunzione è quasi sempre vera: il
-//  filtro che seleziona davvero è lo SPECCHIO.
+//  precedente, quindi la giunzione è quasi sempre vera.
 //  I segnali si valutano a barra chiusa (nessun repaint).
 // ============================================================
 
 // ---------------- INPUT · CANDELA PIENA ----------------
-minBody   = input.float(70.0, "Corpo minimo (% del range)", minval=10.0, maxval=100.0, step=1.0, group="Candela piena", tooltip="Percentuale minima del corpo rispetto al range totale (high-low).")
+minBody   = input.float(70.0, "Corpo minimo (% del range)", minval=10.0, maxval=100.0, step=1.0, group="Candela piena", tooltip="Percentuale minima del corpo rispetto al range totale (high-low). Si applica sempre alla 2ª candela, quella che guida il pattern.")
 wickMode  = input.string("Solo lato chiusura", "Controllo ombre", options=["Entrambe le ombre", "Solo lato chiusura", "Nessun limite"], group="Candela piena", tooltip="Solo lato chiusura: per una candela rialzista conta l'ombra superiore, per una ribassista l'ombra inferiore.")
 maxWickUp = input.float(15.0, "Ombra superiore massima (%)", minval=0.0, maxval=50.0, step=1.0, group="Candela piena")
 maxWickDn = input.float(15.0, "Ombra inferiore massima (%)", minval=0.0, maxval=50.0, step=1.0, group="Candela piena")
@@ -34,16 +44,23 @@ atrLen    = input.int(14,    "Periodo ATR", minval=2, group="Candela piena")
 minAtrMlt = input.float(0.5, "Range minimo (× ATR)", minval=0.1, step=0.1, group="Candela piena")
 
 // ---------------- INPUT · COPPIA ----------------
+firstMode = input.string("Solo la seconda piena", "Candele piene richieste", options=["Entrambe piene", "Solo la seconda piena"], group="Coppia", tooltip="Solo la seconda: la 1ª candela può essere più piccola o con ombre, purché il suo corpo sia proporzionato (vedi sotto). È il caso tipico di una candela assorbita da una candela di spinta.")
+minBodyRel = input.float(30.0, "Corpo minimo della 1ª rispetto alla 2ª (%)", minval=0.0, maxval=200.0, step=5.0, group="Coppia", tooltip="Evita di accoppiare la candela di spinta con un doji: il corpo della 1ª deve valere almeno questa percentuale del corpo della 2ª.")
+linkMode  = input.string("Engulfing (almeno)", "Legame tra le due candele", options=["Engulfing (almeno)", "Specchio esatto", "Sovrapposizione corpi", "Disattivato"], group="Coppia", tooltip="Engulfing: la 2ª chiude oltre l'apertura della 1ª (include lo specchio esatto). Specchio: chiude esattamente lì, entro tolleranza. Sovrapposizione: il corpo della 2ª copre almeno X% del corpo della 1ª.")
+overlapMin = input.float(60.0, "Sovrapposizione minima dei corpi (%)", minval=10.0, maxval=100.0, step=5.0, group="Coppia")
 useJunct  = input.bool(true, "Richiedi giunzione (chiusura 1ª = apertura 2ª)", group="Coppia", tooltip="Su strumenti continui è quasi sempre vera; utile su azioni e future, dove i gap tra barre esistono.")
-useMirror = input.bool(true, "Richiedi specchio (apertura 1ª = chiusura 2ª)", group="Coppia", tooltip="La seconda candela ripercorre esattamente il corpo della prima. È il filtro che seleziona davvero il pattern. Implica automaticamente che le due candele siano di direzione opposta.")
 pairDir   = input.string("Opposte (inversione)", "Direzione della coppia", options=["Opposte (inversione)", "Stessa direzione", "Indifferente"], group="Coppia")
 tolMode   = input.string("% del range candele", "Tolleranza livelli", options=["% del range candele", "% ATR", "Tick"], group="Coppia", tooltip="Due livelli non coincidono quasi mai al centesimo: la tolleranza definisce quanto possono scostarsi per considerarli allo stesso prezzo.")
 tolVal    = input.float(10.0, "Valore tolleranza", minval=0.0, step=0.5, group="Coppia")
 
 // ---------------- INPUT · CONFERMA ----------------
-confWithin = input.int(1, "Conferma entro N candele", minval=1, maxval=10, group="Conferma", tooltip="1 = deve confermare esattamente la candela successiva, come da definizione del pattern. Valori maggiori concedono più barre alla rottura.")
+confWithin = input.int(1, "Conferma entro N candele", minval=1, maxval=10, group="Conferma", tooltip="1 = deve confermare esattamente la candela successiva. Valori maggiori concedono più barre alla rottura.")
 refMode    = input.string("Estremo della candela", "Livello da superare", options=["Estremo della candela", "Chiusura della candela"], group="Conferma", tooltip="Estremo: la conferma deve chiudere oltre il massimo (BUY) o il minimo (SELL) della seconda candela. Chiusura: basta superarne la chiusura.")
-confSameDir = input.bool(false, "La candela di conferma deve essere concorde", group="Conferma", tooltip="Richiede che anche la candela di conferma sia rialzista (BUY) o ribassista (SELL).")
+confSameDir = input.bool(false, "La candela di conferma deve essere concorde", group="Conferma")
+
+// ---------------- INPUT · DIAGNOSTICA ----------------
+diagMode = input.bool(false, "Modalità diagnostica", group="Diagnostica", tooltip="Sotto ogni candela recente stampa ✓ se la coppia che finisce lì è valida, oppure ✗ seguito dalla lettera della prima condizione fallita: P=1ª candela, S=2ª candela piena, D=direzione, G=giunzione, L=legame. Il tooltip riporta tutti i valori misurati.")
+diagBars = input.int(80, "Barre da analizzare", minval=10, maxval=480, group="Diagnostica")
 
 // ---------------- INPUT · VISUAL ----------------
 showLabels = input.bool(true, "Mostra etichette", group="Visual")
@@ -68,7 +85,8 @@ cTxt    = color.new(#E7EDF7, 0)
 // ---------------- CANDELA PIENA ----------------
 rng     = high - low
 rngSafe = rng == 0 ? syminfo.mintick : rng
-bodyPct = math.abs(close - open) / rngSafe * 100
+bodyAbs = math.abs(close - open)
+bodyPct = bodyAbs / rngSafe * 100
 upWick  = (high - math.max(open, close)) / rngSafe * 100
 dnWick  = (math.min(open, close) - low)  / rngSafe * 100
 
@@ -84,30 +102,49 @@ bodyOk = rng > 0 and bodyPct >= minBody and sizeOk
 fullBuy  = bodyOk and close > open and wickOkBuy
 fullSell = bodyOk and close < open and wickOkSell
 
-// ---------------- COPPIA SALDATA ----------------
+// ---------------- COPPIA ----------------
 // c1 = candela [1] (prima) · c2 = candela [0] (seconda, corrente)
-c1Buy  = fullBuy[1]
-c1Sell = fullSell[1]
-c2Buy  = fullBuy
-c2Sell = fullSell
-c1Full = c1Buy or c1Sell
-c2Full = c2Buy or c2Sell
+c1IsBuy  = close[1] > open[1]
+c1IsSell = close[1] < open[1]
+c2Buy    = fullBuy
+c2Sell   = fullSell
+
+// la 2ª candela deve sempre essere piena: è quella che guida il pattern
+p2Ok = c2Buy or c2Sell
+
+// la 1ª può essere piena oppure semplicemente proporzionata alla 2ª
+bothFull   = firstMode == "Entrambe piene"
+body1      = math.abs(close[1] - open[1])
+bodyRelPct = bodyAbs > 0 ? body1 / bodyAbs * 100 : 0.0
+p1Ok = (c1IsBuy or c1IsSell) and (bothFull ? (fullBuy[1] or fullSell[1]) : bodyRelPct >= minBodyRel)
 
 // tolleranza sui livelli: due prezzi coincidono se distano meno di tol
 refRange = math.max(rng, nz(rng[1]))
 tol = tolMode == "Tick" ? tolVal * syminfo.mintick : tolMode == "% ATR" ? (na(atrVal) ? na : atrVal * tolVal / 100.0) : refRange * tolVal / 100.0
 
 // giunzione: la prima chiude dove la seconda apre
-junctOk = not useJunct or math.abs(close[1] - open) <= tol
-// specchio: la prima apre dove la seconda chiude (la 2ª ripercorre il corpo della 1ª)
-mirrorOk = not useMirror or math.abs(open[1] - close) <= tol
+junctOk  = not useJunct or math.abs(close[1] - open) <= tol
+junctGap = math.abs(close[1] - open)
 
-oppOk  = (c1Buy and c2Sell) or (c1Sell and c2Buy)
-sameOk = (c1Buy and c2Buy) or (c1Sell and c2Sell)
-dirOk  = pairDir == "Opposte (inversione)" ? oppOk : pairDir == "Stessa direzione" ? sameOk : (c1Full and c2Full)
+// legame: quanto la 2ª candela riprende il corpo della 1ª
+mirrorGap = math.abs(open[1] - close)
+top1 = math.max(open[1], close[1])
+bot1 = math.min(open[1], close[1])
+top2 = math.max(open, close)
+bot2 = math.min(open, close)
+ovlAbs = math.max(0.0, math.min(top1, top2) - math.max(bot1, bot2))
+ovlPct = body1 > 0 ? ovlAbs / body1 * 100 : 0.0
+
+mirrorOk = mirrorGap <= tol
+engulfOk = c2Buy ? close >= open[1] - tol : close <= open[1] + tol
+linkOk = linkMode == "Disattivato" ? true : linkMode == "Specchio esatto" ? mirrorOk : linkMode == "Engulfing (almeno)" ? engulfOk : ovlPct >= overlapMin
+
+oppOk  = (c1IsBuy and c2Sell) or (c1IsSell and c2Buy)
+sameOk = (c1IsBuy and c2Buy) or (c1IsSell and c2Sell)
+dirOk  = pairDir == "Opposte (inversione)" ? oppOk : pairDir == "Stessa direzione" ? sameOk : true
 
 confirmed = barstate.isconfirmed
-pairFound = c1Full and c2Full and junctOk and mirrorOk and dirOk and not na(tol) and confirmed
+pairFound = p1Ok and p2Ok and dirOk and junctOk and linkOk and not na(tol) and confirmed
 
 // ---------------- MACCHINA A STATI DELLA CONFERMA ----------------
 var int   pendBar = na    // bar_index della seconda candela della coppia
@@ -177,9 +214,8 @@ if confirmed
 
 // ---------------- ETICHETTE ----------------
 f_tip(string dir) =>
-    dir + "  ·  coppia saldata a " + str.tostring(pendLvl, format.mintick) +
-      "\ngiunzione: chiusura 1ª = apertura 2ª" +
-      (useMirror ? "\nspecchio: apertura 1ª = chiusura 2ª" : "") +
+    dir + "  ·  coppia legata a " + str.tostring(pendLvl, format.mintick) +
+      "\nlegame: " + linkMode +
       "\nconferma: chiusura " + (dir == "BUY" ? "sopra " : "sotto ") + str.tostring(pendRef, format.mintick)
 
 if showLabels and buySig
@@ -190,12 +226,26 @@ if showLabels and sellSig
 plotshape(showPend and pairFound and c2Buy,  title="Coppia rialzista in attesa", style=shape.diamond, location=location.belowbar, color=cMut, size=size.tiny)
 plotshape(showPend and pairFound and c2Sell, title="Coppia ribassista in attesa", style=shape.diamond, location=location.abovebar, color=cMut, size=size.tiny)
 
+// ---------------- DIAGNOSTICA ----------------
+// per ogni candela recente: ✓ se la coppia che finisce lì è valida,
+// altrimenti ✗ con la lettera della PRIMA condizione fallita
+if diagMode and confirmed and bar_index > last_bar_index - diagBars
+    fail = not p1Ok ? "P" : not p2Ok ? "S" : not dirOk ? "D" : not junctOk ? "G" : not linkOk ? "L" : ""
+    txt  = fail == "" ? "✓" : "✗" + fail
+    tip  = "1ª candela · corpo " + str.tostring(bodyPct[1], "#") + "% del range · corpo relativo " + str.tostring(bodyRelPct, "#") + "% della 2ª" +
+      "\n2ª candela · corpo " + str.tostring(bodyPct, "#") + "% · ombra sup " + str.tostring(upWick, "#") + "% · ombra inf " + str.tostring(dnWick, "#") + "%" +
+      "\ngiunzione: scostamento " + str.tostring(junctGap, format.mintick) + " (tolleranza " + str.tostring(tol, format.mintick) + ")" +
+      "\nspecchio: scostamento " + str.tostring(mirrorGap, format.mintick) +
+      "\nsovrapposizione corpi: " + str.tostring(ovlPct, "#") + "%" +
+      "\n\nP=1ª candela · S=2ª piena · D=direzione · G=giunzione · L=legame"
+    label.new(bar_index, na, txt, yloc=yloc.belowbar, style=label.style_none, textcolor=fail == "" ? cGold : cMut, size=size.tiny, tooltip=tip)
+
 // ---------------- STATISTICHE ----------------
 var table stats = showStats ? table.new(position.bottom_right, 2, 5, bgcolor=cNavy, border_width=1, border_color=color.new(#E8C55A, 80)) : na
 if showStats and barstate.islast
     okRate = cntPair > 0 ? (cntBuy + cntSell) / cntPair * 100 : na
     table.cell(stats, 0, 0, "COPPIA + CONFERMA", text_color=cGold, bgcolor=cNavy2, text_size=size.tiny)
-    table.cell(stats, 1, 0, str.tostring(minBody, "#") + "% corpo", text_color=cMut, bgcolor=cNavy2, text_size=size.tiny)
+    table.cell(stats, 1, 0, linkMode, text_color=cMut, bgcolor=cNavy2, text_size=size.tiny)
     table.cell(stats, 0, 1, "Coppie rilevate", text_color=cTxt, text_size=size.tiny)
     table.cell(stats, 1, 1, str.tostring(cntPair), text_color=cntPair > 0 ? cTxt : cSell, text_size=size.tiny)
     table.cell(stats, 0, 2, "Confermate BUY / SELL", text_color=cTxt, text_size=size.tiny)
@@ -206,7 +256,7 @@ if showStats and barstate.islast
     table.cell(stats, 1, 4, na(okRate) ? "—" : str.tostring(okRate, "#") + "%", text_color=cMut, text_size=size.tiny)
 
 // ---------------- ALERT ----------------
-alertcondition(buySig,  title="Coppia piena — conferma BUY",  message="Coppia Candele Piene: BUY confermato su {{ticker}} {{interval}} @ {{close}} — chiusura sopra la coppia saldata")
-alertcondition(sellSig, title="Coppia piena — conferma SELL", message="Coppia Candele Piene: SELL confermato su {{ticker}} {{interval}} @ {{close}} — chiusura sotto la coppia saldata")
+alertcondition(buySig,  title="Coppia piena — conferma BUY",  message="Coppia Candele Piene: BUY confermato su {{ticker}} {{interval}} @ {{close}} — chiusura sopra la coppia")
+alertcondition(sellSig, title="Coppia piena — conferma SELL", message="Coppia Candele Piene: SELL confermato su {{ticker}} {{interval}} @ {{close}} — chiusura sotto la coppia")
 alertcondition(buySig or sellSig, title="Coppia piena — conferma BUY o SELL", message="Coppia Candele Piene: pattern confermato su {{ticker}} {{interval}} @ {{close}}")
-alertcondition(pairFound, title="Coppia piena rilevata (in attesa)", message="Coppia Candele Piene: coppia saldata su {{ticker}} {{interval}} @ {{close}} — in attesa della candela di conferma")
+alertcondition(pairFound, title="Coppia piena rilevata (in attesa)", message="Coppia Candele Piene: coppia rilevata su {{ticker}} {{interval}} @ {{close}} — in attesa della candela di conferma")
