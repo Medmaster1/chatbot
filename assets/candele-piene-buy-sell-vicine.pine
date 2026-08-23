@@ -1,0 +1,119 @@
+//@version=6
+indicator("Candele Piene Buy/Sell Vicine", shorttitle="PIENE-BS", overlay=true, max_labels_count=500)
+
+// ============================================================
+//  KID / DIGITAL WEALTH — Candele Piene Buy/Sell Vicine v1.0
+//  Individua candele "piene" (marubozu-like): corpo ampio
+//  rispetto al range e ombre compresse entro un limite.
+//  · BUY  = candela piena rialzista (close > open)
+//  · SELL = candela piena ribassista (close < open)
+//  · Segnale quando una candela piena è VICINA a una candela
+//    piena di direzione opposta (entro N barre di distanza)
+//  · Etichette verdi (BUY) e rosse (SELL), colorazione candele
+//    opzionale, alert configurabili
+//  Nota: corpo e ombre sono definitivi solo a candela chiusa,
+//  quindi i segnali si valutano su barra confermata (no repaint)
+// ============================================================
+
+// ---------------- INPUT · CANDELA PIENA ----------------
+minBody   = input.float(90.0, "Corpo minimo (% del range)", minval=10.0, maxval=100.0, step=1.0, group="Candela piena", tooltip="Percentuale minima del corpo rispetto al range totale (high-low). 90% = candela quasi senza ombre (marubozu).")
+maxWickUp = input.float(10.0, "Ombra superiore massima (%)", minval=0.0, maxval=50.0, step=1.0, group="Candela piena", tooltip="Limite massimo dell'ombra superiore in percentuale del range.")
+maxWickDn = input.float(10.0, "Ombra inferiore massima (%)", minval=0.0, maxval=50.0, step=1.0, group="Candela piena", tooltip="Limite massimo dell'ombra inferiore in percentuale del range.")
+useAtrFlt = input.bool(false, "Filtra candele troppo piccole (ATR)", group="Candela piena", tooltip="Esclude le candele piene con range irrisorio, che sono rumore.")
+atrLen    = input.int(14,    "Periodo ATR", minval=2, group="Candela piena")
+minAtrMlt = input.float(0.5, "Range minimo (× ATR)", minval=0.1, step=0.1, group="Candela piena")
+
+// ---------------- INPUT · VICINANZA ----------------
+onlyNear  = input.bool(true, "Solo segnali vicini a candela piena opposta", group="Vicinanza", tooltip="Attivo: segnala solo le candele piene che hanno una candela piena di direzione opposta entro la distanza massima. Disattivo: segnala tutte le candele piene.")
+maxDist   = input.int(0, "Distanza massima (barre tra le due candele)", minval=0, group="Vicinanza", tooltip="Numero di barre che possono separare le due candele piene opposte. 0 = candele adiacenti (consecutive).")
+markPair  = input.bool(true, "Etichetta anche la candela opposta della coppia", group="Vicinanza", tooltip="Marca retroattivamente la candela piena opposta che ha generato l'accoppiamento, così la coppia è visibile a colpo d'occhio.")
+
+// ---------------- INPUT · VISUAL ----------------
+showLabels = input.bool(true, "Mostra etichette", group="Visual")
+lblSizeStr = input.string("small", "Dimensione etichette", options=["tiny", "small", "normal", "large"], group="Visual")
+buyTxt     = input.string("BUY",  "Testo etichetta rialzista", group="Visual")
+sellTxt    = input.string("SELL", "Testo etichetta ribassista", group="Visual")
+colorMode  = input.string("Solo segnali", "Colorazione candele", options=["Solo segnali", "Tutte le candele piene", "Nessuna"], group="Visual")
+cBuy       = input.color(color.new(#2DD4A7, 0), "Colore BUY",  group="Visual")
+cSell      = input.color(color.new(#E5484D, 0), "Colore SELL", group="Visual")
+cBuyTxt    = input.color(color.new(#04120C, 0), "Testo BUY",   group="Visual")
+cSellTxt   = input.color(color.new(#160405, 0), "Testo SELL",  group="Visual")
+
+lblSize = lblSizeStr == "tiny" ? size.tiny : lblSizeStr == "small" ? size.small : lblSizeStr == "normal" ? size.normal : size.large
+
+// ---------------- CALCOLO CANDELA PIENA ----------------
+rng     = high - low
+rngSafe = rng == 0 ? syminfo.mintick : rng
+bodyPct = math.abs(close - open) / rngSafe * 100
+upWick  = (high - math.max(open, close)) / rngSafe * 100
+dnWick  = (math.min(open, close) - low)  / rngSafe * 100
+
+atrVal   = ta.atr(atrLen)
+sizeOk   = not useAtrFlt or (not na(atrVal) and rng >= atrVal * minAtrMlt)
+isFull   = rng > 0 and bodyPct >= minBody and upWick <= maxWickUp and dnWick <= maxWickDn and sizeOk
+fullBuy  = isFull and close > open
+fullSell = isFull and close < open
+
+// ---------------- VICINANZA CANDELE OPPOSTE ----------------
+// memoria dell'ultima candela piena per direzione (aggiornata a
+// barra chiusa, dopo il confronto: la barra corrente non conta come
+// partner di se stessa)
+var int lastBuyBar  = na
+var int lastSellBar = na
+
+// distanza = barre INTERPOSTE tra le due candele (0 = adiacenti)
+distToSell = na(lastSellBar) ? na : bar_index - lastSellBar - 1
+distToBuy  = na(lastBuyBar)  ? na : bar_index - lastBuyBar  - 1
+
+nearSell = fullBuy  and not na(distToSell) and distToSell <= maxDist
+nearBuy  = fullSell and not na(distToBuy)  and distToBuy  <= maxDist
+
+confirmed  = barstate.isconfirmed
+buySignal  = fullBuy  and (not onlyNear or nearSell) and confirmed
+sellSignal = fullSell and (not onlyNear or nearBuy)  and confirmed
+
+// ---------------- ETICHETTE ----------------
+var int lastPrimaryBar = na   // ultima barra con etichetta di segnale
+var int lastRetroBar   = na   // ultima barra con etichetta retroattiva
+
+f_tip(string dir, float d) =>
+    dir + "  ·  corpo " + str.tostring(bodyPct, "#.#") + "%" +
+      "\nombra sup " + str.tostring(upWick, "#.#") + "%  ·  ombra inf " + str.tostring(dnWick, "#.#") + "%" +
+      (na(d) ? "" : "\ndistanza dalla candela opposta: " + str.tostring(d, "#") + " barre")
+
+// la coppia si etichetta retroattivamente solo in modalità "vicine":
+// senza quel filtro ogni candela piena ha già la sua etichetta
+doRetro = markPair and onlyNear and showLabels
+
+if showLabels and buySignal
+    partner = lastSellBar
+    label.new(bar_index, na, buyTxt, yloc=yloc.belowbar, style=label.style_label_up, color=cBuy, textcolor=cBuyTxt, size=lblSize, tooltip=f_tip("BUY", distToSell))
+    if doRetro and nearSell and partner != lastPrimaryBar and partner != lastRetroBar
+        label.new(partner, na, sellTxt, yloc=yloc.abovebar, style=label.style_label_down, color=cSell, textcolor=cSellTxt, size=lblSize, tooltip="SELL · coppia con la candela piena successiva")
+        lastRetroBar := partner
+    lastPrimaryBar := bar_index
+
+if showLabels and sellSignal
+    partner = lastBuyBar
+    label.new(bar_index, na, sellTxt, yloc=yloc.abovebar, style=label.style_label_down, color=cSell, textcolor=cSellTxt, size=lblSize, tooltip=f_tip("SELL", distToBuy))
+    if doRetro and nearBuy and partner != lastPrimaryBar and partner != lastRetroBar
+        label.new(partner, na, buyTxt, yloc=yloc.belowbar, style=label.style_label_up, color=cBuy, textcolor=cBuyTxt, size=lblSize, tooltip="BUY · coppia con la candela piena successiva")
+        lastRetroBar := partner
+    lastPrimaryBar := bar_index
+
+// aggiornamento memoria DOPO il confronto, solo a barra chiusa
+if confirmed and fullBuy
+    lastBuyBar := bar_index
+if confirmed and fullSell
+    lastSellBar := bar_index
+
+// ---------------- COLORAZIONE CANDELE ----------------
+colSig = colorMode == "Solo segnali"
+colAll = colorMode == "Tutte le candele piene"
+barCol = colSig ? (buySignal ? cBuy : sellSignal ? cSell : na) : colAll ? (confirmed and fullBuy ? cBuy : confirmed and fullSell ? cSell : na) : na
+barcolor(barCol, title="Candele piene")
+
+// ---------------- ALERT ----------------
+alertcondition(buySignal,  title="Candela piena BUY",  message="Candele Piene: BUY su {{ticker}} {{interval}} @ {{close}} — candela piena rialzista vicina a una candela piena ribassista")
+alertcondition(sellSignal, title="Candela piena SELL", message="Candele Piene: SELL su {{ticker}} {{interval}} @ {{close}} — candela piena ribassista vicina a una candela piena rialzista")
+alertcondition(buySignal or sellSignal, title="Candela piena BUY o SELL", message="Candele Piene: segnale su {{ticker}} {{interval}} @ {{close}} — candele piene di direzione opposta ravvicinate")
