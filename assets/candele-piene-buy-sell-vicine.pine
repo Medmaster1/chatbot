@@ -2,9 +2,9 @@
 indicator("Candele Piene Buy/Sell Vicine", shorttitle="PIENE-BS", overlay=true, max_labels_count=500)
 
 // ============================================================
-//  KID / DIGITAL WEALTH — Candele Piene Buy/Sell Vicine v1.0
-//  Individua candele "piene" (marubozu-like): corpo ampio
-//  rispetto al range e ombre compresse entro un limite.
+//  KID / DIGITAL WEALTH — Candele Piene Buy/Sell Vicine v1.1
+//  Individua candele "piene": corpo dominante rispetto al range
+//  e ombre compresse entro un limite.
 //  · BUY  = candela piena rialzista (close > open)
 //  · SELL = candela piena ribassista (close < open)
 //  · Segnale quando una candela piena è VICINA a una candela
@@ -13,12 +13,27 @@ indicator("Candele Piene Buy/Sell Vicine", shorttitle="PIENE-BS", overlay=true, 
 //    opzionale, alert configurabili
 //  Nota: corpo e ombre sono definitivi solo a candela chiusa,
 //  quindi i segnali si valutano su barra confermata (no repaint)
+//
+//  v1.1 — il marubozu rigido (corpo 90%, ombre 10%) è raro su
+//  molti strumenti e scarta candele a corpo pieno con ombre
+//  normali. Novità:
+//  · controllo ombre selezionabile: entrambe / solo lato della
+//    chiusura / nessun limite (default: solo lato chiusura)
+//  · filtro opzionale "chiusura vicino all'estremo"
+//  · MODALITÀ CALIBRAZIONE: stampa corpo% e ombra% su ogni
+//    candela, per leggere i valori reali e tarare le soglie
+//  · pannello statistiche con i percentili del corpo, che
+//    suggeriscono dove posizionare la soglia
+//  · default ammorbiditi (corpo 70%, ombra 15%)
 // ============================================================
 
 // ---------------- INPUT · CANDELA PIENA ----------------
-minBody   = input.float(90.0, "Corpo minimo (% del range)", minval=10.0, maxval=100.0, step=1.0, group="Candela piena", tooltip="Percentuale minima del corpo rispetto al range totale (high-low). 90% = candela quasi senza ombre (marubozu).")
-maxWickUp = input.float(10.0, "Ombra superiore massima (%)", minval=0.0, maxval=50.0, step=1.0, group="Candela piena", tooltip="Limite massimo dell'ombra superiore in percentuale del range.")
-maxWickDn = input.float(10.0, "Ombra inferiore massima (%)", minval=0.0, maxval=50.0, step=1.0, group="Candela piena", tooltip="Limite massimo dell'ombra inferiore in percentuale del range.")
+minBody   = input.float(70.0, "Corpo minimo (% del range)", minval=10.0, maxval=100.0, step=1.0, group="Candela piena", tooltip="Percentuale minima del corpo rispetto al range totale (high-low). 90% = marubozu quasi perfetto (raro), 70% = candela a corpo dominante.")
+wickMode  = input.string("Solo lato chiusura", "Controllo ombre", options=["Entrambe le ombre", "Solo lato chiusura", "Nessun limite"], group="Candela piena", tooltip="Solo lato chiusura: per una candela rialzista conta l'ombra superiore (chiusura vicino al massimo), per una ribassista l'ombra inferiore. È il criterio più sensato per una candela di spinta.")
+maxWickUp = input.float(15.0, "Ombra superiore massima (%)", minval=0.0, maxval=50.0, step=1.0, group="Candela piena")
+maxWickDn = input.float(15.0, "Ombra inferiore massima (%)", minval=0.0, maxval=50.0, step=1.0, group="Candela piena")
+useClsExt = input.bool(false, "Richiedi chiusura vicino all'estremo", group="Candela piena", tooltip="Filtro aggiuntivo: la chiusura deve cadere entro X% del range dal massimo (rialzista) o dal minimo (ribassista).")
+clsExtPct = input.float(15.0, "Distanza massima chiusura-estremo (%)", minval=1.0, maxval=50.0, step=1.0, group="Candela piena")
 useAtrFlt = input.bool(false, "Filtra candele troppo piccole (ATR)", group="Candela piena", tooltip="Esclude le candele piene con range irrisorio, che sono rumore.")
 atrLen    = input.int(14,    "Periodo ATR", minval=2, group="Candela piena")
 minAtrMlt = input.float(0.5, "Range minimo (× ATR)", minval=0.1, step=0.1, group="Candela piena")
@@ -27,6 +42,12 @@ minAtrMlt = input.float(0.5, "Range minimo (× ATR)", minval=0.1, step=0.1, grou
 onlyNear  = input.bool(true, "Solo segnali vicini a candela piena opposta", group="Vicinanza", tooltip="Attivo: segnala solo le candele piene che hanno una candela piena di direzione opposta entro la distanza massima. Disattivo: segnala tutte le candele piene.")
 maxDist   = input.int(0, "Distanza massima (barre tra le due candele)", minval=0, group="Vicinanza", tooltip="Numero di barre che possono separare le due candele piene opposte. 0 = candele adiacenti (consecutive).")
 markPair  = input.bool(true, "Etichetta anche la candela opposta della coppia", group="Vicinanza", tooltip="Marca retroattivamente la candela piena opposta che ha generato l'accoppiamento, così la coppia è visibile a colpo d'occhio.")
+
+// ---------------- INPUT · CALIBRAZIONE ----------------
+calibMode = input.bool(false, "Modalità calibrazione (mostra corpo/ombra)", group="Calibrazione", tooltip="Stampa sotto ogni candela recente il corpo% e l'ombra% del lato di chiusura. Serve a leggere i valori reali delle candele che vuoi intercettare e impostare le soglie di conseguenza.")
+calibBars = input.int(60, "Barre da analizzare", minval=10, maxval=500, group="Calibrazione")
+showStats = input.bool(true, "Mostra pannello statistiche", group="Calibrazione")
+statLen   = input.int(200, "Lookback statistiche (barre)", minval=50, group="Calibrazione")
 
 // ---------------- INPUT · VISUAL ----------------
 showLabels = input.bool(true, "Mostra etichette", group="Visual")
@@ -40,6 +61,11 @@ cBuyTxt    = input.color(color.new(#04120C, 0), "Testo BUY",   group="Visual")
 cSellTxt   = input.color(color.new(#160405, 0), "Testo SELL",  group="Visual")
 
 lblSize = lblSizeStr == "tiny" ? size.tiny : lblSizeStr == "small" ? size.small : lblSizeStr == "normal" ? size.normal : size.large
+cMut    = color.new(#8FA0BC, 0)
+cNavy   = color.new(#0E1830, 0)
+cNavy2  = color.new(#101D3A, 0)
+cGold   = color.new(#E8C55A, 0)
+cTxt    = color.new(#E7EDF7, 0)
 
 // ---------------- CALCOLO CANDELA PIENA ----------------
 rng     = high - low
@@ -47,12 +73,26 @@ rngSafe = rng == 0 ? syminfo.mintick : rng
 bodyPct = math.abs(close - open) / rngSafe * 100
 upWick  = (high - math.max(open, close)) / rngSafe * 100
 dnWick  = (math.min(open, close) - low)  / rngSafe * 100
+clvPct  = (close - low) / rngSafe * 100
 
-atrVal   = ta.atr(atrLen)
-sizeOk   = not useAtrFlt or (not na(atrVal) and rng >= atrVal * minAtrMlt)
-isFull   = rng > 0 and bodyPct >= minBody and upWick <= maxWickUp and dnWick <= maxWickDn and sizeOk
-fullBuy  = isFull and close > open
-fullSell = isFull and close < open
+// l'ombra "rilevante" è quella oltre la chiusura: superiore per una
+// candela rialzista, inferiore per una ribassista
+relWick = close >= open ? upWick : dnWick
+
+wickBoth = wickMode == "Entrambe le ombre"
+wickSide = wickMode == "Solo lato chiusura"
+wickOkBuy  = wickBoth ? (upWick <= maxWickUp and dnWick <= maxWickDn) : wickSide ? upWick <= maxWickUp : true
+wickOkSell = wickBoth ? (upWick <= maxWickUp and dnWick <= maxWickDn) : wickSide ? dnWick <= maxWickDn : true
+
+clsOkBuy  = not useClsExt or clvPct >= 100.0 - clsExtPct
+clsOkSell = not useClsExt or clvPct <= clsExtPct
+
+atrVal = ta.atr(atrLen)
+sizeOk = not useAtrFlt or (not na(atrVal) and rng >= atrVal * minAtrMlt)
+
+bodyOk   = rng > 0 and bodyPct >= minBody and sizeOk
+fullBuy  = bodyOk and close > open and wickOkBuy  and clsOkBuy
+fullSell = bodyOk and close < open and wickOkSell and clsOkSell
 
 // ---------------- VICINANZA CANDELE OPPOSTE ----------------
 // memoria dell'ultima candela piena per direzione (aggiornata a
@@ -79,6 +119,7 @@ var int lastRetroBar   = na   // ultima barra con etichetta retroattiva
 f_tip(string dir, float d) =>
     dir + "  ·  corpo " + str.tostring(bodyPct, "#.#") + "%" +
       "\nombra sup " + str.tostring(upWick, "#.#") + "%  ·  ombra inf " + str.tostring(dnWick, "#.#") + "%" +
+      "\nchiusura al " + str.tostring(clvPct, "#") + "% del range" +
       (na(d) ? "" : "\ndistanza dalla candela opposta: " + str.tostring(d, "#") + " barre")
 
 // la coppia si etichetta retroattivamente solo in modalità "vicine":
@@ -106,6 +147,45 @@ if confirmed and fullBuy
     lastBuyBar := bar_index
 if confirmed and fullSell
     lastSellBar := bar_index
+
+// ---------------- MODALITÀ CALIBRAZIONE ----------------
+// stampa corpo% e ombra rilevante% sotto ogni candela recente:
+// verde se la candela supera il filtro, grigia se scartata
+if calibMode and confirmed and bar_index > last_bar_index - calibBars
+    passed = fullBuy or fullSell
+    label.new(bar_index, na, str.tostring(bodyPct, "#") + "·" + str.tostring(relWick, "#"), yloc=yloc.belowbar, style=label.style_none, textcolor=passed ? (fullBuy ? cBuy : cSell) : cMut, size=size.tiny)
+
+// ---------------- STATISTICHE ----------------
+var int cntFull = 0
+var int cntBuy  = 0
+var int cntSell = 0
+if confirmed and (fullBuy or fullSell)
+    cntFull += 1
+if buySignal
+    cntBuy += 1
+if sellSignal
+    cntSell += 1
+
+// percentili del corpo: dicono dove cade davvero la soglia su questo
+// strumento e timeframe (es. p80 = solo il 20% delle candele supera)
+bodyP50 = ta.percentile_linear_interpolation(bodyPct, statLen, 50)
+bodyP80 = ta.percentile_linear_interpolation(bodyPct, statLen, 80)
+bodyP95 = ta.percentile_linear_interpolation(bodyPct, statLen, 95)
+
+var table stats = showStats ? table.new(position.bottom_right, 2, 6, bgcolor=cNavy, border_width=1, border_color=color.new(#E8C55A, 80)) : na
+if showStats and barstate.islast
+    table.cell(stats, 0, 0, "CANDELE PIENE", text_color=cGold, bgcolor=cNavy2, text_size=size.tiny)
+    table.cell(stats, 1, 0, str.tostring(minBody, "#") + "% corpo", text_color=cMut, bgcolor=cNavy2, text_size=size.tiny)
+    table.cell(stats, 0, 1, "Candele piene trovate", text_color=cTxt, text_size=size.tiny)
+    table.cell(stats, 1, 1, str.tostring(cntFull), text_color=cntFull > 0 ? cTxt : cSell, text_size=size.tiny)
+    table.cell(stats, 0, 2, "Segnali BUY / SELL", text_color=cTxt, text_size=size.tiny)
+    table.cell(stats, 1, 2, str.tostring(cntBuy) + " / " + str.tostring(cntSell), text_color=cTxt, text_size=size.tiny)
+    table.cell(stats, 0, 3, "Corpo mediano (" + str.tostring(statLen) + "b)", text_color=cTxt, text_size=size.tiny)
+    table.cell(stats, 1, 3, str.tostring(bodyP50, "#") + "%", text_color=cMut, text_size=size.tiny)
+    table.cell(stats, 0, 4, "Corpo 80° pct", text_color=cTxt, text_size=size.tiny)
+    table.cell(stats, 1, 4, str.tostring(bodyP80, "#") + "%", text_color=cMut, text_size=size.tiny)
+    table.cell(stats, 0, 5, "Corpo 95° pct", text_color=cTxt, text_size=size.tiny)
+    table.cell(stats, 1, 5, str.tostring(bodyP95, "#") + "%", text_color=cMut, text_size=size.tiny)
 
 // ---------------- COLORAZIONE CANDELE ----------------
 colSig = colorMode == "Solo segnali"
