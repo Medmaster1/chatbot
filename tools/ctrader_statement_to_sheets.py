@@ -29,6 +29,7 @@ from __future__ import annotations
 import argparse
 import csv
 import datetime as dt
+import math
 import os
 import re
 import sys
@@ -251,6 +252,17 @@ def parse_statement(path: str) -> dict:
 # Derived trade metrics and column layout
 # --------------------------------------------------------------------------- #
 
+def round_half_up(value: float, digits: int) -> float:
+    """Round half away from zero, the way a spreadsheet (and the page) does.
+
+    Python's built-in round() goes to the nearest even digit, so a duration of
+    330.445 minutes becomes 330.44 here and 330.45 everywhere else.
+    """
+    factor = 10 ** digits
+    rounded = math.floor(abs(value) * factor + 0.5) / factor
+    return rounded if value >= 0 else -rounded
+
+
 def derive_history(headers: list[str], row: list) -> dict:
     """Duration, price move in points, win/loss flag and % of balance."""
     idx = {h: i for i, h in enumerate(headers)}
@@ -262,13 +274,13 @@ def derive_history(headers: list[str], row: list) -> dict:
     opened, closed = get("Opening Time (UTC+0)"), get("Closing Time (UTC+0)")
     duration = None
     if isinstance(opened, dt.datetime) and isinstance(closed, dt.datetime):
-        duration = round((closed - opened).total_seconds() / 60, 2)
+        duration = round_half_up((closed - opened).total_seconds() / 60, 2)
 
     entry, exit_ = get("Entry Price"), get("Closing Price")
     direction = get("Opening Direction")
     points = None
     if isinstance(entry, float) and isinstance(exit_, float) and direction:
-        points = round(exit_ - entry if direction.upper() == "BUY" else entry - exit_, 5)
+        points = round_half_up(exit_ - entry if direction.upper() == "BUY" else entry - exit_, 5)
 
     net, balance = get("Net EUR"), get("Balance EUR")
     outcome = pct = None
@@ -316,6 +328,19 @@ VIEWS = {
 }
 
 TOTAL_COLUMNS = ("Lordo EUR", "Swap", "Commissioni", "Netto EUR")
+
+# Per-instrument aggregates, keyed by the symbol sitting in column A of the same
+# row. {row} is the spreadsheet row the cell lands on, ARG the locale's argument
+# separator.
+SYMBOL_AGGREGATES = [
+    ("Operazioni", "count", "=COUNTIF({sym}ARG$A{row})"),
+    ("Vinte", "wins", '=COUNTIFS({sym}ARG$A{row}ARG{net}ARG">0")'),
+    ("Perse", "losses", '=COUNTIFS({sym}ARG$A{row}ARG{net}ARG"<0")'),
+    ("Win rate", "winrate",
+     '=IFERROR(COUNTIFS({sym}ARG$A{row}ARG{net}ARG">0")/COUNTIF({sym}ARG$A{row})ARG"")'),
+    ("Netto EUR", "net", "=SUMIF({sym}ARG$A{row}ARG{net})"),
+    ("Netto medio", "avg", '=IFERROR(AVERAGEIF({sym}ARG$A{row}ARG{net})ARG"")'),
+]
 
 
 def view(name: str, section: dict) -> tuple[list[str], list[list]]:
@@ -389,6 +414,51 @@ def compute_stats(data: dict) -> dict:
     }
 
 
+def by_symbol(data: dict) -> list[list]:
+    """Per-instrument tally, worst impact first: [simbolo, operazioni, vinte, perse]."""
+    history = data["sections"].get("History")
+    if not history or not history["rows"]:
+        return []
+    headers, rows = view("History", history)
+    i_sym, i_net = headers.index("Simbolo"), headers.index("Netto EUR")
+    tally: dict[str, list] = {}
+    for row in rows:
+        entry = tally.setdefault(row[i_sym], [0, 0, 0, 0.0])
+        entry[0] += 1
+        net = row[i_net]
+        if isinstance(net, float):
+            if net > 0:
+                entry[1] += 1
+            elif net < 0:
+                entry[2] += 1
+            entry[3] += net
+    ordered = sorted(tally.items(), key=lambda kv: -abs(kv[1][3]))
+    return [[symbol] + counts[:3] for symbol, counts in ordered]
+
+
+def by_day(data: dict) -> list[list]:
+    """Trading days in order: [data, operazioni, netto, saldo di fine giornata]."""
+    history = data["sections"].get("History")
+    if not history or not history["rows"]:
+        return []
+    headers, rows = view("History", history)
+    i_close = headers.index("Chiusura (UTC)")
+    i_net, i_balance = headers.index("Netto EUR"), headers.index("Saldo EUR")
+    days: dict[dt.date, list] = {}
+    for row in rows:
+        closed = row[i_close]
+        if not isinstance(closed, dt.datetime):
+            continue
+        entry = days.setdefault(closed.date(), [0, 0.0, None, None])
+        entry[0] += 1
+        if isinstance(row[i_net], float):
+            entry[1] += row[i_net]
+        if entry[2] is None or closed >= entry[2]:      # last close of the day sets the balance
+            entry[2], entry[3] = closed, row[i_balance]
+    return [[day, n, round(net, 10), balance]
+            for day, (n, net, _, balance) in sorted(days.items())]
+
+
 # --------------------------------------------------------------------------- #
 # Report layout
 # --------------------------------------------------------------------------- #
@@ -441,6 +511,24 @@ def build_report(data: dict) -> list[dict]:
     blocks.append({"group": "summary", "kind": "pairs",
                    "title": "PERFORMANCE DEL PERIODO", "rows": performance})
 
+    symbols = by_symbol(data)
+    if symbols:
+        blocks.append({
+            "group": "summary", "id": "symbols",
+            "kind": "table", "title": "RIEPILOGO PER STRUMENTO",
+            "headers": ["Simbolo"] + [label for label, _, _ in SYMBOL_AGGREGATES],
+            "rows": [[row[0]] + ["{{SYMAGG:%s:%s}}" % (key, row[0])
+                                 for _, key, _ in SYMBOL_AGGREGATES] for row in symbols],
+            "totals": None})
+
+    days = by_day(data)
+    if days:
+        blocks.append({
+            "group": "daily", "id": "daily",
+            "kind": "table", "title": "ANDAMENTO GIORNALIERO",
+            "headers": ["Data", "Operazioni", "Netto EUR", "Saldo fine giornata"],
+            "rows": days, "totals": None, "is_daily": True})
+
     for name, group in (("History", "trades"), ("Orders", "orders"),
                         ("Positions", "positions"), ("Transactions", "transactions")):
         section = data["sections"].get(name)
@@ -469,9 +557,16 @@ def resolve(cell, ctx):
     if not isinstance(cell, str) or not cell.startswith("{{"):
         return cell
     kind, _, argument = cell[2:-2].partition(":")
-    rng = lambda col: f"{ctx['sheet']}{col}{ctx['first']}:{col}{ctx['last']}"
+    rng = lambda col: f"{ctx['sheet']}${col}${ctx['first']}:${col}${ctx['last']}"
     if kind == "SUM":
         return f"=SUM({rng(ctx['column'](argument))})"
+    if kind == "SYMAGG":
+        argument = argument.split(":")[0]           # the symbol rides along for value output
+        template = next(t for _, key, t in SYMBOL_AGGREGATES if key == argument)
+        return (template.replace("ARG", ctx["arg"])
+                        .format(sym=rng(ctx["column"]("Simbolo")),
+                                net=rng(ctx["column"]("Netto EUR")),
+                                row=ctx["row"]))
     template = next(t for label, key, t in STATS if key == argument)
     ranges = {}
     for token, label in (("net", "Netto EUR"), ("dur", "Durata (min)"), ("sym", "Simbolo")):
@@ -507,13 +602,21 @@ def check_consistency(data: dict) -> list[str]:
 # Formatting helpers
 # --------------------------------------------------------------------------- #
 
+def plain(value: float) -> str:
+    """Decimal notation always: a spreadsheet reads 8,4834e-06 as text, not a number."""
+    text = repr(round(value, 10))
+    if "e" in text or "E" in text:
+        text = f"{value:.10f}".rstrip("0").rstrip(".") or "0"
+    return text
+
+
 def fmt_intl(value):
     if isinstance(value, dt.datetime):
         return value.strftime("%Y-%m-%d %H:%M:%S")
     if isinstance(value, dt.date):
         return value.strftime("%Y-%m-%d")
     if isinstance(value, float):
-        return repr(round(value, 10))
+        return plain(value)
     return "" if value is None else value
 
 
@@ -523,7 +626,7 @@ def fmt_it(value):
     if isinstance(value, dt.date):
         return value.strftime("%d/%m/%Y")
     if isinstance(value, float):
-        return repr(round(value, 10)).replace(".", ",")
+        return plain(value).replace(".", ",")
     return "" if value is None else value
 
 
@@ -602,9 +705,12 @@ def write_gsheet_csv(data: dict, path: str) -> str:
     ctx = {"sheet": "", "first": trades["first"], "last": trades["last"], "arg": ";",
            "column": lambda label: (col_letter(trades["headers"].index(label) + 1)
                                     if label in trades["headers"] else "")}
-    resolved = [[resolve(cell, ctx) if trades["first"] else "" if
-                 isinstance(cell, str) and cell.startswith("{{") else cell
-                 for cell in row] for row in rows]
+    resolved = []
+    for number, row in enumerate(rows, start=1):
+        row_ctx = dict(ctx, row=number)
+        resolved.append([resolve(cell, row_ctx) if trades["first"] else
+                         "" if isinstance(cell, str) and cell.startswith("{{") else cell
+                         for cell in row])
 
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     with open(path, "w", newline="", encoding="utf-8") as fh:
@@ -617,21 +723,24 @@ def write_gsheet_csv(data: dict, path: str) -> str:
 # XLSX output
 # --------------------------------------------------------------------------- #
 
-EUR_FMT = '#,##0.00;[Red]-#,##0.00'
+EUR_FMT = '#,##0.00\u00a0"€";[Red]-#,##0.00\u00a0"€"'
 PRICE_FMT = '#,##0.00####'
 PCT_FMT = '0.00%;[Red]-0.00%'
 DATE_FMT = 'dd/mm/yyyy hh:mm:ss'
 
-MONEY_COLS = {"Swap", "Commissioni", "Lordo EUR", "Netto EUR", "Saldo EUR", "Importo EUR"}
+MONEY_COLS = {"Swap", "Commissioni", "Lordo EUR", "Netto EUR", "Saldo EUR", "Importo EUR",
+              "Netto medio", "Saldo fine giornata"}
 PRICE_COLS = {"Prezzo entrata", "Prezzo uscita", "Prezzo ordine", "Stop loss", "Take profit"}
 PCT_LABELS = {"P/L % sul saldo", "Win rate"}
-SHEETS = [("summary", "Riepilogo"), ("trades", "Operazioni"), ("orders", "Ordini"),
-          ("positions", "Posizioni"), ("transactions", "Transazioni")]
+SHEETS = [("summary", "Riepilogo"), ("trades", "Operazioni"), ("daily", "Andamento"),
+          ("orders", "Ordini"), ("positions", "Posizioni"), ("transactions", "Transazioni")]
 
 
 def number_format(label, value):
-    if isinstance(value, (dt.datetime, dt.date)):
+    if isinstance(value, dt.datetime):
         return DATE_FMT
+    if isinstance(value, dt.date):
+        return "dd/mm/yyyy"
     if label in MONEY_COLS:
         return EUR_FMT
     if label in PRICE_COLS:
@@ -642,11 +751,15 @@ def number_format(label, value):
         return "0.0000000000"
     if label in ("Durata (min)", "Punti", "Profit factor"):
         return "0.00"
+    if label in ("Operazioni", "Vinte", "Perse", "Strumenti negoziati"):
+        return "0"
     return "0.####" if isinstance(value, float) else "General"
 
 
 def write_xlsx(data: dict, path: str) -> str:
     from openpyxl import Workbook
+    from openpyxl.chart import LineChart, Reference
+    from openpyxl.formatting.rule import ColorScaleRule, DataBarRule
     from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
     from openpyxl.utils import get_column_letter
 
@@ -654,9 +767,14 @@ def write_xlsx(data: dict, path: str) -> str:
     bold = Font(name="Arial", size=10, bold=True)
     head_font = Font(name="Arial", size=10, bold=True, color="FFFFFF")
     head_fill = PatternFill("solid", fgColor="1F3864")
-    title_font = Font(name="Arial", size=12, bold=True, color="1F3864")
+    title_font = Font(name="Arial", size=11, bold=True, color="FFFFFF")
+    title_fill = PatternFill("solid", fgColor="2E5496")
     doc_font = Font(name="Arial", size=16, bold=True, color="1F3864")
     sub_font = Font(name="Arial", size=10, color="7F7F7F")
+    win_font = Font(name="Arial", size=10, bold=True, color="1E7A46")
+    loss_font = Font(name="Arial", size=10, bold=True, color="C00000")
+    stripe = PatternFill("solid", fgColor="F2F5FA")
+    total_fill = PatternFill("solid", fgColor="DCE3F0")
     thin = Side(style="thin", color="D9D9D9")
     box = Border(top=thin, bottom=thin, left=thin, right=thin)
 
@@ -665,6 +783,7 @@ def write_xlsx(data: dict, path: str) -> str:
     wb.remove(wb.active)
     widths: dict[str, dict[int, int]] = {}
     trades = {"sheet": None, "first": None, "last": None, "headers": []}
+    daily = {"sheet": None, "first": None, "last": None, "headers": []}
     pending: list[tuple] = []          # cells holding a token, resolved at the end
 
     for group, sheet_name in SHEETS:
@@ -696,7 +815,11 @@ def write_xlsx(data: dict, path: str) -> str:
 
             cursor += 1
             title = ws.cell(row=cursor, column=1, value=block["title"])
-            title.font = title_font
+            title.font, title.fill = title_font, title_fill
+            span = len(block["headers"]) if block["kind"] == "table" else 2
+            for c in range(2, span + 1):
+                ws.cell(row=cursor, column=c).fill = title_fill
+            ws.row_dimensions[cursor].height = 20
 
             if block["kind"] == "pairs":
                 for label, value in block["rows"]:
@@ -734,27 +857,52 @@ def write_xlsx(data: dict, path: str) -> str:
                 continue
 
             first = header_row + 1
-            for row in block["rows"]:
+            for n, row in enumerate(block["rows"]):
                 cursor += 1
                 r = cursor
                 for c, (label, value) in enumerate(zip(block["headers"], row), start=1):
-                    cell = ws.cell(row=r, column=c, value=value)
+                    cell = ws.cell(row=r, column=c)
                     cell.font, cell.border = base, box
-                    cell.number_format = number_format(label, value)
+                    if isinstance(value, str) and value.startswith("{{"):
+                        pending.append((cell, value, label))
+                    else:
+                        cell.value = value
+                        cell.number_format = number_format(label, value)
+                    if n % 2:
+                        cell.fill = stripe
+                    if label == "Esito" and value in ("WIN", "LOSS"):
+                        cell.font = win_font if value == "WIN" else loss_font
                     measure(c, fmt_intl(value))
             last = cursor
 
+            if block.get("is_daily"):
+                daily = {"sheet": sheet_name, "first": first, "last": last,
+                         "headers": block["headers"]}
             if block.get("is_trades"):
                 trades = {"sheet": sheet_name, "first": first, "last": last,
                           "headers": block["headers"]}
                 ws.freeze_panes = ws.cell(row=first, column=1).coordinate
+                # Where the money went, and which trades were left running.
+                column = lambda label: get_column_letter(block["headers"].index(label) + 1)
+                if "Netto EUR" in block["headers"]:
+                    net = column("Netto EUR")
+                    ws.conditional_formatting.add(
+                        f"{net}{first}:{net}{last}",
+                        ColorScaleRule(start_type="min", start_color="F8696B",
+                                       mid_type="num", mid_value=0, mid_color="FFFFFF",
+                                       end_type="max", end_color="63BE7B"))
+                if "Durata (min)" in block["headers"]:
+                    dur = column("Durata (min)")
+                    ws.conditional_formatting.add(
+                        f"{dur}{first}:{dur}{last}",
+                        DataBarRule(start_type="min", end_type="max", color="8EA9DB"))
             if block["totals"]:
                 cursor += 1
                 r = cursor
                 for c, (label, value) in enumerate(zip(block["headers"], block["totals"]),
                                                    start=1):
                     cell = ws.cell(row=r, column=c)
-                    cell.font = bold
+                    cell.font, cell.fill, cell.border = bold, total_fill, box
                     if isinstance(value, str) and value.startswith("{{"):
                         pending.append((cell, value, label))
                         cell.number_format = EUR_FMT
@@ -767,9 +915,24 @@ def write_xlsx(data: dict, path: str) -> str:
            "column": lambda label: (get_column_letter(trades["headers"].index(label) + 1)
                                     if label in trades["headers"] else "")}
     for cell, token, label in pending:
-        cell.value = resolve(cell=token, ctx=ctx) if trades["first"] else None
-        if label in PCT_LABELS:
-            cell.number_format = PCT_FMT
+        cell.value = (resolve(token, dict(ctx, row=cell.row)) if trades["first"] else None)
+        # A formula cell has no value to infer a format from, so go by its column.
+        cell.number_format = PCT_FMT if label in PCT_LABELS else number_format(label, 0.0)
+
+    if daily["sheet"] and daily["last"] > daily["first"]:
+        ws = wb[daily["sheet"]]
+        balance_col = daily["headers"].index("Saldo fine giornata") + 1
+        chart = LineChart()
+        chart.title = "Curva del saldo"
+        chart.height, chart.width = 8, 18
+        chart.y_axis.title, chart.x_axis.title = "EUR", None
+        chart.legend = None
+        chart.add_data(Reference(ws, min_col=balance_col,
+                                 min_row=daily["first"] - 1, max_row=daily["last"]),
+                       titles_from_data=True)
+        chart.set_categories(Reference(ws, min_col=1,
+                                       min_row=daily["first"], max_row=daily["last"]))
+        ws.add_chart(chart, f"{get_column_letter(len(daily['headers']) + 2)}{daily['first']}")
 
     for sheet_name, cols in widths.items():
         for col, width in cols.items():
@@ -777,7 +940,38 @@ def write_xlsx(data: dict, path: str) -> str:
 
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     wb.save(path)
+    shrink_xlsx(path)
     return path
+
+
+def shrink_xlsx(path: str) -> int:
+    """Repack the workbook as small as the format allows, and return its size.
+
+    Uploading a workbook through an API that takes the bytes inline leaves very
+    little room, so drop the parts nothing here relies on - the 10 KB colour
+    theme (no style below refers to a theme colour) and the document properties
+    - and recompress the rest at maximum deflate.
+    """
+    import re as _re
+    import zipfile
+
+    drop = ("xl/theme/theme1.xml", "docProps/app.xml", "docProps/core.xml")
+    with zipfile.ZipFile(path) as zf:
+        parts = {i.filename: zf.read(i.filename) for i in zf.infolist()}
+
+    for name in drop:
+        parts.pop(name, None)
+    for name in ("[Content_Types].xml", "xl/_rels/workbook.xml.rels", "_rels/.rels"):
+        if name in parts:
+            xml = parts[name].decode("utf-8")
+            xml = _re.sub(r"<(?:Override|Relationship)\b[^>]*?"
+                          r"(?:theme/theme1\.xml|docProps/(?:app|core)\.xml)[^>]*?/>", "", xml)
+            parts[name] = xml.encode("utf-8")
+
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
+        for name, blob in parts.items():
+            zf.writestr(name, blob)
+    return os.path.getsize(path)
 
 
 def main(argv=None) -> int:

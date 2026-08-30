@@ -47,6 +47,22 @@ restano vive nel foglio: `SUM`, `COUNTIF`, `SUMIF`, `AVERAGEIF`, `IFERROR`,
 Usa la variante `.it.csv` se il foglio Google ha impostazioni locali italiane,
 altrimenti i numeri vengono importati come testo.
 
+### Consegna verso Google Sheets
+
+Il connettore Drive accetta il contenuto del file solo **inline**, e oltre ~10 KB il
+payload viene troncato: il file arriva corrotto e la conversione in foglio Google viene
+rifiutata con `Invalid conversion requested`. Da qui la regola:
+
+| Report | Come arriva su Sheets |
+|---|---|
+| Sotto la soglia (statement giornalieri) | caricato direttamente come foglio Google nativo, partendo da `--gsheet-csv` |
+| Sopra la soglia (statement mensili) | consegnato come `.xlsx` formattato, da trascinare in Drive: aprendolo, Sheets lo converte mantenendo grafica, grafico e formule |
+
+Un `.xlsx` caricato con conversione attiva diventa un foglio Google nativo **con** la
+formattazione, quindi il trascinamento manuale non perde nulla: è solo un passaggio in più.
+Verificare sempre `fileSize` dopo un upload binario — se non coincide con il file locale,
+il payload è stato troncato.
+
 ### Ordine del report
 
 Le sezioni sono impaginate per rilevanza decrescente, non nell'ordine dello
@@ -57,9 +73,14 @@ statement originale:
 2. **Performance del periodo** — P/L realizzato, win rate, profit factor,
    aspettativa, profitto e perdita media, migliore e peggiore operazione, durata
    media, depositi e prelievi
-3. **Operazioni chiuse** — con riga TOTALE
-4. **Ordini pendenti** → **Posizioni aperte** → **Transazioni**
-5. **Dati del conto** — intestatario, email, periodo, data di generazione
+3. **Riepilogo per strumento** — operazioni, vinte, perse, win rate, netto e netto
+   medio per simbolo, ordinati per impatto: con formule `COUNTIFS`/`SUMIF` vive sulla
+   tabella delle operazioni
+4. **Andamento giornaliero** — operazioni, netto e saldo di fine giornata per ogni
+   giorno operativo; nel workbook alimenta il grafico della curva del saldo
+5. **Operazioni chiuse** — con riga TOTALE
+6. **Ordini pendenti** → **Posizioni aperte** → **Transazioni**
+7. **Dati del conto** — intestatario, email, periodo, data di generazione
 
 Anche le colonne sono riordinate in modo leggibile: identità (ID, simbolo,
 direzione) → tempi (apertura, chiusura, durata) → dimensione e prezzi → risultato
@@ -69,13 +90,18 @@ di conversione va in fondo.
 
 ### Cosa produce il workbook
 
-* `Riepilogo` – situazione del conto, performance del periodo (statistiche come
-  formule dal vivo sul foglio `Operazioni`, quindi si aggiornano se aggiungi righe)
-  e dati del conto
+* `Riepilogo` – situazione del conto, performance del periodo e riepilogo per strumento
+  (formule dal vivo sul foglio `Operazioni`, quindi si aggiornano se aggiungi righe),
+  più i dati del conto
 * `Operazioni` – storico con date e numeri tipizzati, colonne derivate
-  `Durata (min)`, `Punti`, `Esito`, `P/L % sul saldo`, riga TOTALE con `SOMMA` e
-  intestazione bloccata
+  `Durata (min)`, `Punti`, `Esito`, `P/L % sul saldo`, riga TOTALE con `SOMMA`,
+  intestazione bloccata, scala colore sul netto e barre dati sulla durata
+* `Andamento` – tabella giornaliera più il grafico a linee della curva del saldo
 * `Ordini`, `Posizioni`, `Transazioni`
+
+Il workbook viene ricompresso da `shrink_xlsx()`: via il tema colori da 10 KB (nessuno
+stile vi fa riferimento) e le proprietà del documento, deflate al massimo. Serve a stare
+sotto il limite del connettore quando il report è piccolo.
 
 Le formule usano solo funzioni supportate sia da Excel sia da Google Sheets
 (`SUM`, `COUNTIF`, `SUMIF`, `AVERAGEIF`, `IFERROR`, `SUMPRODUCT`, `MAX`, `MIN`).

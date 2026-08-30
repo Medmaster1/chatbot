@@ -97,6 +97,12 @@
   .kv h4{grid-column:1/-1;margin:16px 0 2px;font-size:10px;letter-spacing:.14em;
          text-transform:uppercase;color:var(--gold)}
 
+  .spark{padding:14px 16px 4px;border-bottom:1px solid var(--line)}
+  .spark-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;
+              margin-bottom:6px;flex-wrap:wrap}
+  .spark-head .k{font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--txt3)}
+  .spark-head .r{font-size:11px;color:var(--txt2);font-variant-numeric:tabular-nums}
+  .spark svg{width:100%;height:120px;display:block}
   .note{font-size:11.5px;color:var(--txt3);line-height:1.7;margin:16px 0 0}
   .note code{color:var(--txt2);font-size:11px}
   .hidden{display:none!important}
@@ -226,6 +232,18 @@ const VIEWS = {
   ]
 };
 const TOTAL_COLUMNS = ['Lordo EUR', 'Swap', 'Commissioni', 'Netto EUR'];
+
+/* Per-instrument aggregates, keyed by the symbol in column A of the same row.
+   {row} is the spreadsheet row the cell lands on, ARG the argument separator. */
+const SYMBOL_AGGREGATES = [
+  ['Operazioni','count','=COUNTIF({sym}ARG$A{row})'],
+  ['Vinte','wins','=COUNTIFS({sym}ARG$A{row}ARG{net}ARG">0")'],
+  ['Perse','losses','=COUNTIFS({sym}ARG$A{row}ARG{net}ARG"<0")'],
+  ['Win rate','winrate',
+   '=IFERROR(COUNTIFS({sym}ARG$A{row}ARG{net}ARG">0")/COUNTIF({sym}ARG$A{row})ARG"")'],
+  ['Netto EUR','net','=SUMIF({sym}ARG$A{row}ARG{net})'],
+  ['Netto medio','avg','=IFERROR(AVERAGEIF({sym}ARG$A{row}ARG{net})ARG"")']
+];
 
 /* label, stats key, formula template ({net}/{dur}/{sym} ranges, ARG = separator) */
 const STATS = [
@@ -371,6 +389,11 @@ function view(name, section) {
 
 const sum = values => values.reduce((a, b) => a + (typeof b === 'number' ? b : 0), 0);
 const round10 = v => Math.round(v * 1e10) / 1e10;
+/* Decimal notation always: a spreadsheet reads 8.4834e-6 as text, not a number. */
+const plain = v => {
+  const text = String(round10(v));
+  return /e/i.test(text) ? v.toFixed(10).replace(/0+$/, '').replace(/\.$/, '') || '0' : text;
+};
 
 function computeStats(data) {
   const history = data.sections['History'];
@@ -394,6 +417,55 @@ function computeStats(data) {
     avgDuration: durations.length ? round10(sum(durations) / durations.length) : null,
     symbols: symbols.size
   };
+}
+
+/* Per-instrument tally, worst impact first. */
+function bySymbol(data) {
+  const history = data.sections['History'];
+  if (!history || !history.rows.length) return [];
+  const {headers, rows} = view('History', history);
+  const iSym = headers.indexOf('Simbolo'), iNet = headers.indexOf('Netto EUR');
+  const tally = new Map();
+  for (const row of rows) {
+    const symbol = row[iSym], net = row[iNet];
+    const entry = tally.get(symbol) || {count: 0, wins: 0, losses: 0, net: 0};
+    entry.count++;
+    if (typeof net === 'number') {
+      if (net > 0) entry.wins++; else if (net < 0) entry.losses++;
+      entry.net += net;
+    }
+    tally.set(symbol, entry);
+  }
+  return [...tally.entries()]
+    .map(([symbol, e]) => ({symbol, ...e, net: round10(e.net),
+                            winrate: e.count ? e.wins / e.count : null,
+                            avg: e.count ? round10(e.net / e.count) : null}))
+    .sort((a, b) => Math.abs(b.net) - Math.abs(a.net));
+}
+
+/* Trading days in order, with the balance left at each day's last close. */
+function byDay(data) {
+  const history = data.sections['History'];
+  if (!history || !history.rows.length) return [];
+  const {headers, rows} = view('History', history);
+  const iClose = headers.indexOf('Chiusura (UTC)');
+  const iNet = headers.indexOf('Netto EUR'), iBal = headers.indexOf('Saldo EUR');
+  const days = new Map();
+  for (const row of rows) {
+    const closed = row[iClose];
+    if (!closed || !closed.date) continue;
+    const key = closed.date.toISOString().slice(0, 10);
+    const entry = days.get(key) || {count: 0, net: 0, last: null, balance: null,
+                                    day: {date: new Date(key + 'T00:00:00Z'), hasTime: false}};
+    entry.count++;
+    if (typeof row[iNet] === 'number') entry.net += row[iNet];
+    if (entry.last === null || closed.date >= entry.last) {
+      entry.last = closed.date; entry.balance = row[iBal];
+    }
+    days.set(key, entry);
+  }
+  return [...days.entries()].sort(([a], [b]) => a < b ? -1 : 1)
+    .map(([, e]) => [e.day, e.count, round10(e.net), e.balance]);
 }
 
 /* =========================================================================
@@ -432,6 +504,22 @@ function buildReport(data) {
                    ['Movimenti netti', get('Movimenti netti','Total Net')]);
   blocks.push({group:'summary', kind:'pairs', title:'PERFORMANCE DEL PERIODO', rows:performance});
 
+  const symbols = bySymbol(data);
+  if (symbols.length) {
+    blocks.push({group:'summary', id:'symbols', kind:'table', title:'RIEPILOGO PER STRUMENTO',
+                 headers:['Simbolo'].concat(SYMBOL_AGGREGATES.map(([label]) => label)),
+                 rows:symbols.map(s => [s.symbol].concat(
+                   SYMBOL_AGGREGATES.map(([, key]) => `{{SYMAGG:${key}:${s.symbol}}}`))),
+                 totals:null});
+  }
+
+  const days = byDay(data);
+  if (days.length) {
+    blocks.push({group:'daily', id:'daily', kind:'table', title:'ANDAMENTO GIORNALIERO',
+                 headers:['Data','Operazioni','Netto EUR','Saldo fine giornata'],
+                 rows:days, totals:null});
+  }
+
   [['History','trades'], ['Orders','orders'], ['Positions','positions'],
    ['Transactions','transactions']].forEach(([name, group]) => {
     const section = data.sections[name];
@@ -460,16 +548,27 @@ const colLetter = i => {
 /* Turn a {{SUM:...}} / {{STAT:...}} token into a formula, or into its value. */
 function resolve(cell, ctx) {
   if (typeof cell !== 'string' || !cell.startsWith('{{')) return cell;
-  const [kind, argument] = cell.slice(2, -2).split(':');
+  const [kind, argument, symbol] = cell.slice(2, -2).split(':');
   if (!ctx.formulas) {
     if (kind === 'SUM') return ctx.sums[argument] ?? null;
+    if (kind === 'SYMAGG') {
+      const entry = (ctx.symbols || []).find(s => s.symbol === symbol);
+      return entry ? (entry[argument] ?? null) : null;
+    }
     return ctx.stats ? (ctx.stats[argument] ?? null) : null;
   }
   const range = label => {
     const col = ctx.column(label);
-    return col ? `${col}${ctx.first}:${col}${ctx.last}` : '';
+    return col ? `$${col}$${ctx.first}:$${col}$${ctx.last}` : '';
   };
   if (kind === 'SUM') return `=SUM(${range(argument)})`;
+  if (kind === 'SYMAGG') {
+    return SYMBOL_AGGREGATES.find(([, key]) => key === argument)[2]
+      .replace(/ARG/g, ctx.arg)
+      .replace(/\{sym\}/g, range('Simbolo'))
+      .replace(/\{net\}/g, range('Netto EUR'))
+      .replace(/\{row\}/g, ctx.row);
+  }
   const template = STATS.find(([, key]) => key === argument)[2];
   return template.replace(/ARG/g, ctx.arg)
                  .replace(/\{net\}/g, range('Netto EUR'))
@@ -491,7 +590,7 @@ function fmtIt(value) {
     return value.hasTime
       ? `${day} ${pad(d.getUTCHours())}.${pad(d.getUTCMinutes())}.${pad(d.getUTCSeconds())}` : day;
   }
-  if (typeof value === 'number') return String(round10(value)).replace('.', ',');
+  if (typeof value === 'number') return plain(value).replace('.', ',');
   return String(value);
 }
 
@@ -503,7 +602,7 @@ function fmtIntl(value) {
     return value.hasTime
       ? `${day} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}` : day;
   }
-  if (typeof value === 'number') return String(round10(value));
+  if (typeof value === 'number') return plain(value);
   return String(value);
 }
 
@@ -547,12 +646,12 @@ function reportRows(data, opts) {
     });
   }
   const ctx = {
-    formulas: opts.formulas, arg: opts.arg || ';', stats, sums,
+    formulas: opts.formulas, arg: opts.arg || ';', stats, sums, symbols: bySymbol(data),
     first: trades.first, last: trades.last,
     column: label => trades.headers.includes(label)
       ? colLetter(trades.headers.indexOf(label) + 1) : ''
   };
-  return rows.map(row => row.map(cell => resolve(cell, ctx)));
+  return rows.map((row, i) => row.map(cell => resolve(cell, {...ctx, row: i + 1})));
 }
 
 function toDelimited(rows, delimiter, fmt) {
@@ -578,7 +677,8 @@ function download(name, text, mime) {
 const $ = id => document.getElementById(id);
 const NUMERIC = new Set(['Durata (min)','Quantita','Volume','Prezzo entrata','Prezzo uscita',
   'Prezzo ordine','Punti','Lordo EUR','Swap','Commissioni','Netto EUR','Saldo EUR',
-  'P/L % sul saldo','Tasso conversione','Stop loss','Take profit','Importo EUR']);
+  'P/L % sul saldo','Tasso conversione','Stop loss','Take profit','Importo EUR',
+  'Operazioni','Vinte','Perse','Win rate','Netto medio','Saldo fine giornata']);
 let current = null, activeTab = 'trades';
 
 const money = v => v === null || v === undefined || typeof v !== 'number' ? '—'
@@ -636,21 +736,37 @@ function renderKpis(data) {
   }).join('');
 }
 
+/* On screen a formula is useless: show what it would evaluate to. */
+function displayRows(block) {
+  const history = current.sections['History'];
+  const sums = {};
+  if (history) TOTAL_COLUMNS.forEach(label => {
+    const source = (VIEWS.History.find(([l]) => l === label) || [])[1];
+    const i = history.headers.indexOf(source);
+    sums[label] = i >= 0 ? round10(sum(history.rows.map(r => r[i]))) : null;
+  });
+  const ctx = {formulas: false, stats: computeStats(current), sums, symbols: bySymbol(current)};
+  return block.rows.map(row => row.map(cell => resolve(cell, ctx)));
+}
+
 function tableHtml(block) {
   if (!block.rows.length) return '<div class="empty">Nessun record nel periodo</div>';
   const head = block.headers.map(h =>
     `<th class="${NUMERIC.has(h) ? 'num' : ''}">${h}</th>`).join('');
-  const body = block.rows.map(row => '<tr>' + row.map((cell, i) => {
+  const body = displayRows(block).map(row => '<tr>' + row.map((cell, i) => {
     const label = block.headers[i];
     let text = fmtIt(cell), cls = NUMERIC.has(label) ? 'num' : '';
     if (label === 'ID') cls = 'id';
     if (label === 'Esito' && cell) {
       return `<td><span class="pill ${String(cell).toLowerCase()}">${cell}</span></td>`;
     }
-    if (label === 'P/L % sul saldo' && typeof cell === 'number') text = dec(cell * 100, 2) + ' %';
-    else if (typeof cell === 'number' && ['Lordo EUR','Netto EUR','Saldo EUR','Swap','Commissioni',
-             'Importo EUR'].includes(label)) text = dec(cell, 2);
-    if (['Netto EUR','Lordo EUR','Punti','P/L % sul saldo'].includes(label) &&
+    if (['P/L % sul saldo','Win rate'].includes(label) && typeof cell === 'number') {
+      text = dec(cell * 100, 2) + ' %';
+    } else if (typeof cell === 'number' && ['Lordo EUR','Netto EUR','Saldo EUR','Swap',
+               'Commissioni','Importo EUR','Netto medio','Saldo fine giornata'].includes(label)) {
+      text = dec(cell, 2);
+    }
+    if (['Netto EUR','Lordo EUR','Punti','P/L % sul saldo','Netto medio'].includes(label) &&
         typeof cell === 'number') cls += cell > 0 ? ' pos' : cell < 0 ? ' neg' : '';
     return `<td class="${cls}">${escape(text)}</td>`;
   }).join('') + '</tr>').join('');
@@ -670,6 +786,34 @@ function tableHtml(block) {
   }
   return `<div class="scroll"><table class="data"><thead><tr>${head}</tr></thead>
           <tbody>${body}${totals}</tbody></table></div>`;
+}
+
+/* Balance curve, drawn as inline SVG: the page pulls in no chart library. */
+function sparkline(points, width, height) {
+  if (points.length < 2) return '';
+  const pad = 6, values = points.map(p => p.value);
+  const min = Math.min(...values, 0), max = Math.max(...values, 0);
+  const span = max - min || 1;
+  const x = i => pad + i * (width - 2 * pad) / (points.length - 1);
+  const y = v => height - pad - (v - min) * (height - 2 * pad) / span;
+  const line = points.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.value).toFixed(1)}`).join(' ');
+  const area = `${line} L${x(points.length - 1).toFixed(1)},${y(min).toFixed(1)} L${x(0).toFixed(1)},${y(min).toFixed(1)} Z`;
+  const zero = min < 0 && max > 0
+    ? `<line x1="${pad}" y1="${y(0).toFixed(1)}" x2="${width - pad}" y2="${y(0).toFixed(1)}"
+             stroke="var(--line2)" stroke-dasharray="3 3"/>` : '';
+  const last = points[points.length - 1];
+  return `<div class="spark"><div class="spark-head">
+      <span class="k">Curva del saldo</span>
+      <span class="r">${escape(points[0].label)} → ${escape(last.label)} ·
+        <strong>${money(last.value)}</strong></span></div>
+    <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" role="img"
+         aria-label="Curva del saldo di fine giornata">
+      <path d="${area}" fill="rgba(231,181,74,.12)"/>${zero}
+      <path d="${line}" fill="none" stroke="var(--gold)" stroke-width="1.5"
+            stroke-linejoin="round" stroke-linecap="round"/>
+      <circle cx="${x(points.length - 1).toFixed(1)}" cy="${y(last.value).toFixed(1)}" r="2.5"
+              fill="var(--gold)"/>
+    </svg></div>`;
 }
 
 function pairsHtml(blocks) {
@@ -700,8 +844,15 @@ function renderPanel() {
     $('panel').innerHTML = pairsHtml(blocks.filter(b => b.kind === 'pairs'));
     return;
   }
-  const block = blocks.find(b => b.group === activeTab && b.kind === 'table');
-  $('panel').innerHTML = block ? tableHtml(block) : '<div class="empty">Sezione non presente</div>';
+  const block = blocks.find(b => (b.id || b.group) === activeTab && b.kind === 'table');
+  if (!block) { $('panel').innerHTML = '<div class="empty">Sezione non presente</div>'; return; }
+  let head = '';
+  if (activeTab === 'daily') {
+    const points = block.rows.map(row => ({label: fmtIt(row[0]), value: row[3]}))
+                             .filter(p => typeof p.value === 'number');
+    head = sparkline(points, 600, 120);
+  }
+  $('panel').innerHTML = head + tableHtml(block);
   markOverflow();
 }
 
@@ -716,13 +867,14 @@ function markOverflow() {
 
 function renderTabs() {
   const blocks = buildReport(current);
-  const tabs = [['trades','Operazioni chiuse'], ['orders','Ordini pendenti'],
+  const tabs = [['trades','Operazioni chiuse'], ['symbols','Per strumento'],
+                ['daily','Andamento'], ['orders','Ordini pendenti'],
                 ['positions','Posizioni aperte'], ['transactions','Transazioni']]
-    .filter(([group]) => blocks.some(b => b.group === group && b.kind === 'table'))
-    .map(([group, label]) => {
-      const block = blocks.find(b => b.group === group);
-      return [group, label, block.rows.length];
-    });
+    .map(([key, label]) => {
+      const block = blocks.find(b => (b.id || b.group) === key && b.kind === 'table');
+      return block ? [key, label, block.rows.length] : null;
+    })
+    .filter(Boolean);
   tabs.push(['summary', 'Situazione conto', null]);
   if (!tabs.some(([g]) => g === activeTab)) activeTab = tabs[0][0];
 
