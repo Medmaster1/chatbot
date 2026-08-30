@@ -12,12 +12,30 @@ testo. Incollato in Sheets non è ordinabile né sommabile.
 ### Uso
 
 ```bash
-# workbook multi-foglio (consigliato: si carica su Drive e Sheets lo apre così com'è)
+# CSV unico da caricare su Google Drive: diventa un foglio Google nativo
+python3 tools/ctrader_statement_to_sheets.py Statement.html --gsheet-csv out/estratto.csv
+
+# workbook multi-foglio (per Excel, o da aprire in Sheets dopo l'upload)
 python3 tools/ctrader_statement_to_sheets.py Statement.html --xlsx out/estratto.xlsx
 
 # CSV, uno per sezione, in due varianti di locale
 python3 tools/ctrader_statement_to_sheets.py Statement.html --csv-dir out/csv
 ```
+
+### `--gsheet-csv`: inserimento diretto in Google Sheets
+
+Google Drive converte un CSV caricato in un foglio Google nativo, ma sempre con
+una sola scheda: questa modalità impagina quindi tutte le sezioni una sotto
+l'altra (intestazione, operazioni con riga TOTALE, statistiche, posizioni,
+ordini, transazioni, riepilogo).
+
+Usa separatore `;` e virgola decimale perché è l'unico formato che le
+impostazioni locali italiane interpretano correttamente: con il punto decimale
+Sheets legge `-5.15` come una **durata** (-5h15m), non come numero.
+
+Le formule sono scritte con `;` come separatore di argomenti (locale italiano) e
+restano vive nel foglio: `SUM`, `COUNTIF`, `SUMIF`, `AVERAGEIF`, `IFERROR`,
+`SUMPRODUCT`, `MAX`, `MIN`.
 
 `--csv-dir` scrive per ogni sezione:
 

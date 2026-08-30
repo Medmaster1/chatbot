@@ -358,6 +358,110 @@ def write_csvs(data: dict, out_dir: str) -> list[str]:
     return written
 
 
+
+# --------------------------------------------------------------------------- #
+# Single-tab CSV for direct upload to Google Drive (native Google Sheet)
+# --------------------------------------------------------------------------- #
+
+def write_gsheet_csv(data: dict, path: str) -> str:
+    """One semicolon/comma-decimal CSV holding every section, stacked.
+
+    Google Drive converts an uploaded CSV into a native Google Sheet, but only
+    ever with a single tab, so the sections are stacked with title rows and the
+    formulas use ';' as argument separator (Italian locale).
+    """
+    rows: list[list] = []
+
+    def add(*cells):
+        rows.append(list(cells))
+
+    def row_of(offset_from_end: int = 0) -> int:
+        """1-based spreadsheet row number of the row about to be written."""
+        return len(rows) + 1 + offset_from_end
+
+    add("ESTRATTO CONTO cTrader")
+    for key, value in data["meta"].items():
+        add(key, value)
+    add()
+
+    history = data["sections"].get("History")
+    hist_first = hist_last = None
+    if history and history["rows"]:
+        headers = [HEADER_LABELS.get(h, h) for h in history["headers"]] + DERIVED
+        body = [list(r) + derive_history(history["headers"], r) for r in history["rows"]]
+        add("OPERAZIONI CHIUSE")
+        add(*headers)
+        hist_first = row_of()
+        for row in body:
+            add(*row)
+        hist_last = row_of(-1)
+        totals = [""] * len(headers)
+        totals[0] = "TOTALE"
+        for name in ("Swap", "Commissioni", "Lordo EUR", "Netto EUR"):
+            if name in headers:
+                col = _col_letter(headers.index(name) + 1)
+                totals[headers.index(name)] = f"=SUM({col}{hist_first}:{col}{hist_last})"
+        add(*totals)
+        add()
+
+        net = f"N{hist_first}:N{hist_last}"
+        dur = f"P{hist_first}:P{hist_last}"
+        sym = f"B{hist_first}:B{hist_last}"
+        net = f"{_col_letter(headers.index('Netto EUR') + 1)}{hist_first}:" \
+              f"{_col_letter(headers.index('Netto EUR') + 1)}{hist_last}"
+        dur = f"{_col_letter(headers.index('Durata (min)') + 1)}{hist_first}:" \
+              f"{_col_letter(headers.index('Durata (min)') + 1)}{hist_last}"
+        sym = f"{_col_letter(headers.index('Simbolo') + 1)}{hist_first}:" \
+              f"{_col_letter(headers.index('Simbolo') + 1)}{hist_last}"
+        add("STATISTICHE")
+        add("Operazioni chiuse", f"=COUNT({net})")
+        add("Operazioni in profitto", f'=COUNTIF({net};">0")')
+        add("Operazioni in perdita", f'=COUNTIF({net};"<0")')
+        add("Win rate", f'=IFERROR(COUNTIF({net};">0")/COUNT({net});"")')
+        add("P/L netto totale", f"=SUM({net})")
+        add("Profitto medio", f'=IFERROR(AVERAGEIF({net};">0");"")')
+        add("Perdita media", f'=IFERROR(AVERAGEIF({net};"<0");"")')
+        add("Profit factor", f'=IFERROR(SUMIF({net};">0")/ABS(SUMIF({net};"<0"));"")')
+        add("Aspettativa per operazione", f'=IFERROR(AVERAGE({net});"")')
+        add("Migliore operazione", f"=MAX({net})")
+        add("Peggiore operazione", f"=MIN({net})")
+        add("Durata media (min)", f'=IFERROR(AVERAGE({dur});"")')
+        add("Strumenti negoziati", f'=IFERROR(SUMPRODUCT((COUNTIF({sym};{sym})>0)/COUNTIF({sym};{sym}));"")')
+        add()
+
+    for name in ("Positions", "Orders", "Transactions"):
+        section = data["sections"].get(name)
+        if not section:
+            continue
+        add(SECTION_LABELS[name].upper())
+        add(*[HEADER_LABELS.get(h, h) for h in section["headers"]])
+        if section["rows"]:
+            for row in section["rows"]:
+                add(*row)
+        else:
+            add("Nessun record nel periodo")
+        add()
+
+    if data["summary"]:
+        add("RIEPILOGO")
+        for label, value in data["summary"]:
+            add(label, value)
+
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    with open(path, "w", newline="", encoding="utf-8") as fh:
+        writer = csv.writer(fh, delimiter=";")
+        writer.writerows([[fmt_it(c) for c in row] for row in rows])
+    return path
+
+
+def _col_letter(index: int) -> str:
+    letters = ""
+    while index:
+        index, rest = divmod(index - 1, 26)
+        letters = chr(65 + rest) + letters
+    return letters
+
+
 # --------------------------------------------------------------------------- #
 # XLSX output
 # --------------------------------------------------------------------------- #
@@ -581,10 +685,13 @@ def main(argv=None) -> int:
     ap.add_argument("statement", help="cTrader statement .html file")
     ap.add_argument("--xlsx", help="write a Google Sheets ready workbook here")
     ap.add_argument("--csv-dir", help="write one CSV per section into this directory")
+    ap.add_argument("--gsheet-csv", metavar="FILE",
+                    help="write a single semicolon CSV with every section stacked, "
+                         "ready to upload to Google Drive as a native Google Sheet")
     args = ap.parse_args(argv)
 
-    if not args.xlsx and not args.csv_dir:
-        ap.error("choose at least one of --xlsx / --csv-dir")
+    if not args.xlsx and not args.csv_dir and not args.gsheet_csv:
+        ap.error("choose at least one of --xlsx / --csv-dir / --gsheet-csv")
 
     data = parse_statement(args.statement)
     counts = ", ".join(f"{name}: {len(s['rows'])}" for name, s in data["sections"].items())
@@ -595,6 +702,8 @@ def main(argv=None) -> int:
     if args.csv_dir:
         for path in write_csvs(data, args.csv_dir):
             print("wrote", path)
+    if args.gsheet_csv:
+        print("wrote", write_gsheet_csv(data, args.gsheet_csv))
     if args.xlsx:
         print("wrote", write_xlsx(data, args.xlsx))
     return 0
