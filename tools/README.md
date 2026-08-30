@@ -47,16 +47,35 @@ restano vive nel foglio: `SUM`, `COUNTIF`, `SUMIF`, `AVERAGEIF`, `IFERROR`,
 Usa la variante `.it.csv` se il foglio Google ha impostazioni locali italiane,
 altrimenti i numeri vengono importati come testo.
 
+### Ordine del report
+
+Le sezioni sono impaginate per rilevanza decrescente, non nell'ordine dello
+statement originale:
+
+1. **Situazione del conto** — saldo, equity, margine libero e utilizzato, livello
+   margine, P/L non realizzato, bonus
+2. **Performance del periodo** — P/L realizzato, win rate, profit factor,
+   aspettativa, profitto e perdita media, migliore e peggiore operazione, durata
+   media, depositi e prelievi
+3. **Operazioni chiuse** — con riga TOTALE
+4. **Ordini pendenti** → **Posizioni aperte** → **Transazioni**
+5. **Dati del conto** — intestatario, email, periodo, data di generazione
+
+Anche le colonne sono riordinate in modo leggibile: identità (ID, simbolo,
+direzione) → tempi (apertura, chiusura, durata) → dimensione e prezzi → risultato
+(punti, lordo, swap, commissioni, netto, esito) → saldo progressivo. La colonna
+`Direzione chiusura` viene omessa perché sempre opposta all'apertura, e il tasso
+di conversione va in fondo.
+
 ### Cosa produce il workbook
 
-* `Riepilogo` – intestazione del conto e voci di sintesi (saldo, equity, margine, P/L)
-* `Operazioni chiuse` – storico con date e numeri tipizzati, più le colonne derivate
-  `Durata (min)`, `Punti`, `Esito`, `P/L % sul saldo`, e riga TOTALE con formule `SOMMA`
-* `Posizioni aperte`, `Ordini pendenti`, `Transazioni`
-* `Statistiche` – win rate, profit factor, aspettativa, profitto/perdita media,
-  migliore e peggiore operazione, durata media: tutte formule dal vivo sul foglio
-  `Operazioni chiuse`, quindi si aggiornano se aggiungi righe
-* `Legenda` – dizionario delle colonne e delle assunzioni
+* `Riepilogo` – situazione del conto, performance del periodo (statistiche come
+  formule dal vivo sul foglio `Operazioni`, quindi si aggiornano se aggiungi righe)
+  e dati del conto
+* `Operazioni` – storico con date e numeri tipizzati, colonne derivate
+  `Durata (min)`, `Punti`, `Esito`, `P/L % sul saldo`, riga TOTALE con `SOMMA` e
+  intestazione bloccata
+* `Ordini`, `Posizioni`, `Transazioni`
 
 Le formule usano solo funzioni supportate sia da Excel sia da Google Sheets
 (`SUM`, `COUNTIF`, `SUMIF`, `AVERAGEIF`, `IFERROR`, `SUMPRODUCT`, `MAX`, `MIN`).

@@ -248,13 +248,10 @@ def parse_statement(path: str) -> dict:
 
 
 # --------------------------------------------------------------------------- #
-# Derived trade metrics (History)
+# Derived trade metrics and column layout
 # --------------------------------------------------------------------------- #
 
-DERIVED = ["Durata (min)", "Punti", "Esito", "P/L % sul saldo"]
-
-
-def derive_history(headers: list[str], row: list) -> list:
+def derive_history(headers: list[str], row: list) -> dict:
     """Duration, price move in points, win/loss flag and % of balance."""
     idx = {h: i for i, h in enumerate(headers)}
 
@@ -279,7 +276,208 @@ def derive_history(headers: list[str], row: list) -> list:
         outcome = "WIN" if net > 0 else ("LOSS" if net < 0 else "BE")
         if isinstance(balance, float) and balance - net:
             pct = net / (balance - net)
-    return [duration, points, outcome, pct]
+    return {"Durata (min)": duration, "Punti": points,
+            "Esito": outcome, "P/L % sul saldo": pct}
+
+
+# Output columns, in reading order: identity, timing, size and prices, result,
+# running balance. Entries are (label, source) where a source not present in the
+# statement is simply skipped, and "@" marks a derived column.
+VIEWS = {
+    "History": [
+        ("ID", "ID"), ("Simbolo", "Symbol"), ("Direzione", "Opening Direction"),
+        ("Apertura (UTC)", "Opening Time (UTC+0)"), ("Chiusura (UTC)", "Closing Time (UTC+0)"),
+        ("Durata (min)", "@Durata (min)"), ("Quantita", "Closing Quantity"),
+        ("Prezzo entrata", "Entry Price"), ("Prezzo uscita", "Closing Price"),
+        ("Punti", "@Punti"), ("Lordo EUR", "Gross EUR"), ("Swap", "Swap"),
+        ("Commissioni", "Commission"), ("Netto EUR", "Net EUR"), ("Esito", "@Esito"),
+        ("P/L % sul saldo", "@P/L % sul saldo"), ("Saldo EUR", "Balance EUR"),
+        ("Tasso conversione", "Conversion Rate"),
+    ],
+    "Orders": [
+        ("ID", "ID"), ("Simbolo", "Symbol"), ("Direzione", "Direction"),
+        ("Tipo", "Order Type"), ("Inviato (UTC)", "Submitted Time (UTC+0)"),
+        ("Prezzo ordine", "Submitted Price"), ("Quantita", "Current Quantity"),
+        ("Volume", "Current Volume"), ("Stop loss", "S/L"), ("Take profit", "T/P"),
+        ("Validita", "TIF"), ("Scadenza", "Expiry Time"), ("SL garantito", "SL is guaranteed"),
+    ],
+    "Positions": [
+        ("ID", "ID"), ("Simbolo", "Symbol"), ("Direzione", "Direction"),
+        ("Creata (UTC)", "Created (UTC+0)"), ("Prezzo entrata", "Entry Price"),
+        ("Quantita", "Quantity"), ("Volume", "Volume"), ("Stop loss", "S/L"),
+        ("Take profit", "T/P"), ("Swap", "Swap"), ("Commissioni", "Commissions"),
+        ("Lordo EUR", "Gross EUR"), ("Netto EUR", "Net EUR"),
+        ("SL garantito", "SL is guaranteed"),
+    ],
+    "Transactions": [
+        ("ID", "ID"), ("Data/ora (UTC)", "Time (UTC+0)"), ("Tipo", "Type"),
+        ("Importo EUR", "Amount EUR"), ("Nota", "Note"),
+    ],
+}
+
+TOTAL_COLUMNS = ("Lordo EUR", "Swap", "Commissioni", "Netto EUR")
+
+
+def view(name: str, section: dict) -> tuple[list[str], list[list]]:
+    """Re-order a parsed section into its output columns."""
+    spec = VIEWS.get(name)
+    if not spec:
+        labels = [HEADER_LABELS.get(h, h) for h in section["headers"]]
+        return labels, [list(r) for r in section["rows"]]
+
+    idx = {h: i for i, h in enumerate(section["headers"])}
+    columns = [(label, source) for label, source in spec
+               if source.startswith("@") or source in idx]
+    rows = []
+    for row in section["rows"]:
+        derived = derive_history(section["headers"], row) if name == "History" else {}
+        rows.append([derived.get(source[1:]) if source.startswith("@")
+                     else (row[idx[source]] if idx[source] < len(row) else None)
+                     for _, source in columns])
+    return [label for label, _ in columns], rows
+
+
+# --------------------------------------------------------------------------- #
+# Statistics
+# --------------------------------------------------------------------------- #
+
+# Each entry is (label, statistics key, formula template). The template is
+# rendered by whichever writer knows where the trades table ended up; ranges are
+# substituted for {net}, {dur} and {sym}, and ARG is the locale's argument
+# separator (';' for Italian spreadsheets).
+STATS = [
+    ("Operazioni chiuse", "count", "=COUNT({net})"),
+    ("Operazioni in profitto", "wins", '=COUNTIF({net}ARG">0")'),
+    ("Operazioni in perdita", "losses", '=COUNTIF({net}ARG"<0")'),
+    ("Win rate", "win_rate", '=IFERROR(COUNTIF({net}ARG">0")/COUNT({net})ARG"")'),
+    ("Profitto medio", "avg_win", '=IFERROR(AVERAGEIF({net}ARG">0")ARG"")'),
+    ("Perdita media", "avg_loss", '=IFERROR(AVERAGEIF({net}ARG"<0")ARG"")'),
+    ("Profit factor", "profit_factor",
+     '=IFERROR(SUMIF({net}ARG">0")/ABS(SUMIF({net}ARG"<0"))ARG"")'),
+    ("Aspettativa per operazione", "expectancy", '=IFERROR(AVERAGE({net})ARG"")'),
+    ("Migliore operazione", "best", "=MAX({net})"),
+    ("Peggiore operazione", "worst", "=MIN({net})"),
+    ("Durata media (min)", "avg_duration", '=IFERROR(AVERAGE({dur})ARG"")'),
+    ("Strumenti negoziati", "symbols",
+     '=IFERROR(SUMPRODUCT((COUNTIF({sym}ARG{sym})>0)/COUNTIF({sym}ARG{sym}))ARG"")'),
+]
+
+
+def compute_stats(data: dict) -> dict:
+    history = data["sections"].get("History")
+    if not history or not history["rows"]:
+        return {}
+    idx = history["headers"].index("Net EUR")
+    nets = [r[idx] for r in history["rows"] if isinstance(r[idx], float)]
+    wins = [v for v in nets if v > 0]
+    losses = [v for v in nets if v < 0]
+    durations = [derive_history(history["headers"], r)["Durata (min)"]
+                 for r in history["rows"]]
+    durations = [d for d in durations if d is not None]
+    symbols = {r[history["headers"].index("Symbol")] for r in history["rows"]}
+    return {
+        "count": len(nets), "wins": len(wins), "losses": len(losses),
+        "win_rate": len(wins) / len(nets) if nets else None,
+        "total": round(sum(nets), 10),
+        "avg_win": round(sum(wins) / len(wins), 10) if wins else None,
+        "avg_loss": round(sum(losses) / len(losses), 10) if losses else None,
+        "profit_factor": round(sum(wins) / abs(sum(losses)), 10) if losses else None,
+        "expectancy": round(sum(nets) / len(nets), 10) if nets else None,
+        "best": max(nets) if nets else None, "worst": min(nets) if nets else None,
+        "avg_duration": round(sum(durations) / len(durations), 10) if durations else None,
+        "symbols": len(symbols),
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Report layout
+# --------------------------------------------------------------------------- #
+
+def summary_value(data: dict, *labels):
+    for label, value in data["summary"]:
+        if label in labels:
+            return value
+    return None
+
+
+def build_report(data: dict) -> list[dict]:
+    """The statement as ordered blocks, most decision-relevant first.
+
+    Blocks carry a group so a writer can either stack them (one CSV, one Google
+    Sheet tab) or split them across sheets. Formula cells are emitted as tokens
+    ({{SUM:label}}, {{STAT:key}}) and resolved once the writer knows the row
+    numbers the trades table landed on.
+    """
+    meta = data["meta"]
+    blocks: list[dict] = []
+    get = lambda *labels: summary_value(data, *labels)
+
+    subtitle = " · ".join(x for x in [
+        f"Conto {meta.get('Conto', '-')}", meta.get("Tipo conto"),
+        meta.get("Valuta"), meta.get("Periodo")] if x)
+    blocks.append({"group": "summary", "kind": "heading",
+                   "title": "ESTRATTO CONTO cTrader", "subtitle": subtitle})
+
+    blocks.append({"group": "summary", "kind": "pairs", "title": "SITUAZIONE DEL CONTO",
+                   "rows": [[label, get(*names)] for label, *names in [
+                       ["Saldo", "Saldo", "Balance"],
+                       ["Equity", "Equity"],
+                       ["Margine libero", "Margine libero", "Free Margin"],
+                       ["Margine utilizzato", "Margine utilizzato", "Margin"],
+                       ["Livello margine", "Livello margine", "Margin Level"],
+                       ["P/L non realizzato", "P/L non realizzato", "Unrealized P&L"],
+                       ["Bonus attivo", "Bonus attivo", "Active bonus"],
+                   ]]})
+
+    stats = compute_stats(data)
+    performance = [["P/L realizzato", get("P/L realizzato", "Realized P&L")]]
+    if stats:
+        performance += [[label, "{{STAT:%s}}" % key] for label, key, _ in STATS]
+    performance += [
+        ["Depositi", get("Depositi", "Deposit")],
+        ["Prelievi", get("Prelievi", "Withdrawal")],
+        ["Movimenti netti", get("Movimenti netti", "Total Net")],
+    ]
+    blocks.append({"group": "summary", "kind": "pairs",
+                   "title": "PERFORMANCE DEL PERIODO", "rows": performance})
+
+    for name, group in (("History", "trades"), ("Orders", "orders"),
+                        ("Positions", "positions"), ("Transactions", "transactions")):
+        section = data["sections"].get(name)
+        if not section:
+            continue
+        headers, rows = view(name, section)
+        block = {"group": group, "kind": "table", "title": SECTION_LABELS[name].upper(),
+                 "headers": headers, "rows": rows, "totals": None,
+                 "is_trades": name == "History"}
+        if name == "History" and rows:
+            totals = [""] * len(headers)
+            totals[0] = "TOTALE"
+            for label in TOTAL_COLUMNS:
+                if label in headers:
+                    totals[headers.index(label)] = "{{SUM:%s}}" % label
+            block["totals"] = totals
+        blocks.append(block)
+
+    blocks.append({"group": "summary", "kind": "pairs", "title": "DATI DEL CONTO",
+                   "rows": [[k, v] for k, v in meta.items()]})
+    return blocks
+
+
+def resolve(cell, ctx):
+    """Turn a {{SUM:...}} / {{STAT:...}} token into a formula for one writer."""
+    if not isinstance(cell, str) or not cell.startswith("{{"):
+        return cell
+    kind, _, argument = cell[2:-2].partition(":")
+    rng = lambda col: f"{ctx['sheet']}{col}{ctx['first']}:{col}{ctx['last']}"
+    if kind == "SUM":
+        return f"=SUM({rng(ctx['column'](argument))})"
+    template = next(t for label, key, t in STATS if key == argument)
+    ranges = {}
+    for token, label in (("net", "Netto EUR"), ("dur", "Durata (min)"), ("sym", "Simbolo")):
+        col = ctx["column"](label)
+        ranges[token] = rng(col) if col else ""
+    return template.replace("ARG", ctx["arg"]).format(**ranges)
 
 
 def check_consistency(data: dict) -> list[str]:
@@ -306,7 +504,7 @@ def check_consistency(data: dict) -> list[str]:
 
 
 # --------------------------------------------------------------------------- #
-# CSV output
+# Formatting helpers
 # --------------------------------------------------------------------------- #
 
 def fmt_intl(value):
@@ -329,23 +527,34 @@ def fmt_it(value):
     return "" if value is None else value
 
 
+def col_letter(index: int) -> str:
+    letters = ""
+    while index:
+        index, rest = divmod(index - 1, 26)
+        letters = chr(65 + rest) + letters
+    return letters
+
+
+# --------------------------------------------------------------------------- #
+# CSV output
+# --------------------------------------------------------------------------- #
+
 def write_csvs(data: dict, out_dir: str) -> list[str]:
+    """One CSV per section, in both dot-decimal and Italian-locale flavours."""
     os.makedirs(out_dir, exist_ok=True)
     written = []
-    blocks: list[tuple[str, list[str], list[list]]] = []
-
-    meta_rows = [[k, v] for k, v in data["meta"].items()]
-    blocks.append(("00_intestazione", ["Voce", "Valore"], meta_rows))
-
-    for name, section in data["sections"].items():
-        headers = [HEADER_LABELS.get(h, h) for h in section["headers"]]
-        rows = [list(r) for r in section["rows"]]
-        if name == "History":
-            headers = headers + DERIVED
-            rows = [r + derive_history(section["headers"], r) for r in rows]
-        blocks.append((f"{list(SECTION_LABELS).index(name) + 1:02d}_{SECTION_LABELS[name].replace(' ', '_').lower()}", headers, rows))
-
-    blocks.append(("05_riepilogo", ["Voce", "Valore"], [[k, v] for k, v in data["summary"]]))
+    blocks: list[tuple[str, list[str], list[list]]] = [
+        ("00_dati_conto", ["Voce", "Valore"], [[k, v] for k, v in data["meta"].items()])
+    ]
+    for i, name in enumerate(TITLES[:-1], start=1):
+        section = data["sections"].get(name)
+        if not section:
+            continue
+        headers, rows = view(name, section)
+        blocks.append((f"{i:02d}_{SECTION_LABELS[name].replace(' ', '_').lower()}",
+                       headers, rows))
+    blocks.append(("05_riepilogo", ["Voce", "Valore"],
+                   [[k, v] for k, v in data["summary"]]))
 
     for base, headers, rows in blocks:
         for suffix, delim, fmt in ((".csv", ",", fmt_intl), (".it.csv", ";", fmt_it)):
@@ -358,108 +567,50 @@ def write_csvs(data: dict, out_dir: str) -> list[str]:
     return written
 
 
-
-# --------------------------------------------------------------------------- #
-# Single-tab CSV for direct upload to Google Drive (native Google Sheet)
-# --------------------------------------------------------------------------- #
-
 def write_gsheet_csv(data: dict, path: str) -> str:
-    """One semicolon/comma-decimal CSV holding every section, stacked.
+    """One semicolon/comma-decimal CSV holding every block, stacked.
 
     Google Drive converts an uploaded CSV into a native Google Sheet, but only
-    ever with a single tab, so the sections are stacked with title rows and the
+    ever with a single tab, so the blocks are stacked in reading order and the
     formulas use ';' as argument separator (Italian locale).
     """
     rows: list[list] = []
+    trades = {"first": None, "last": None, "headers": []}
 
-    def add(*cells):
-        rows.append(list(cells))
-
-    def row_of(offset_from_end: int = 0) -> int:
-        """1-based spreadsheet row number of the row about to be written."""
-        return len(rows) + 1 + offset_from_end
-
-    add("ESTRATTO CONTO cTrader")
-    for key, value in data["meta"].items():
-        add(key, value)
-    add()
-
-    history = data["sections"].get("History")
-    hist_first = hist_last = None
-    if history and history["rows"]:
-        headers = [HEADER_LABELS.get(h, h) for h in history["headers"]] + DERIVED
-        body = [list(r) + derive_history(history["headers"], r) for r in history["rows"]]
-        add("OPERAZIONI CHIUSE")
-        add(*headers)
-        hist_first = row_of()
-        for row in body:
-            add(*row)
-        hist_last = row_of(-1)
-        totals = [""] * len(headers)
-        totals[0] = "TOTALE"
-        for name in ("Swap", "Commissioni", "Lordo EUR", "Netto EUR"):
-            if name in headers:
-                col = _col_letter(headers.index(name) + 1)
-                totals[headers.index(name)] = f"=SUM({col}{hist_first}:{col}{hist_last})"
-        add(*totals)
-        add()
-
-        net = f"N{hist_first}:N{hist_last}"
-        dur = f"P{hist_first}:P{hist_last}"
-        sym = f"B{hist_first}:B{hist_last}"
-        net = f"{_col_letter(headers.index('Netto EUR') + 1)}{hist_first}:" \
-              f"{_col_letter(headers.index('Netto EUR') + 1)}{hist_last}"
-        dur = f"{_col_letter(headers.index('Durata (min)') + 1)}{hist_first}:" \
-              f"{_col_letter(headers.index('Durata (min)') + 1)}{hist_last}"
-        sym = f"{_col_letter(headers.index('Simbolo') + 1)}{hist_first}:" \
-              f"{_col_letter(headers.index('Simbolo') + 1)}{hist_last}"
-        add("STATISTICHE")
-        add("Operazioni chiuse", f"=COUNT({net})")
-        add("Operazioni in profitto", f'=COUNTIF({net};">0")')
-        add("Operazioni in perdita", f'=COUNTIF({net};"<0")')
-        add("Win rate", f'=IFERROR(COUNTIF({net};">0")/COUNT({net});"")')
-        add("P/L netto totale", f"=SUM({net})")
-        add("Profitto medio", f'=IFERROR(AVERAGEIF({net};">0");"")')
-        add("Perdita media", f'=IFERROR(AVERAGEIF({net};"<0");"")')
-        add("Profit factor", f'=IFERROR(SUMIF({net};">0")/ABS(SUMIF({net};"<0"));"")')
-        add("Aspettativa per operazione", f'=IFERROR(AVERAGE({net});"")')
-        add("Migliore operazione", f"=MAX({net})")
-        add("Peggiore operazione", f"=MIN({net})")
-        add("Durata media (min)", f'=IFERROR(AVERAGE({dur});"")')
-        add("Strumenti negoziati", f'=IFERROR(SUMPRODUCT((COUNTIF({sym};{sym})>0)/COUNTIF({sym};{sym}));"")')
-        add()
-
-    for name in ("Positions", "Orders", "Transactions"):
-        section = data["sections"].get(name)
-        if not section:
-            continue
-        add(SECTION_LABELS[name].upper())
-        add(*[HEADER_LABELS.get(h, h) for h in section["headers"]])
-        if section["rows"]:
-            for row in section["rows"]:
-                add(*row)
+    for block in build_report(data):
+        if block["kind"] == "heading":
+            rows.append([block["title"]])
+            if block.get("subtitle"):
+                rows.append([block["subtitle"]])
+        elif block["kind"] == "pairs":
+            rows.append([block["title"]])
+            rows.extend([list(r) for r in block["rows"]])
         else:
-            add("Nessun record nel periodo")
-        add()
+            rows.append([block["title"]])
+            rows.append(list(block["headers"]))
+            if block["rows"]:
+                if block.get("is_trades"):
+                    trades = {"first": len(rows) + 1, "last": len(rows) + len(block["rows"]),
+                              "headers": block["headers"]}
+                rows.extend([list(r) for r in block["rows"]])
+                if block["totals"]:
+                    rows.append(list(block["totals"]))
+            else:
+                rows.append(["Nessun record nel periodo"])
+        rows.append([])
 
-    if data["summary"]:
-        add("RIEPILOGO")
-        for label, value in data["summary"]:
-            add(label, value)
+    ctx = {"sheet": "", "first": trades["first"], "last": trades["last"], "arg": ";",
+           "column": lambda label: (col_letter(trades["headers"].index(label) + 1)
+                                    if label in trades["headers"] else "")}
+    resolved = [[resolve(cell, ctx) if trades["first"] else "" if
+                 isinstance(cell, str) and cell.startswith("{{") else cell
+                 for cell in row] for row in rows]
 
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     with open(path, "w", newline="", encoding="utf-8") as fh:
-        writer = csv.writer(fh, delimiter=";")
-        writer.writerows([[fmt_it(c) for c in row] for row in rows])
+        csv.writer(fh, delimiter=";").writerows(
+            [[fmt_it(c) for c in row] for row in resolved])
     return path
-
-
-def _col_letter(index: int) -> str:
-    letters = ""
-    while index:
-        index, rest = divmod(index - 1, 26)
-        letters = chr(65 + rest) + letters
-    return letters
 
 
 # --------------------------------------------------------------------------- #
@@ -471,213 +622,163 @@ PRICE_FMT = '#,##0.00####'
 PCT_FMT = '0.00%;[Red]-0.00%'
 DATE_FMT = 'dd/mm/yyyy hh:mm:ss'
 
-MONEY_COLS = {"Swap", "Commissioni", "Lordo EUR", "Netto EUR", "Saldo EUR", "Amount EUR"}
+MONEY_COLS = {"Swap", "Commissioni", "Lordo EUR", "Netto EUR", "Saldo EUR", "Importo EUR"}
 PRICE_COLS = {"Prezzo entrata", "Prezzo uscita", "Prezzo ordine", "Stop loss", "Take profit"}
+PCT_LABELS = {"P/L % sul saldo", "Win rate"}
+SHEETS = [("summary", "Riepilogo"), ("trades", "Operazioni"), ("orders", "Ordini"),
+          ("positions", "Posizioni"), ("transactions", "Transazioni")]
+
+
+def number_format(label, value):
+    if isinstance(value, (dt.datetime, dt.date)):
+        return DATE_FMT
+    if label in MONEY_COLS:
+        return EUR_FMT
+    if label in PRICE_COLS:
+        return PRICE_FMT
+    if label in PCT_LABELS:
+        return PCT_FMT
+    if label == "Tasso conversione":
+        return "0.0000000000"
+    if label in ("Durata (min)", "Punti", "Profit factor"):
+        return "0.00"
+    return "0.####" if isinstance(value, float) else "General"
 
 
 def write_xlsx(data: dict, path: str) -> str:
     from openpyxl import Workbook
     from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
     from openpyxl.utils import get_column_letter
-    from openpyxl.worksheet.table import Table, TableStyleInfo
 
     base = Font(name="Arial", size=10)
     bold = Font(name="Arial", size=10, bold=True)
     head_font = Font(name="Arial", size=10, bold=True, color="FFFFFF")
     head_fill = PatternFill("solid", fgColor="1F3864")
-    title_font = Font(name="Arial", size=14, bold=True, color="1F3864")
-    thin = Side(style="thin", color="BFBFBF")
+    title_font = Font(name="Arial", size=12, bold=True, color="1F3864")
+    doc_font = Font(name="Arial", size=16, bold=True, color="1F3864")
+    sub_font = Font(name="Arial", size=10, color="7F7F7F")
+    thin = Side(style="thin", color="D9D9D9")
     box = Border(top=thin, bottom=thin, left=thin, right=thin)
 
+    blocks = build_report(data)
     wb = Workbook()
     wb.remove(wb.active)
+    widths: dict[str, dict[int, int]] = {}
+    trades = {"sheet": None, "first": None, "last": None, "headers": []}
+    pending: list[tuple] = []          # cells holding a token, resolved at the end
 
-    def style_header(ws, row_idx, ncols):
-        for c in range(1, ncols + 1):
-            cell = ws.cell(row=row_idx, column=c)
-            cell.font, cell.fill, cell.border = head_font, head_fill, box
-            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-        ws.row_dimensions[row_idx].height = 30
-
-    def autosize(ws, headers, rows, start=1):
-        for i, header in enumerate(headers, start=start):
-            width = len(str(header))
-            for row in rows:
-                v = row[i - start] if i - start < len(row) else None
-                width = max(width, len(fmt_intl(v)))
-            ws.column_dimensions[get_column_letter(i)].width = min(max(width + 3, 10), 26)
-
-    def data_sheet(title, headers, rows, table_name, freeze="A3", numeric_totals=()):
-        ws = wb.create_sheet(title)
-        ws.sheet_view.showGridLines = False
-        ws["A1"] = title
-        ws["A1"].font = title_font
-        ws.append([])
-        ws.append(headers)
-        style_header(ws, 3, len(headers))
-        for row in rows:
-            ws.append(row)
-        first, last = 4, 3 + len(rows)
-        for r in range(first, last + 1):
-            for c, header in enumerate(headers, start=1):
-                cell = ws.cell(row=r, column=c)
-                cell.font, cell.border = base, box
-                if isinstance(cell.value, (dt.datetime, dt.date)):
-                    cell.number_format = DATE_FMT
-                elif header in MONEY_COLS:
-                    cell.number_format = EUR_FMT
-                elif header in PRICE_COLS:
-                    cell.number_format = PRICE_FMT
-                elif header == "Tasso conversione":
-                    cell.number_format = "0.0000000000"
-                elif header == "P/L % sul saldo":
-                    cell.number_format = PCT_FMT
-                elif header == "Durata (min)":
-                    cell.number_format = "0.00"
-                elif header == "Punti":
-                    cell.number_format = "0.00"
-                elif isinstance(cell.value, float):
-                    cell.number_format = "0.####"
-        if rows:
-            ws.add_table(Table(displayName=table_name,
-                               ref=f"A3:{get_column_letter(len(headers))}{last}",
-                               tableStyleInfo=TableStyleInfo(name="TableStyleLight9",
-                                                             showRowStripes=True)))
-            if numeric_totals:
-                trow = last + 1
-                ws.cell(row=trow, column=1, value="TOTALE").font = bold
-                for header in numeric_totals:
-                    if header in headers:
-                        col = get_column_letter(headers.index(header) + 1)
-                        cell = ws.cell(row=trow, column=headers.index(header) + 1,
-                                       value=f"=SUM({col}{first}:{col}{last})")
-                        cell.font, cell.number_format = bold, EUR_FMT
-        else:
-            ws.cell(row=4, column=1, value="Nessun record nel periodo").font = base
-        ws.freeze_panes = freeze
-        autosize(ws, headers, rows)
-        return ws, first, last
-
-    # ---- Riepilogo ------------------------------------------------------- #
-    ws = wb.create_sheet("Riepilogo")
-    ws.sheet_view.showGridLines = False
-    ws["A1"] = "Estratto conto - riepilogo"
-    ws["A1"].font = title_font
-    r = 3
-    for key, value in data["meta"].items():
-        ws.cell(row=r, column=1, value=key).font = bold
-        ws.cell(row=r, column=2, value=value).font = base
-        r += 1
-    r += 1
-    ws.cell(row=r, column=1, value="Voce").font = head_font
-    ws.cell(row=r, column=2, value="Valore").font = head_font
-    for c in (1, 2):
-        ws.cell(row=r, column=c).fill = head_fill
-        ws.cell(row=r, column=c).border = box
-    r += 1
-    for label, value in data["summary"]:
-        ws.cell(row=r, column=1, value=label).font = base
-        cell = ws.cell(row=r, column=2, value=value)
-        cell.font = base
-        if isinstance(value, float):
-            cell.number_format = EUR_FMT
-        r += 1
-    ws.column_dimensions["A"].width = 26
-    ws.column_dimensions["B"].width = 34
-
-    # ---- Sections -------------------------------------------------------- #
-    hist_first = hist_last = None
-    hist_cols: dict[str, str] = {}
-    for name in TITLES[:-1]:
-        section = data["sections"].get(name)
-        if not section:
+    for group, sheet_name in SHEETS:
+        group_blocks = [b for b in blocks if b["group"] == group]
+        if not group_blocks:
             continue
-        headers = [HEADER_LABELS.get(h, h) for h in section["headers"]]
-        rows = [list(r) for r in section["rows"]]
-        totals = ()
-        if name == "History":
-            headers += DERIVED
-            rows = [r + derive_history(section["headers"], r) for r in rows]
-            totals = ("Swap", "Commissioni", "Lordo EUR", "Netto EUR")
-        _, first, last = data_sheet(SECTION_LABELS[name], headers, rows,
-                                    table_name=f"tbl_{name}", numeric_totals=totals)
-        if name == "History" and rows:
-            from openpyxl.utils import get_column_letter as gcl
-            hist_first, hist_last = first, last
-            hist_cols = {h: gcl(i + 1) for i, h in enumerate(headers)}
-
-    # ---- Statistiche (formulas over the History sheet) ------------------- #
-    if hist_first:
-        sheet = f"'{SECTION_LABELS['History']}'"
-        net = f"{sheet}!{hist_cols['Netto EUR']}{hist_first}:{hist_cols['Netto EUR']}{hist_last}"
-        dur = f"{sheet}!{hist_cols['Durata (min)']}{hist_first}:{hist_cols['Durata (min)']}{hist_last}"
-        sym = f"{sheet}!{hist_cols['Simbolo']}{hist_first}:{hist_cols['Simbolo']}{hist_last}"
-        stats = [
-            ("Operazioni chiuse", f"=COUNT({net})", "0"),
-            ("Operazioni in profitto", f'=COUNTIF({net},">0")', "0"),
-            ("Operazioni in perdita", f'=COUNTIF({net},"<0")', "0"),
-            ("Win rate", f'=IFERROR(COUNTIF({net},">0")/COUNT({net}),"")', PCT_FMT),
-            ("P/L netto totale", f"=SUM({net})", EUR_FMT),
-            ("Profitto medio", f'=IFERROR(AVERAGEIF({net},">0"),"")', EUR_FMT),
-            ("Perdita media", f'=IFERROR(AVERAGEIF({net},"<0"),"")', EUR_FMT),
-            ("Profit factor", f'=IFERROR(SUMIF({net},">0")/ABS(SUMIF({net},"<0")),"")', "0.00"),
-            ("Aspettativa per operazione", f"=IFERROR(AVERAGE({net}),\"\")", EUR_FMT),
-            ("Migliore operazione", f"=MAX({net})", EUR_FMT),
-            ("Peggiore operazione", f"=MIN({net})", EUR_FMT),
-            ("Durata media (min)", f'=IFERROR(AVERAGE({dur}),"")', "0.00"),
-            ("Strumenti negoziati",
-             f'=IFERROR(SUMPRODUCT((COUNTIF({sym},{sym})>0)/COUNTIF({sym},{sym})),"")', "0"),
-        ]
-        ws = wb.create_sheet("Statistiche")
+        ws = wb.create_sheet(sheet_name)
         ws.sheet_view.showGridLines = False
-        ws["A1"] = "Statistiche di periodo"
-        ws["A1"].font = title_font
-        ws["A3"], ws["B3"] = "Metrica", "Valore"
-        for c in (1, 2):
-            cell = ws.cell(row=3, column=c)
-            cell.font, cell.fill, cell.border = head_font, head_fill, box
-        for i, (label, formula, fmt) in enumerate(stats, start=4):
-            ws.cell(row=i, column=1, value=label).font = base
-            cell = ws.cell(row=i, column=2, value=formula)
-            cell.font, cell.number_format, cell.border = base, fmt, box
-        ws.column_dimensions["A"].width = 30
-        ws.column_dimensions["B"].width = 18
+        widths[sheet_name] = {}
+        cursor = 0                     # last written row; openpyxl's max_row is 1 when empty
 
-    # ---- Legenda --------------------------------------------------------- #
-    ws = wb.create_sheet("Legenda")
-    ws.sheet_view.showGridLines = False
-    ws["A1"] = "Come leggere questo file"
-    ws["A1"].font = title_font
-    notes = [
-        ("Origine", "Estratto conto cTrader (HTML) convertito con tools/ctrader_statement_to_sheets.py"),
-        ("Date/ora", "Convertite in valori data-ora reali (UTC+0), formato dd/mm/yyyy hh:mm:ss: ordinabili e filtrabili"),
-        ("Numeri", "Convertiti in numeri veri (non testo): somme, medie e grafici funzionano subito"),
-        ("Totali", "Nell'originale erano bianchi su bianco; qui sono formule SOMMA visibili in fondo alle tabelle"),
-        ("Durata (min)", "Minuti tra apertura e chiusura dell'operazione"),
-        ("Punti", "Movimento di prezzo a favore: (uscita - entrata) per BUY, (entrata - uscita) per SELL"),
-        ("Esito", "WIN / LOSS / BE in base al Netto EUR"),
-        ("P/L % sul saldo", "Netto EUR diviso il saldo precedente all'operazione (Saldo EUR - Netto EUR)"),
-        ("Statistiche", "Formule dal vivo sul foglio Operazioni chiuse: aggiungendo righe si aggiornano"),
-        ("Google Sheets", "Carica il file su Drive e aprilo: viene convertito senza finestra di importazione"),
-    ]
-    ws["A3"], ws["B3"] = "Voce", "Descrizione"
-    for c in (1, 2):
-        cell = ws.cell(row=3, column=c)
-        cell.font, cell.fill, cell.border = head_font, head_fill, box
-    for i, (label, text) in enumerate(notes, start=4):
-        ws.cell(row=i, column=1, value=label).font = bold
-        cell = ws.cell(row=i, column=2, value=text)
-        cell.font = base
-        cell.alignment = Alignment(wrap_text=True, vertical="top")
-    ws.column_dimensions["A"].width = 22
-    ws.column_dimensions["B"].width = 95
+        def measure(col, text):
+            widths[sheet_name][col] = max(widths[sheet_name].get(col, 10),
+                                          min(len(str(text)) + 3, 30))
+
+        for block in group_blocks:
+            if block["kind"] == "heading":
+                cursor += 1
+                cell = ws.cell(row=cursor, column=1, value=block["title"])
+                cell.font = doc_font
+                ws.row_dimensions[cursor].height = 22
+                if block.get("subtitle"):
+                    cursor += 1
+                    sub = ws.cell(row=cursor, column=1, value=block["subtitle"])
+                    sub.font = sub_font
+                    measure(1, block["subtitle"])
+                cursor += 1
+                continue
+
+            cursor += 1
+            title = ws.cell(row=cursor, column=1, value=block["title"])
+            title.font = title_font
+
+            if block["kind"] == "pairs":
+                for label, value in block["rows"]:
+                    cursor += 1
+                    r = cursor
+                    ws.cell(row=r, column=1, value=label).font = base
+                    cell = ws.cell(row=r, column=2)
+                    if isinstance(value, str) and value.startswith("{{"):
+                        pending.append((cell, value, label))
+                    else:
+                        cell.value = value
+                        cell.number_format = number_format(label, value)
+                    cell.font = base
+                    cell.alignment = Alignment(horizontal="right")
+                    measure(1, label)
+                    measure(2, value)
+                cursor += 1
+                continue
+
+            cursor += 1
+            header_row = cursor
+            for c, label in enumerate(block["headers"], start=1):
+                cell = ws.cell(row=header_row, column=c, value=label)
+                cell.font, cell.fill, cell.border = head_font, head_fill, box
+                cell.alignment = Alignment(horizontal="center", vertical="center",
+                                           wrap_text=True)
+                measure(c, label)
+            ws.row_dimensions[header_row].height = 28
+
+            if not block["rows"]:
+                cursor += 1
+                ws.cell(row=cursor, column=1,
+                        value="Nessun record nel periodo").font = base
+                cursor += 1
+                continue
+
+            first = header_row + 1
+            for row in block["rows"]:
+                cursor += 1
+                r = cursor
+                for c, (label, value) in enumerate(zip(block["headers"], row), start=1):
+                    cell = ws.cell(row=r, column=c, value=value)
+                    cell.font, cell.border = base, box
+                    cell.number_format = number_format(label, value)
+                    measure(c, fmt_intl(value))
+            last = cursor
+
+            if block.get("is_trades"):
+                trades = {"sheet": sheet_name, "first": first, "last": last,
+                          "headers": block["headers"]}
+                ws.freeze_panes = ws.cell(row=first, column=1).coordinate
+            if block["totals"]:
+                cursor += 1
+                r = cursor
+                for c, (label, value) in enumerate(zip(block["headers"], block["totals"]),
+                                                   start=1):
+                    cell = ws.cell(row=r, column=c)
+                    cell.font = bold
+                    if isinstance(value, str) and value.startswith("{{"):
+                        pending.append((cell, value, label))
+                        cell.number_format = EUR_FMT
+                    elif value:
+                        cell.value = value
+            cursor += 1
+
+    ctx = {"sheet": f"'{trades['sheet']}'!" if trades["sheet"] else "",
+           "first": trades["first"], "last": trades["last"], "arg": ",",
+           "column": lambda label: (get_column_letter(trades["headers"].index(label) + 1)
+                                    if label in trades["headers"] else "")}
+    for cell, token, label in pending:
+        cell.value = resolve(cell=token, ctx=ctx) if trades["first"] else None
+        if label in PCT_LABELS:
+            cell.number_format = PCT_FMT
+
+    for sheet_name, cols in widths.items():
+        for col, width in cols.items():
+            wb[sheet_name].column_dimensions[get_column_letter(col)].width = width
 
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     wb.save(path)
     return path
 
-
-# --------------------------------------------------------------------------- #
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
