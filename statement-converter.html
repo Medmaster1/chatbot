@@ -1,0 +1,512 @@
+<!DOCTYPE html><html lang="it"><head><meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Statement Converter — KID Digital Wealth</title>
+<meta name="description" content="Converte l'estratto conto HTML di cTrader in un formato pronto per Google Sheets: date e numeri tipizzati, totali visibili, metriche per operazione."/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+<link rel="icon" href="./assets/favicon.svg" type="image/svg+xml"/>
+<link rel="canonical" href="https://medmaster1.github.io/chatbot/statement-converter.html"/>
+<meta property="og:type" content="website"/>
+<meta property="og:site_name" content="KID Digital Wealth"/>
+<meta property="og:title" content="Statement Converter — KID Digital Wealth"/>
+<meta property="og:description" content="Estratto conto cTrader → Google Sheets, senza passaggi manuali."/>
+<meta property="og:url" content="https://medmaster1.github.io/chatbot/statement-converter.html"/>
+<meta property="og:image" content="https://medmaster1.github.io/chatbot/assets/og.png"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<link rel="stylesheet" href="./assets/site.css"/>
+<style>
+  .drop{border:1px dashed var(--line2);border-radius:14px;background:var(--panel);
+        padding:38px 22px;text-align:center;cursor:pointer;transition:.15s;position:relative}
+  .drop:hover,.drop.over{border-color:var(--gold);background:var(--panel2)}
+  .drop input{position:absolute;inset:0;opacity:0;cursor:pointer}
+  .drop .ic{font-size:30px;margin-bottom:8px}
+  .drop h3{margin:0 0 4px;font-size:15px;color:var(--txt)}
+  .drop p{margin:0;font-size:12px;color:var(--txt3)}
+  .actions{display:flex;flex-wrap:wrap;gap:10px;margin:18px 0 0}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:18px}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+  .kpi .k{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--txt3)}
+  .kpi .v{font-size:19px;font-weight:700;color:var(--txt);margin-top:4px}
+  .kpi .v.pos{color:var(--green)} .kpi .v.neg{color:var(--red)}
+  .tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;margin-top:18px;background:var(--panel)}
+  table.data{border-collapse:collapse;width:100%;font-size:12px;white-space:nowrap}
+  table.data th{background:var(--panel3);color:var(--txt2);text-align:left;padding:9px 12px;
+                font-size:10px;letter-spacing:.08em;text-transform:uppercase;position:sticky;top:0}
+  table.data td{padding:8px 12px;border-top:1px solid var(--line);color:var(--txt)}
+  table.data td.num{text-align:right;font-variant-numeric:tabular-nums}
+  table.data tr:hover td{background:var(--panel2)}
+  .pos{color:var(--green)} .neg{color:var(--red)}
+  .sub{font-size:11px;color:var(--txt3);margin-top:8px}
+  .hidden{display:none}
+</style>
+</head><body>
+
+<header class="site-nav">
+  <a class="nav-brand" href="./profilo.html"><span class="mk">A</span><span>KID Digital Wealth</span></a>
+  <nav class="nav-links" aria-label="Navigazione principale">
+    <a href="./profilo.html">Profilo</a>
+    <a href="./research.html">Research</a>
+    <a href="./index.html" class="active">Strumenti</a>
+    <a href="./contatti.html">Contatti</a>
+    <a href="./legal.html">Legal</a>
+  </nav>
+</header>
+
+<div class="hero" style="padding:56px 0 40px"><div class="container">
+  <div class="eyebrow">Strumenti</div>
+  <h1 style="font-size:34px">Statement Converter</h1>
+  <p class="lead">Trascina l'estratto conto HTML di cTrader: lo trasformo in un formato che Google Sheets
+  legge davvero — date e numeri tipizzati, totali visibili, metriche per ogni operazione.
+  Il file non lascia il tuo browser.</p>
+</div></div>
+
+<section><div class="container">
+  <label class="drop" id="drop">
+    <input type="file" id="file" accept=".html,.htm,text/html"/>
+    <div class="ic">📄</div>
+    <h3>Trascina qui l'estratto conto (.html)</h3>
+    <p>oppure clicca per selezionarlo — EndOfDayStatement_For_Account_XXXXXXX.html</p>
+  </label>
+  <div class="alert hidden" id="alert"></div>
+
+  <div id="out" class="hidden">
+    <div class="actions">
+      <button class="btn btn-primary" id="copyBtn">Copia per Google Sheets</button>
+      <button class="btn" id="csvIt">Scarica CSV (locale IT)</button>
+      <button class="btn" id="csvIntl">Scarica CSV (internazionale)</button>
+    </div>
+    <p class="sub" id="meta"></p>
+    <div class="kpis" id="kpis"></div>
+    <div class="tbl-wrap"><table class="data" id="trades"></table></div>
+    <p class="sub">Incolla nel foglio con <strong>Ctrl+V</strong>: il pulsante di copia usa le tabulazioni,
+    quindi le colonne si separano da sole. Il CSV locale IT usa <code>;</code> e la virgola decimale,
+    l'unico formato che Sheets in italiano interpreta come numeri (con il punto <code>-5.15</code>
+    diventerebbe una durata).</p>
+  </div>
+</div></section>
+
+<footer class="site-footer">
+  <div class="foot-grid">
+    <div class="col"><h4>KID Digital Wealth</h4>
+      <a href="./profilo.html">Profilo</a><a href="./research.html">Research</a><a href="./index.html">Strumenti</a></div>
+    <div class="col"><h4>Strumenti</h4>
+      <a href="./macro-energy.html">Macro &amp; Energy</a><a href="./market-analysis.html">Market Analysis</a><a href="./gold-silver-terminal.html">Gold / Silver</a></div>
+    <div class="col"><h4>Contatti</h4>
+      <a href="./contatti.html">Scrivimi</a><a href="./legal.html">Note legali</a></div>
+  </div>
+  <div class="disclaimer">Strumento di sola elaborazione locale. Nessun dato viene inviato a server.</div>
+</footer>
+
+<script>
+'use strict';
+
+const TITLES = ['History', 'Positions', 'Orders', 'Transactions'];
+const SECTION_LABELS = {History:'Operazioni chiuse', Positions:'Posizioni aperte',
+                        Orders:'Ordini pendenti', Transactions:'Transazioni'};
+const HEADERS = {
+  'ID':'ID','Symbol':'Simbolo','Opening Direction':'Direzione apertura',
+  'Closing Direction':'Direzione chiusura','Opening Time (UTC+0)':'Apertura (UTC)',
+  'Closing Time (UTC+0)':'Chiusura (UTC)','Created (UTC+0)':'Creata (UTC)',
+  'Submitted Time (UTC+0)':'Inviato (UTC)','Time (UTC+0)':'Data/ora (UTC)',
+  'Entry Price':'Prezzo entrata','Closing Price':'Prezzo uscita','Submitted Price':'Prezzo ordine',
+  'Closing Quantity':'Quantita','Current Quantity':'Quantita','Quantity':'Quantita',
+  'Current Volume':'Volume','Volume':'Volume','Direction':'Direzione','Order Type':'Tipo ordine',
+  'Swap':'Swap','Commission':'Commissioni','Commissions':'Commissioni',
+  'Conversion Rate':'Tasso conversione','S/L':'Stop loss','SL is guaranteed':'SL garantito',
+  'T/P':'Take profit','TIF':'Validita','Expiry Time':'Scadenza','Type':'Tipo','Note':'Nota',
+  'Gross EUR':'Lordo EUR','Net EUR':'Netto EUR','Balance EUR':'Saldo EUR','Amount EUR':'Importo EUR'
+};
+const SUMMARY = {
+  'Deposit':'Depositi','Withdrawal':'Prelievi','Total Net':'Movimenti netti','Balance':'Saldo',
+  'Unrealized P&L':'P/L non realizzato','Realized P&L':'P/L realizzato',
+  'Margin':'Margine utilizzato','Free Margin':'Margine libero','Margin Level':'Livello margine',
+  'Active bonus':'Bonus attivo','Equity':'Equity'
+};
+const META = {'Account':'Conto','Account type':'Tipo conto','Currency':'Valuta'};
+const DERIVED = ['Durata (min)', 'Punti', 'Esito', 'P/L % sul saldo'];
+
+const DATE_RE = /^(\d{2})\/(\d{2})\/(\d{4})(?:[ T](\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?)?$/;
+const NUM_RE = /^-?\d+(\.\d+)?$/;
+const GENERATED_RE = /^(\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}(?:\.\d+)?),?\s*UTC$/;
+const PERIOD_RE = /(\d{2}\/\d{2}\/\d{4})\s*-\s*(\d{2}\/\d{2}\/\d{4})/;
+
+/* cTrader declares charset=utf-16 but ships utf-8; pick whichever decodes to markup. */
+function decode(buffer) {
+  for (const enc of ['utf-8', 'utf-16le', 'utf-16be', 'windows-1252']) {
+    try {
+      const text = new TextDecoder(enc, {fatal:false}).decode(buffer);
+      if (/<html/i.test(text)) return text;
+    } catch (e) { /* unsupported encoding, try the next */ }
+  }
+  return new TextDecoder('utf-8').decode(buffer);
+}
+
+function cellText(td) { return (td.textContent || '').replace(/\s+/g, ' ').trim(); }
+
+function typed(value) {
+  const v = (value || '').trim();
+  if (v === '' || v === '-') return null;
+  const m = DATE_RE.exec(v);
+  if (m) {
+    const [, d, mo, y, hh, mi, ss, ms] = m;
+    const millis = ms ? +(ms + '000').slice(0, 3) : 0;
+    return {date: new Date(Date.UTC(+y, +mo - 1, +d, +(hh || 0), +(mi || 0), +(ss || 0), millis)),
+            hasTime: hh !== undefined};
+  }
+  if (NUM_RE.test(v)) return parseFloat(v);
+  return v;
+}
+
+function parseStatement(html) {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const meta = {}, sections = {}, summary = [];
+  let period = null, generated = null;
+
+  doc.querySelectorAll('table').forEach(table => {
+    const rows = [...table.rows]
+      .filter(tr => tr.closest('table') === table)
+      .map(tr => [...tr.cells].map(cellText))
+      .filter(cells => cells.some(c => c));
+    if (!rows.length) return;
+    const cls = table.className;
+
+    if (cls === 'dataTable') {
+      const title = rows[0][0];
+      if (!TITLES.includes(title)) return;
+      const headers = rows.length > 1 ? rows[1].slice(1) : [];
+      const body = [], seen = [];
+      for (const row of rows.slice(2)) {
+        const cells = row.slice(1);
+        if (row[0] === 'Totals') continue;
+        if (row[0] && row[0].startsWith('- No')) continue;
+        if (cells.length >= Math.max(1, headers.length - 2)) body.push(cells.map(typed));
+      }
+      sections[title] = {headers, rows: body};
+    } else if (cls === 'summaryTable') {
+      for (const row of rows.slice(1)) {
+        const cells = row.filter(c => c !== '');
+        for (let i = 0; i + 1 < cells.length; i += 2) {
+          const label = cells[i];
+          if (label && !label.startsWith('Summary')) {
+            summary.push([SUMMARY[label] || label, typed(cells[i + 1])]);
+          }
+        }
+      }
+    } else {
+      for (const row of rows) {
+        const cells = row.filter(c => c);
+        cells.forEach((text, i) => {
+          const label = text.replace(/\s*:\s*$/, '');
+          if (META[label] && i + 1 < cells.length) meta[META[label]] = cells[i + 1];
+          else if (GENERATED_RE.test(text)) generated = GENERATED_RE.exec(text)[1];
+          else if (PERIOD_RE.test(text)) {
+            const p = PERIOD_RE.exec(text);
+            period = p[1] + ' - ' + p[2];
+          } else if (text.includes('@') && text.includes('.') && !text.includes(' ')) meta['Email'] = text;
+          else if (cells.length === 1 && meta['Email'] && !meta['Intestatario'] &&
+                   (text.match(/[A-Za-z]{2,}/g) || []).length >= 2) meta['Intestatario'] = text;
+        });
+      }
+    }
+  });
+  if (period) meta['Periodo'] = period;
+  if (generated) meta['Generato'] = generated + ' UTC';
+  return {meta, sections, summary};
+}
+
+function derive(headers, row) {
+  const idx = {};
+  headers.forEach((h, i) => idx[h] = i);
+  const get = name => idx[name] === undefined ? null : row[idx[name]];
+
+  const opened = get('Opening Time (UTC+0)'), closed = get('Closing Time (UTC+0)');
+  let duration = null;
+  if (opened && opened.date && closed && closed.date) {
+    duration = Math.round((closed.date - opened.date) / 600) / 100;
+  }
+  const entry = get('Entry Price'), exit = get('Closing Price'), dir = get('Opening Direction');
+  let points = null;
+  if (typeof entry === 'number' && typeof exit === 'number' && dir) {
+    points = Math.round((dir.toUpperCase() === 'BUY' ? exit - entry : entry - exit) * 1e5) / 1e5;
+  }
+  const net = get('Net EUR'), balance = get('Balance EUR');
+  let outcome = null, pct = null;
+  if (typeof net === 'number') {
+    outcome = net > 0 ? 'WIN' : (net < 0 ? 'LOSS' : 'BE');
+    if (typeof balance === 'number' && balance - net !== 0) pct = net / (balance - net);
+  }
+  return [duration, points, outcome, pct];
+}
+
+/* ---- formatting ---------------------------------------------------------- */
+const pad = n => String(n).padStart(2, '0');
+/* Match the Python converter: 10 decimals is past every field's real precision. */
+const round10 = v => Math.round(v * 1e10) / 1e10;
+
+function fmtIt(value) {
+  if (value === null || value === undefined) return '';
+  if (value.date) {
+    const d = value.date;
+    const day = `${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}/${d.getUTCFullYear()}`;
+    return value.hasTime
+      ? `${day} ${pad(d.getUTCHours())}.${pad(d.getUTCMinutes())}.${pad(d.getUTCSeconds())}` : day;
+  }
+  if (typeof value === 'number') return String(round10(value)).replace('.', ',');
+  return String(value);
+}
+
+function fmtIntl(value) {
+  if (value === null || value === undefined) return '';
+  if (value.date) {
+    const d = value.date;
+    const day = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+    return value.hasTime
+      ? `${day} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}` : day;
+  }
+  if (typeof value === 'number') return String(round10(value));
+  return String(value);
+}
+
+const colLetter = i => {
+  let s = '';
+  while (i > 0) { const r = (i - 1) % 26; s = String.fromCharCode(65 + r) + s; i = (i - r - 1) / 26; }
+  return s;
+};
+
+/* ---- output builders ----------------------------------------------------- */
+function buildRows(data, opts) {
+  const rows = [];
+  const add = (...cells) => rows.push(cells);
+  const formulas = opts.formulas;
+
+  add('ESTRATTO CONTO cTrader');
+  for (const [k, v] of Object.entries(data.meta)) add(k, v);
+  add();
+
+  const history = data.sections['History'];
+  if (history && history.rows.length) {
+    const headers = history.headers.map(h => HEADERS[h] || h).concat(DERIVED);
+    add('OPERAZIONI CHIUSE');
+    add(...headers);
+    const first = rows.length + 1;
+    history.rows.forEach(r => add(...r.concat(derive(history.headers, r))));
+    const last = rows.length;
+
+    const at = name => colLetter(headers.indexOf(name) + 1);
+    const totals = headers.map(() => '');
+    totals[0] = 'TOTALE';
+    ['Swap', 'Commissioni', 'Lordo EUR', 'Netto EUR'].forEach(name => {
+      const i = headers.indexOf(name);
+      if (i >= 0) {
+        const c = colLetter(i + 1);
+        totals[i] = formulas ? `=SUM(${c}${first}:${c}${last})`
+                             : sum(history.rows.map(r => r[history.headers.indexOf(nameEn(name))]));
+      }
+    });
+    add(...totals);
+    add();
+
+    const net = `${at('Netto EUR')}${first}:${at('Netto EUR')}${last}`;
+    const dur = `${at('Durata (min)')}${first}:${at('Durata (min)')}${last}`;
+    const sym = `${at('Simbolo')}${first}:${at('Simbolo')}${last}`;
+    const stats = computeStats(data);
+    add('STATISTICHE');
+    const put = (label, formula, value) => add(label, formulas ? formula : value);
+    put('Operazioni chiuse', `=COUNT(${net})`, stats.n);
+    put('Operazioni in profitto', `=COUNTIF(${net};">0")`, stats.wins);
+    put('Operazioni in perdita', `=COUNTIF(${net};"<0")`, stats.losses);
+    put('Win rate', `=IFERROR(COUNTIF(${net};">0")/COUNT(${net});"")`, stats.winRate);
+    put('P/L netto totale', `=SUM(${net})`, stats.total);
+    put('Profitto medio', `=IFERROR(AVERAGEIF(${net};">0");"")`, stats.avgWin);
+    put('Perdita media', `=IFERROR(AVERAGEIF(${net};"<0");"")`, stats.avgLoss);
+    put('Profit factor', `=IFERROR(SUMIF(${net};">0")/ABS(SUMIF(${net};"<0"));"")`, stats.profitFactor);
+    put('Aspettativa per operazione', `=IFERROR(AVERAGE(${net});"")`, stats.expectancy);
+    put('Migliore operazione', `=MAX(${net})`, stats.best);
+    put('Peggiore operazione', `=MIN(${net})`, stats.worst);
+    put('Durata media (min)', `=IFERROR(AVERAGE(${dur});"")`, stats.avgDuration);
+    put('Strumenti negoziati',
+        `=IFERROR(SUMPRODUCT((COUNTIF(${sym};${sym})>0)/COUNTIF(${sym};${sym}));"")`, stats.symbols);
+    add();
+  }
+
+  for (const name of ['Positions', 'Orders', 'Transactions']) {
+    const section = data.sections[name];
+    if (!section) continue;
+    add(SECTION_LABELS[name].toUpperCase());
+    add(...section.headers.map(h => HEADERS[h] || h));
+    if (section.rows.length) section.rows.forEach(r => add(...r));
+    else add('Nessun record nel periodo');
+    add();
+  }
+
+  if (data.summary.length) {
+    add('RIEPILOGO');
+    data.summary.forEach(([label, value]) => add(label, value));
+  }
+  return rows;
+}
+
+const nameEn = it => Object.keys(HEADERS).find(k => HEADERS[k] === it) || it;
+const sum = values => values.reduce((a, b) => a + (typeof b === 'number' ? b : 0), 0);
+
+function computeStats(data) {
+  const history = data.sections['History'];
+  const idx = history.headers.indexOf('Net EUR');
+  const nets = history.rows.map(r => r[idx]).filter(v => typeof v === 'number');
+  const wins = nets.filter(v => v > 0), losses = nets.filter(v => v < 0);
+  const durations = history.rows.map(r => derive(history.headers, r)[0]).filter(v => v !== null);
+  const symbols = new Set(history.rows.map(r => r[history.headers.indexOf('Symbol')]));
+  const round = v => Math.round(v * 1e6) / 1e6;
+  return {
+    n: nets.length, wins: wins.length, losses: losses.length,
+    winRate: nets.length ? round(wins.length / nets.length) : null,
+    total: round(sum(nets)),
+    avgWin: wins.length ? round(sum(wins) / wins.length) : null,
+    avgLoss: losses.length ? round(sum(losses) / losses.length) : null,
+    profitFactor: losses.length ? round(sum(wins) / Math.abs(sum(losses))) : null,
+    expectancy: nets.length ? round(sum(nets) / nets.length) : null,
+    best: nets.length ? Math.max(...nets) : null,
+    worst: nets.length ? Math.min(...nets) : null,
+    avgDuration: durations.length ? round(sum(durations) / durations.length) : null,
+    symbols: symbols.size
+  };
+}
+
+function toDelimited(rows, delimiter, fmt) {
+  return rows.map(row => row.map(cell => {
+    const text = fmt(cell === undefined ? null : cell);
+    return (text.includes(delimiter) || text.includes('"') || text.includes('\n'))
+      ? '"' + text.replace(/"/g, '""') + '"' : text;
+  }).join(delimiter)).join('\r\n');
+}
+
+function download(name, text, mime) {
+  const url = URL.createObjectURL(new Blob(['﻿' + text], {type: mime}));
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/* ---- UI ------------------------------------------------------------------ */
+const $ = id => document.getElementById(id);
+let current = null;
+
+function alertBox(message, kind) {
+  const el = $('alert');
+  el.textContent = message;
+  el.className = 'alert ' + (kind || '');
+  el.classList.toggle('hidden', !message);
+}
+
+function fileStem(data) {
+  const account = (data.meta['Conto'] || 'conto').replace(/\W+/g, '');
+  const period = (data.meta['Periodo'] || '').split(' - ').pop().replace(/\//g, '-');
+  return `estratto_conto_${account}${period ? '_' + period : ''}`;
+}
+
+function render(data) {
+  const history = data.sections['History'];
+  const nTrades = history ? history.rows.length : 0;
+  $('meta').textContent = [
+    `Conto ${data.meta['Conto'] || '-'}`, data.meta['Periodo'] || '',
+    `${nTrades} operazioni chiuse`,
+    `${(data.sections['Orders'] || {rows: []}).rows.length} ordini pendenti`
+  ].filter(Boolean).join(' · ');
+
+  const stats = nTrades ? computeStats(data) : null;
+  const money = v => v === null || v === undefined ? '—'
+    : v.toLocaleString('it-IT', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' €';
+  const kpis = stats ? [
+    ['P/L netto', money(stats.total), stats.total],
+    ['Win rate', (stats.winRate * 100).toFixed(1).replace('.', ',') + ' %', null],
+    ['Operazioni', `${stats.wins} W / ${stats.losses} L`, null],
+    ['Profit factor', stats.profitFactor === null ? '—' : stats.profitFactor.toFixed(2).replace('.', ','), null],
+    ['Aspettativa', money(stats.expectancy), stats.expectancy],
+    ['Durata media', stats.avgDuration === null ? '—' : stats.avgDuration.toFixed(1).replace('.', ',') + ' min', null]
+  ] : [];
+  $('kpis').innerHTML = kpis.map(([k, v, signed]) =>
+    `<div class="kpi"><div class="k">${k}</div><div class="v ${
+      signed === null || signed === undefined ? '' : (signed > 0 ? 'pos' : signed < 0 ? 'neg' : '')
+    }">${v}</div></div>`).join('');
+
+  const table = $('trades');
+  if (!nTrades) { table.innerHTML = '<tr><td>Nessuna operazione chiusa nel periodo</td></tr>'; return; }
+  const headers = history.headers.map(h => HEADERS[h] || h).concat(DERIVED);
+  const body = history.rows.map(r => r.concat(derive(history.headers, r)));
+  table.innerHTML =
+    '<thead><tr>' + headers.map(h => `<th>${h}</th>`).join('') + '</tr></thead><tbody>' +
+    body.map(row => '<tr>' + row.map((cell, i) => {
+      const isNum = typeof cell === 'number';
+      const cls = [isNum ? 'num' : '', headers[i] === 'Netto EUR' && isNum ? (cell > 0 ? 'pos' : cell < 0 ? 'neg' : '') : ''].join(' ').trim();
+      let text = fmtIt(cell);
+      if (headers[i] === 'P/L % sul saldo' && typeof cell === 'number') {
+        text = (cell * 100).toFixed(2).replace('.', ',') + ' %';
+      }
+      return `<td class="${cls}">${text}</td>`;
+    }).join('') + '</tr>').join('') + '</tbody>';
+}
+
+async function handleFile(file) {
+  if (!file) return;
+  try {
+    const data = parseStatement(decode(await file.arrayBuffer()));
+    if (!Object.keys(data.sections).length) {
+      alertBox('Non sembra un estratto conto cTrader: nessuna tabella riconosciuta.', 'err');
+      $('out').classList.add('hidden');
+      return;
+    }
+    current = data;
+    const warnings = [];
+    const history = data.sections['History'];
+    if (history && history.rows.length) {
+      const netTotal = sum(history.rows.map(r => r[history.headers.indexOf('Net EUR')]));
+      const realized = (data.summary.find(([l]) => l === 'P/L realizzato') || [])[1];
+      if (typeof realized === 'number' && Math.abs(netTotal - realized) > 0.01) {
+        warnings.push(`somma Netto EUR (${netTotal.toFixed(2)}) diversa dal P/L realizzato (${realized.toFixed(2)})`);
+      }
+    }
+    alertBox(warnings.length ? 'Attenzione: ' + warnings.join('; ') : '', warnings.length ? 'err' : '');
+    render(data);
+    $('out').classList.remove('hidden');
+  } catch (err) {
+    alertBox('Errore nella lettura del file: ' + err.message, 'err');
+  }
+}
+
+$('file').addEventListener('change', e => handleFile(e.target.files[0]));
+['dragenter', 'dragover'].forEach(ev => $('drop').addEventListener(ev, e => {
+  e.preventDefault(); $('drop').classList.add('over');
+}));
+['dragleave', 'drop'].forEach(ev => $('drop').addEventListener(ev, e => {
+  e.preventDefault(); $('drop').classList.remove('over');
+}));
+$('drop').addEventListener('drop', e => handleFile(e.dataTransfer.files[0]));
+
+$('copyBtn').addEventListener('click', async () => {
+  if (!current) return;
+  const text = toDelimited(buildRows(current, {formulas: false}), '\t', fmtIt);
+  try {
+    await navigator.clipboard.writeText(text);
+    $('copyBtn').textContent = 'Copiato ✓';
+  } catch (err) {
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); ta.remove();
+    $('copyBtn').textContent = 'Copiato ✓';
+  }
+  setTimeout(() => $('copyBtn').textContent = 'Copia per Google Sheets', 2000);
+});
+
+$('csvIt').addEventListener('click', () => {
+  if (!current) return;
+  download(fileStem(current) + '_it.csv',
+           toDelimited(buildRows(current, {formulas: true}), ';', fmtIt), 'text/csv;charset=utf-8');
+});
+
+$('csvIntl').addEventListener('click', () => {
+  if (!current) return;
+  download(fileStem(current) + '.csv',
+           toDelimited(buildRows(current, {formulas: false}), ',', fmtIntl), 'text/csv;charset=utf-8');
+});
+</script>
+</body></html>
