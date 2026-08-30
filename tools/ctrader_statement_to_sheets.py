@@ -588,11 +588,41 @@ def build_report(data: dict) -> list[dict]:
     return blocks
 
 
+def symbol_aggregate(rows: list[list], symbol: str, key: str):
+    """The per-instrument number a {{SYMAGG}} token asks for, computed."""
+    row = next((r for r in rows if r[0] == symbol), None)
+    if not row:
+        return None
+    _, count, wins, losses, net = row
+    if key == "count":
+        return count
+    if key == "wins":
+        return wins
+    if key == "losses":
+        return losses
+    if key == "winrate":
+        return round(wins / count, 10) if count else None
+    if key == "net":
+        return net
+    return round(net / count, 10) if count else None
+
+
 def resolve(cell, ctx):
-    """Turn a {{SUM:...}} / {{STAT:...}} token into a formula for one writer."""
+    """Turn a {{SUM:...}} / {{STAT:...}} / {{SYMAGG:...}} token into a formula.
+
+    With ctx["formulas"] false the token resolves to the number itself instead:
+    a sheet that carries no trades table has nothing for a formula to read.
+    """
     if not isinstance(cell, str) or not cell.startswith("{{"):
         return cell
     kind, _, argument = cell[2:-2].partition(":")
+    if not ctx.get("formulas", True):
+        if kind == "SUM":
+            return ctx["sums"].get(argument)
+        if kind == "SYMAGG":
+            key, _, symbol = argument.partition(":")
+            return symbol_aggregate(ctx["symbols"], symbol, key)
+        return ctx["stats"].get(argument)
     rng = lambda col: f"{ctx['sheet']}${col}${ctx['first']}:${col}${ctx['last']}"
     if kind == "SUM":
         return f"=SUM({rng(ctx['column'](argument))})"
@@ -706,17 +736,17 @@ def write_csvs(data: dict, out_dir: str) -> list[str]:
     return written
 
 
-def write_gsheet_csv(data: dict, path: str) -> str:
-    """One semicolon/comma-decimal CSV holding every block, stacked.
+def stack_blocks(blocks: list[dict], skip_trades: bool = False):
+    """Lay report blocks out one under the other, as a spreadsheet reads them.
 
-    Google Drive converts an uploaded CSV into a native Google Sheet, but only
-    ever with a single tab, so the blocks are stacked in reading order and the
-    formulas use ';' as argument separator (Italian locale).
+    Returns the rows and where the trades table landed, which is what the
+    formula tokens need to resolve.
     """
     rows: list[list] = []
     trades = {"first": None, "last": None, "headers": []}
-
-    for block in build_report(data):
+    for block in blocks:
+        if skip_trades and block.get("is_trades"):
+            continue
         if block["kind"] == "heading":
             rows.append([block["title"]])
             if block.get("subtitle"):
@@ -737,6 +767,87 @@ def write_gsheet_csv(data: dict, path: str) -> str:
             else:
                 rows.append(["Nessun record nel periodo"])
         rows.append([])
+    return rows, trades
+
+
+def value_context(data: dict) -> dict:
+    """Everything the token resolver needs to produce numbers instead of formulas."""
+    sums = {}
+    history = data["sections"].get("History")
+    if history and history["rows"]:
+        headers, rows = view("History", history)
+        for label in TOTAL_COLUMNS:
+            if label in headers:
+                i = headers.index(label)
+                sums[label] = round(sum(r[i] for r in rows if isinstance(r[i], float)), 10)
+    return {"formulas": False, "stats": compute_stats(data), "sums": sums,
+            "symbols": by_symbol(data)}
+
+
+def write_csv_rows(path: str, rows: list[list], ctx: dict) -> int:
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    with open(path, "w", newline="", encoding="utf-8") as fh:
+        csv.writer(fh, delimiter=";").writerows(
+            [[fmt_it(resolve(cell, ctx)) for cell in row] for row in rows])
+    return os.path.getsize(path)
+
+
+def write_drive_csvs(data: dict, out_dir: str, budget: int = 9000) -> list[str]:
+    """The report as several CSVs, each small enough for the Drive connector.
+
+    The connector takes the file content inline and truncates it past roughly
+    10 KB, and a truncated upload is then refused by the conversion - so a long
+    statement has to arrive as a summary plus the trade list in parts.
+    """
+    blocks = build_report(data)
+    ctx = value_context(data)
+    written = []
+
+    rows, _ = stack_blocks(blocks, skip_trades=True)
+    path = os.path.join(out_dir, "00_riepilogo.csv")
+    size = write_csv_rows(path, rows, ctx)
+    written.append(path)
+    print(f"  {os.path.basename(path)}: {size} byte")
+
+    trades = next((b for b in blocks if b.get("is_trades") and b["rows"]), None)
+    if not trades:
+        return written
+
+    # Pack rows into files that stay under the budget, header repeated in each.
+    header = list(trades["headers"])
+    chunks, current = [], []
+    overhead = len(";".join(map(str, header))) + 80
+    size_of = lambda row: len(";".join(fmt_it(cell) for cell in row)) + 2
+    used = overhead
+    for row in trades["rows"]:
+        if current and used + size_of(row) > budget:
+            chunks.append(current)
+            current, used = [], overhead
+        current.append(row)
+        used += size_of(row)
+    if current:
+        chunks.append(current)
+
+    start = 1
+    for n, chunk in enumerate(chunks, start=1):
+        stop = start + len(chunk) - 1
+        title = f"OPERAZIONI CHIUSE · {start}-{stop} di {len(trades['rows'])}"
+        path = os.path.join(out_dir, f"{n:02d}_operazioni_{start}-{stop}.csv")
+        size = write_csv_rows(path, [[title], header] + [list(r) for r in chunk], ctx)
+        written.append(path)
+        print(f"  {os.path.basename(path)}: {size} byte, righe {start}-{stop}")
+        start = stop + 1
+    return written
+
+
+def write_gsheet_csv(data: dict, path: str) -> str:
+    """One semicolon/comma-decimal CSV holding every block, stacked.
+
+    Google Drive converts an uploaded CSV into a native Google Sheet, but only
+    ever with a single tab, so the blocks are stacked in reading order and the
+    formulas use ';' as argument separator (Italian locale).
+    """
+    rows, trades = stack_blocks(build_report(data))
 
     ctx = {"sheet": "", "first": trades["first"], "last": trades["last"], "arg": ";",
            "column": lambda label: (col_letter(trades["headers"].index(label) + 1)
@@ -1120,13 +1231,18 @@ def main(argv=None) -> int:
     ap.add_argument("statement", help="cTrader statement .html file")
     ap.add_argument("--xlsx", help="write a Google Sheets ready workbook here")
     ap.add_argument("--csv-dir", help="write one CSV per section into this directory")
+    ap.add_argument("--drive-csv", metavar="DIR",
+                    help="write the report as several CSVs, each small enough to upload "
+                         "through the Drive connector (summary plus the trades in parts)")
+    ap.add_argument("--budget", type=int, default=9000, metavar="BYTE",
+                    help="size ceiling per file for --drive-csv (default 9000)")
     ap.add_argument("--gsheet-csv", metavar="FILE",
                     help="write a single semicolon CSV with every section stacked, "
                          "ready to upload to Google Drive as a native Google Sheet")
     args = ap.parse_args(argv)
 
-    if not args.xlsx and not args.csv_dir and not args.gsheet_csv:
-        ap.error("choose at least one of --xlsx / --csv-dir / --gsheet-csv")
+    if not any((args.xlsx, args.csv_dir, args.gsheet_csv, args.drive_csv)):
+        ap.error("choose at least one of --xlsx / --csv-dir / --gsheet-csv / --drive-csv")
 
     data = parse_statement(args.statement)
     counts = ", ".join(f"{name}: {len(s['rows'])}" for name, s in data["sections"].items())
@@ -1137,6 +1253,9 @@ def main(argv=None) -> int:
     if args.csv_dir:
         for path in write_csvs(data, args.csv_dir):
             print("wrote", path)
+    if args.drive_csv:
+        print(f"wrote {len(write_drive_csvs(data, args.drive_csv, args.budget))} file "
+              f"in {args.drive_csv}")
     if args.gsheet_csv:
         print("wrote", write_gsheet_csv(data, args.gsheet_csv))
     if args.xlsx:

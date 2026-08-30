@@ -56,7 +56,17 @@ rifiutata con `Invalid conversion requested`. Da qui la regola:
 | Report | Come arriva su Sheets |
 |---|---|
 | Sotto la soglia (statement giornalieri) | caricato direttamente come foglio Google nativo, partendo da `--gsheet-csv` |
-| Sopra la soglia (statement mensili) | consegnato come `.xlsx` formattato, da trascinare in Drive: aprendolo, Sheets lo converte mantenendo grafica, grafico e formule |
+| Sopra la soglia (statement mensili) | `--drive-csv`: un foglio di riepilogo più l'elenco operazioni spezzato in parti, tutte caricabili una per una; oppure il `.xlsx` formattato da trascinare in Drive, che mantiene grafica, grafici e formule |
+
+```bash
+# report tagliato in file che passano dal connettore
+python3 tools/ctrader_statement_to_sheets.py Statement.html --drive-csv out/drive --budget 6200
+```
+
+`00_riepilogo.csv` contiene tutti i blocchi tranne l'elenco operazioni, con i **valori**
+al posto delle formule: staccato dalla tabella delle operazioni, una formula non avrebbe
+più nulla da leggere. I file `NN_operazioni_A-B.csv` ripetono l'intestazione e dicono in
+testa quale intervallo contengono.
 
 Un `.xlsx` caricato con conversione attiva diventa un foglio Google nativo **con** la
 formattazione, quindi il trascinamento manuale non perde nulla: è solo un passaggio in più.
