@@ -415,7 +415,7 @@ def compute_stats(data: dict) -> dict:
 
 
 def by_symbol(data: dict) -> list[list]:
-    """Per-instrument tally, worst impact first: [simbolo, operazioni, vinte, perse]."""
+    """Per-instrument tally, worst impact first: [simbolo, operazioni, vinte, perse, netto]."""
     history = data["sections"].get("History")
     if not history or not history["rows"]:
         return []
@@ -433,7 +433,7 @@ def by_symbol(data: dict) -> list[list]:
                 entry[2] += 1
             entry[3] += net
     ordered = sorted(tally.items(), key=lambda kv: -abs(kv[1][3]))
-    return [[symbol] + counts[:3] for symbol, counts in ordered]
+    return [[symbol] + counts[:3] + [round(counts[3], 10)] for symbol, counts in ordered]
 
 
 def by_day(data: dict) -> list[list]:
@@ -457,6 +457,34 @@ def by_day(data: dict) -> list[list]:
             entry[2], entry[3] = closed, row[i_balance]
     return [[day, n, round(net, 10), balance]
             for day, (n, net, _, balance) in sorted(days.items())]
+
+
+# Fixed bins, coarse to keep the histogram readable: scalps, minutes, hours.
+DURATION_BUCKETS = [("meno di 1 min", 0, 1), ("1-5 min", 1, 5), ("5-15 min", 5, 15),
+                    ("15-60 min", 15, 60), ("1-4 ore", 60, 240),
+                    ("oltre 4 ore", 240, float("inf"))]
+
+
+def duration_buckets(data: dict) -> list[list]:
+    """How long trades were held: [fascia, operazioni, netto]."""
+    history = data["sections"].get("History")
+    if not history or not history["rows"]:
+        return []
+    headers, rows = view("History", history)
+    i_dur, i_net = headers.index("Durata (min)"), headers.index("Netto EUR")
+    tally = {label: [0, 0.0] for label, _, _ in DURATION_BUCKETS}
+    for row in rows:
+        duration = row[i_dur]
+        if not isinstance(duration, float):
+            continue
+        for label, low, high in DURATION_BUCKETS:
+            if low <= duration < high:
+                tally[label][0] += 1
+                if isinstance(row[i_net], float):
+                    tally[label][1] += row[i_net]
+                break
+    return [[label, count, round(net, 10)]
+            for label, (count, net) in tally.items() if count]
 
 
 # --------------------------------------------------------------------------- #
@@ -520,6 +548,14 @@ def build_report(data: dict) -> list[dict]:
             "rows": [[row[0]] + ["{{SYMAGG:%s:%s}}" % (key, row[0])
                                  for _, key, _ in SYMBOL_AGGREGATES] for row in symbols],
             "totals": None})
+
+    durations = duration_buckets(data)
+    if durations:
+        blocks.append({
+            "group": "summary", "id": "durations",
+            "kind": "table", "title": "DISTRIBUZIONE DURATE",
+            "headers": ["Fascia", "Operazioni", "Netto EUR"],
+            "rows": durations, "totals": None})
 
     days = by_day(data)
     if days:
@@ -756,6 +792,115 @@ def number_format(label, value):
     return "0.####" if isinstance(value, float) else "General"
 
 
+# Diverging pair for gain/loss, validated against both surfaces with the palette
+# checker: green/red reads as a single colour under deuteranopia (dE 4.1 on white,
+# against a floor of 8), blue/red clears every check (dE 23.8).
+CHART_PROFIT, CHART_LOSS = "2A78D6", "D03B3B"
+CHART_INK, CHART_GRID = "52514E", "E1E0D9"
+# One hue, light to dark: duration bands are ordered magnitude, not identity.
+BLUE_RAMP = ["86B6EF", "6DA7EC", "5598E7", "3987E5", "2A78D6", "256ABF", "1C5CAB", "184F95"]
+
+
+def style_chart(chart, title: str, legend: bool = False):
+    from openpyxl.chart.shapes import GraphicalProperties
+    from openpyxl.drawing.line import LineProperties
+
+    chart.title = title
+    chart.height, chart.width = 7.5, 14
+    if not legend:
+        chart.legend = None
+    elif chart.legend:
+        chart.legend.position = "b"
+    chart.x_axis.majorGridlines = None
+    hairline = GraphicalProperties(ln=LineProperties(solidFill=CHART_GRID))
+    chart.x_axis.spPr, chart.y_axis.spPr = hairline, hairline
+    return chart
+
+
+def paint_by_sign(series, values):
+    """Colour each bar from the sign of its own value."""
+    from openpyxl.chart.marker import DataPoint
+    from openpyxl.chart.shapes import GraphicalProperties
+
+    series.data_points = [
+        DataPoint(idx=i, spPr=GraphicalProperties(
+            solidFill=CHART_PROFIT if (value or 0) >= 0 else CHART_LOSS))
+        for i, value in enumerate(values)]
+
+
+def add_charts(wb, placed: dict, data: dict) -> None:
+    """Four charts, each anchored beside the block it reads."""
+    from openpyxl.chart import BarChart, LineChart, Reference
+    from openpyxl.chart.marker import DataPoint
+    from openpyxl.chart.shapes import GraphicalProperties
+    from openpyxl.utils import get_column_letter
+
+    def block_ref(spot, label, header=False):
+        column = spot["headers"].index(label) + 1
+        return Reference(wb[spot["sheet"]], min_col=column,
+                         min_row=spot["first"] - (1 if header else 0), max_row=spot["last"])
+
+    def categories(spot):
+        return Reference(wb[spot["sheet"]], min_col=1,
+                         min_row=spot["first"], max_row=spot["last"])
+
+    symbols = placed.get("symbols")
+    if symbols:
+        rows = by_symbol(data)
+        chart = BarChart()
+        chart.type, chart.overlap = "bar", 100          # horizontal bars, one series
+        chart.add_data(block_ref(symbols, "Netto EUR", header=True), titles_from_data=True)
+        chart.set_categories(categories(symbols))
+        paint_by_sign(chart.series[0], [row[4] for row in rows])
+        style_chart(chart, "Netto per strumento (EUR)")
+        wb[symbols["sheet"]].add_chart(chart, f"I{symbols['first'] - 1}")
+
+        split = BarChart()
+        split.type, split.grouping, split.overlap = "col", "stacked", 100
+        for label, colour in (("Vinte", CHART_PROFIT), ("Perse", CHART_LOSS)):
+            split.add_data(block_ref(symbols, label, header=True), titles_from_data=True)
+            split.series[-1].graphicalProperties = GraphicalProperties(solidFill=colour)
+        split.set_categories(categories(symbols))
+        style_chart(split, "Operazioni vinte e perse", legend=True)
+        wb[symbols["sheet"]].add_chart(split, f"I{symbols['first'] + 15}")
+
+    durations = placed.get("durations")
+    if durations:
+        chart = BarChart()
+        chart.type, chart.overlap = "col", 100
+        chart.add_data(block_ref(durations, "Operazioni", header=True), titles_from_data=True)
+        chart.set_categories(categories(durations))
+        span = max(durations["last"] - durations["first"] + 1, 1)
+        chart.series[0].data_points = [
+            DataPoint(idx=i, spPr=GraphicalProperties(
+                solidFill=BLUE_RAMP[min(int(i * len(BLUE_RAMP) / span), len(BLUE_RAMP) - 1)]))
+            for i in range(span)]
+        style_chart(chart, "Operazioni per durata")
+        wb[durations["sheet"]].add_chart(chart, f"I{durations['first'] + 31}")
+
+    daily = placed.get("daily")
+    if daily and daily["last"] > daily["first"]:
+        sheet = wb[daily["sheet"]]
+        curve = LineChart()
+        curve.add_data(block_ref(daily, "Saldo fine giornata", header=True),
+                       titles_from_data=True)
+        curve.set_categories(categories(daily))
+        curve.series[0].graphicalProperties = GraphicalProperties()
+        curve.series[0].graphicalProperties.line.solidFill = CHART_PROFIT
+        curve.series[0].graphicalProperties.line.width = 22000
+        curve.series[0].smooth = False
+        style_chart(curve, "Curva del saldo (EUR)")
+        sheet.add_chart(curve, f"{get_column_letter(len(daily['headers']) + 2)}{daily['first']}")
+
+        bars = BarChart()
+        bars.type, bars.overlap = "col", 100
+        bars.add_data(block_ref(daily, "Netto EUR", header=True), titles_from_data=True)
+        bars.set_categories(categories(daily))
+        paint_by_sign(bars.series[0], [row[2] for row in by_day(data)])
+        style_chart(bars, "Netto giornaliero (EUR)")
+        sheet.add_chart(bars, f"{get_column_letter(len(daily['headers']) + 2)}{daily['first'] + 16}")
+
+
 def write_xlsx(data: dict, path: str) -> str:
     from openpyxl import Workbook
     from openpyxl.chart import LineChart, Reference
@@ -775,6 +920,7 @@ def write_xlsx(data: dict, path: str) -> str:
     loss_font = Font(name="Arial", size=10, bold=True, color="C00000")
     stripe = PatternFill("solid", fgColor="F2F5FA")
     total_fill = PatternFill("solid", fgColor="DCE3F0")
+    band_fill = PatternFill("solid", fgColor="F7F9FC")
     thin = Side(style="thin", color="D9D9D9")
     box = Border(top=thin, bottom=thin, left=thin, right=thin)
 
@@ -783,7 +929,7 @@ def write_xlsx(data: dict, path: str) -> str:
     wb.remove(wb.active)
     widths: dict[str, dict[int, int]] = {}
     trades = {"sheet": None, "first": None, "last": None, "headers": []}
-    daily = {"sheet": None, "first": None, "last": None, "headers": []}
+    placed: dict[str, dict] = {}       # where each table landed, for the charts
     pending: list[tuple] = []          # cells holding a token, resolved at the end
 
     for group, sheet_name in SHEETS:
@@ -822,11 +968,15 @@ def write_xlsx(data: dict, path: str) -> str:
             ws.row_dimensions[cursor].height = 20
 
             if block["kind"] == "pairs":
+                banded = block["title"] != "DATI DEL CONTO"
                 for label, value in block["rows"]:
                     cursor += 1
                     r = cursor
-                    ws.cell(row=r, column=1, value=label).font = base
+                    key = ws.cell(row=r, column=1, value=label)
+                    key.font = base
                     cell = ws.cell(row=r, column=2)
+                    if banded:
+                        key.fill = cell.fill = band_fill
                     if isinstance(value, str) and value.startswith("{{"):
                         pending.append((cell, value, label))
                     else:
@@ -875,26 +1025,29 @@ def write_xlsx(data: dict, path: str) -> str:
                     measure(c, fmt_intl(value))
             last = cursor
 
-            if block.get("is_daily"):
-                daily = {"sheet": sheet_name, "first": first, "last": last,
-                         "headers": block["headers"]}
+            spot = {"sheet": sheet_name, "first": first, "last": last,
+                    "headers": block["headers"]}
+            placed[block.get("id") or block["group"]] = spot
             if block.get("is_trades"):
-                trades = {"sheet": sheet_name, "first": first, "last": last,
-                          "headers": block["headers"]}
+                trades = spot
                 ws.freeze_panes = ws.cell(row=first, column=1).coordinate
-                # Where the money went, and which trades were left running.
-                column = lambda label: get_column_letter(block["headers"].index(label) + 1)
-                if "Netto EUR" in block["headers"]:
-                    net = column("Netto EUR")
+
+            # Where the money went, and which trades were left running: the same
+            # diverging pair as the charts, so cell and bar say the same thing.
+            column = lambda label: get_column_letter(block["headers"].index(label) + 1)
+            for label in ("Netto EUR", "P/L % sul saldo"):
+                if label in block["headers"]:
+                    col = column(label)
                     ws.conditional_formatting.add(
-                        f"{net}{first}:{net}{last}",
-                        ColorScaleRule(start_type="min", start_color="F8696B",
+                        f"{col}{first}:{col}{last}",
+                        ColorScaleRule(start_type="min", start_color=CHART_LOSS,
                                        mid_type="num", mid_value=0, mid_color="FFFFFF",
-                                       end_type="max", end_color="63BE7B"))
-                if "Durata (min)" in block["headers"]:
-                    dur = column("Durata (min)")
+                                       end_type="max", end_color=CHART_PROFIT))
+            for label in ("Durata (min)", "Operazioni"):
+                if label in block["headers"]:
+                    col = column(label)
                     ws.conditional_formatting.add(
-                        f"{dur}{first}:{dur}{last}",
+                        f"{col}{first}:{col}{last}",
                         DataBarRule(start_type="min", end_type="max", color="8EA9DB"))
             if block["totals"]:
                 cursor += 1
@@ -919,20 +1072,7 @@ def write_xlsx(data: dict, path: str) -> str:
         # A formula cell has no value to infer a format from, so go by its column.
         cell.number_format = PCT_FMT if label in PCT_LABELS else number_format(label, 0.0)
 
-    if daily["sheet"] and daily["last"] > daily["first"]:
-        ws = wb[daily["sheet"]]
-        balance_col = daily["headers"].index("Saldo fine giornata") + 1
-        chart = LineChart()
-        chart.title = "Curva del saldo"
-        chart.height, chart.width = 8, 18
-        chart.y_axis.title, chart.x_axis.title = "EUR", None
-        chart.legend = None
-        chart.add_data(Reference(ws, min_col=balance_col,
-                                 min_row=daily["first"] - 1, max_row=daily["last"]),
-                       titles_from_data=True)
-        chart.set_categories(Reference(ws, min_col=1,
-                                       min_row=daily["first"], max_row=daily["last"]))
-        ws.add_chart(chart, f"{get_column_letter(len(daily['headers']) + 2)}{daily['first']}")
+    add_charts(wb, placed, data)
 
     for sheet_name, cols in widths.items():
         for col, width in cols.items():

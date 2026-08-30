@@ -106,6 +106,32 @@ sotto il limite del connettore quando il report è piccolo.
 Le formule usano solo funzioni supportate sia da Excel sia da Google Sheets
 (`SUM`, `COUNTIF`, `SUMIF`, `AVERAGEIF`, `IFERROR`, `SUMPRODUCT`, `MAX`, `MIN`).
 
+### Grafici e colori
+
+Il workbook porta cinque grafici — netto per strumento, vinte/perse, operazioni per
+durata, curva del saldo e netto giornaliero — più scale colore divergenti sulle colonne
+di netto e barre dati sui conteggi. La pagina disegna gli stessi grafici in SVG inline,
+senza librerie esterne.
+
+Utile e perdita usano **blu `#2A78D6` / rosso `#D03B3B`** (sul fondo scuro della pagina:
+`#3987E5` / `#E66767`), non verde/rosso. Non è una preferenza: il validatore di palette
+boccia verde/rosso perché sotto daltonismo deutan o protan le due barre finiscono a
+ΔE 4,1 su fondo bianco, contro una soglia di 8 — cioè indistinguibili. La coppia blu/rosso
+passa tutti i controlli su entrambe le superfici (ΔE 23,8 e 19,2). Prima di cambiare
+questi colori, rieseguire la verifica:
+
+```bash
+node <skill dataviz>/scripts/validate_palette.js "#2a78d6,#d03b3b" --mode light --surface "#ffffff"
+node <skill dataviz>/scripts/validate_palette.js "#3987e5,#e66767" --mode dark  --surface "#0a111f"
+```
+
+L'oro del sito resta colore d'interfaccia: come marcatore di dati esce dalla banda di
+luminosità e finisce in zona d'allerta accanto al rosso. Verde e rosso restano invece nei
+**numeri** di tabelle e KPI, dove sono testo di delta e non marcatori.
+
+Le fasce di durata (istogramma) usano una sola tinta che scurisce al crescere della
+fascia: è magnitudine ordinata, non identità, quindi niente palette categoriale.
+
 ### Controllo di quadratura
 
 A ogni conversione lo script confronta la somma della colonna `Net EUR` con il

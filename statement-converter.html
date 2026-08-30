@@ -14,6 +14,14 @@
 <meta name="twitter:card" content="summary_large_image"/>
 <link rel="stylesheet" href="./assets/site.css"/>
 <style>
+  /* Data-mark colours, kept apart from the interface palette. Blue/red is the
+     diverging pair that clears the palette checks on this surface (CVD dE 19.2);
+     green/red would read as one colour to a deutan viewer. The site gold stays
+     interface-only: it sits outside the lightness band as a data mark. */
+  :root{
+    --viz-profit:#3987e5; --viz-loss:#e66767;
+    --viz-ink:#8294b4; --viz-grid:rgba(150,170,205,.14);
+  }
   .wrap{max-width:1180px;margin:0 auto;padding:0 22px}
 
   /* ---- drop zone ---- */
@@ -97,12 +105,29 @@
   .kv h4{grid-column:1/-1;margin:16px 0 2px;font-size:10px;letter-spacing:.14em;
          text-transform:uppercase;color:var(--gold)}
 
-  .spark{padding:14px 16px 4px;border-bottom:1px solid var(--line)}
-  .spark-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;
-              margin-bottom:6px;flex-wrap:wrap}
-  .spark-head .k{font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--txt3)}
-  .spark-head .r{font-size:11px;color:var(--txt2);font-variant-numeric:tabular-nums}
-  .spark svg{width:100%;height:120px;display:block}
+  .charts{display:grid;gap:0;border-bottom:1px solid var(--line)}
+  @media(min-width:860px){.charts.two{grid-template-columns:1fr 1fr}}
+  .chart{padding:14px 16px 10px;position:relative}
+  .chart + .chart{border-left:1px solid var(--line)}
+  @media(max-width:859px){.chart + .chart{border-left:0;border-top:1px solid var(--line)}}
+  .chart-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;
+              margin-bottom:8px;flex-wrap:wrap}
+  .chart-head .k{font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--txt3)}
+  .chart-head .r{font-size:11px;color:var(--txt2);font-variant-numeric:tabular-nums}
+  .chart svg{width:100%;display:block;overflow:visible}
+  .chart .mark{transition:opacity .12s}
+  .chart:hover .mark{opacity:.55}
+  .chart .mark:hover{opacity:1}
+  .legend{display:flex;gap:14px;margin-top:8px;font-size:10.5px;color:var(--txt3)}
+  .legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;
+            vertical-align:baseline}
+  .tip{position:absolute;pointer-events:none;z-index:5;background:var(--panel3);
+       border:1px solid var(--line2);border-radius:8px;padding:6px 9px;font-size:11px;
+       color:var(--txt);box-shadow:var(--shadow);white-space:nowrap;opacity:0;
+       transform:translate(-50%,-115%);transition:opacity .1s}
+  .tip.on{opacity:1}
+  .tip b{color:var(--txt);font-variant-numeric:tabular-nums}
+  .tip span{color:var(--txt3)}
   .note{font-size:11.5px;color:var(--txt3);line-height:1.7;margin:16px 0 0}
   .note code{color:var(--txt2);font-size:11px}
   .hidden{display:none!important}
@@ -443,6 +468,29 @@ function bySymbol(data) {
     .sort((a, b) => Math.abs(b.net) - Math.abs(a.net));
 }
 
+/* Fixed bins, coarse to keep the histogram readable: scalps, minutes, hours. */
+const DURATION_BUCKETS = [['meno di 1 min',0,1], ['1-5 min',1,5], ['5-15 min',5,15],
+                          ['15-60 min',15,60], ['1-4 ore',60,240], ['oltre 4 ore',240,Infinity]];
+
+function durationBuckets(data) {
+  const history = data.sections['History'];
+  if (!history || !history.rows.length) return [];
+  const {headers, rows} = view('History', history);
+  const iDur = headers.indexOf('Durata (min)'), iNet = headers.indexOf('Netto EUR');
+  const tally = new Map(DURATION_BUCKETS.map(([label]) => [label, [0, 0]]));
+  for (const row of rows) {
+    const duration = row[iDur];
+    if (typeof duration !== 'number') continue;
+    const hit = DURATION_BUCKETS.find(([, low, high]) => duration >= low && duration < high);
+    if (!hit) continue;
+    const entry = tally.get(hit[0]);
+    entry[0]++;
+    if (typeof row[iNet] === 'number') entry[1] += row[iNet];
+  }
+  return [...tally.entries()].filter(([, e]) => e[0])
+                             .map(([label, e]) => [label, e[0], round10(e[1])]);
+}
+
 /* Trading days in order, with the balance left at each day's last close. */
 function byDay(data) {
   const history = data.sections['History'];
@@ -511,6 +559,12 @@ function buildReport(data) {
                  rows:symbols.map(s => [s.symbol].concat(
                    SYMBOL_AGGREGATES.map(([, key]) => `{{SYMAGG:${key}:${s.symbol}}}`))),
                  totals:null});
+  }
+
+  const durations = durationBuckets(data);
+  if (durations.length) {
+    blocks.push({group:'summary', id:'durations', kind:'table', title:'DISTRIBUZIONE DURATE',
+                 headers:['Fascia','Operazioni','Netto EUR'], rows:durations, totals:null});
   }
 
   const days = byDay(data);
@@ -788,32 +842,172 @@ function tableHtml(block) {
           <tbody>${body}${totals}</tbody></table></div>`;
 }
 
-/* Balance curve, drawn as inline SVG: the page pulls in no chart library. */
-function sparkline(points, width, height) {
+/* ---- charts, drawn by hand: the page pulls in no chart library --------- */
+
+const esc = s => escape(s);
+const tip = (label, value) => `data-label="${esc(label)}" data-value="${esc(value)}"`;
+
+function chartCard(title, right, svg, legend) {
+  if (!svg) return '';
+  return `<div class="chart"><div class="chart-head"><span class="k">${esc(title)}</span>
+      <span class="r">${right ? esc(right) : ''}</span></div>${svg}${legend || ''}</div>`;
+}
+
+/* Line over a time series, with the area beneath it washed in. */
+function lineChart(points, width, height) {
   if (points.length < 2) return '';
-  const pad = 6, values = points.map(p => p.value);
-  const min = Math.min(...values, 0), max = Math.max(...values, 0);
+  const pad = 8, values = points.map(p => p.value);
+  const min = Math.min(...values), max = Math.max(...values);
   const span = max - min || 1;
   const x = i => pad + i * (width - 2 * pad) / (points.length - 1);
   const y = v => height - pad - (v - min) * (height - 2 * pad) / span;
   const line = points.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.value).toFixed(1)}`).join(' ');
-  const area = `${line} L${x(points.length - 1).toFixed(1)},${y(min).toFixed(1)} L${x(0).toFixed(1)},${y(min).toFixed(1)} Z`;
+  const area = `${line} L${x(points.length - 1).toFixed(1)},${height - pad} L${pad},${height - pad} Z`;
   const zero = min < 0 && max > 0
     ? `<line x1="${pad}" y1="${y(0).toFixed(1)}" x2="${width - pad}" y2="${y(0).toFixed(1)}"
-             stroke="var(--line2)" stroke-dasharray="3 3"/>` : '';
-  const last = points[points.length - 1];
-  return `<div class="spark"><div class="spark-head">
-      <span class="k">Curva del saldo</span>
-      <span class="r">${escape(points[0].label)} → ${escape(last.label)} ·
-        <strong>${money(last.value)}</strong></span></div>
-    <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" role="img"
-         aria-label="Curva del saldo di fine giornata">
-      <path d="${area}" fill="rgba(231,181,74,.12)"/>${zero}
-      <path d="${line}" fill="none" stroke="var(--gold)" stroke-width="1.5"
+             stroke="var(--viz-grid)" stroke-dasharray="3 3"/>` : '';
+  const dots = points.map((p, i) =>
+    `<circle class="mark" cx="${x(i).toFixed(1)}" cy="${y(p.value).toFixed(1)}" r="7"
+             fill="transparent" ${tip(p.label, money(p.value))}/>`).join('');
+  return `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" role="img"
+       aria-label="Curva del saldo di fine giornata" style="height:${height}px">
+      <path d="${area}" fill="rgba(57,135,229,.14)"/>${zero}
+      <path d="${line}" fill="none" stroke="var(--viz-profit)" stroke-width="2"
             stroke-linejoin="round" stroke-linecap="round"/>
-      <circle cx="${x(points.length - 1).toFixed(1)}" cy="${y(last.value).toFixed(1)}" r="2.5"
-              fill="var(--gold)"/>
-    </svg></div>`;
+      <circle cx="${x(points.length - 1).toFixed(1)}" cy="${y(points[points.length - 1].value).toFixed(1)}"
+              r="3" fill="var(--viz-profit)"/>${dots}</svg>`;
+}
+
+/* Columns over a zero baseline: the sign is carried by the side of the line a
+   bar sits on, so colour is never the only channel. */
+function columnChart(items, width, height) {
+  if (!items.length) return '';
+  const pad = 8, values = items.map(i => i.value);
+  const max = Math.max(...values, 0), min = Math.min(...values, 0);
+  const span = (max - min) || 1;
+  const step = (width - 2 * pad) / items.length;
+  const barW = Math.max(Math.min(step - 2, 26), 1.5);
+  const y = v => pad + (max - v) * (height - 2 * pad) / span;
+  const zeroY = y(0);
+  const bars = items.map((item, i) => {
+    const cx = pad + step * (i + 0.5);
+    const top = Math.min(y(item.value), zeroY), h = Math.max(Math.abs(y(item.value) - zeroY), 1);
+    const colour = item.value >= 0 ? 'var(--viz-profit)' : 'var(--viz-loss)';
+    return `<rect class="mark" x="${(cx - barW / 2).toFixed(1)}" y="${top.toFixed(1)}"
+        width="${barW.toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="${colour}"
+        ${tip(item.label, money(item.value))}/>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Netto per periodo"
+       style="height:${height}px">
+      <line x1="${pad}" y1="${zeroY.toFixed(1)}" x2="${width - pad}" y2="${zeroY.toFixed(1)}"
+            stroke="var(--viz-grid)"/>${bars}</svg>`;
+}
+
+/* Horizontal bars for a handful of named values, diverging around zero. */
+function barChart(items, width, rowH) {
+  if (!items.length) return '';
+  const pad = 8, labelW = 78, height = items.length * rowH + pad;
+  const values = items.map(i => i.value);
+  const max = Math.max(...values, 0), min = Math.min(...values, 0);
+  const span = (max - min) || 1;
+  const plot = width - labelW - pad * 2;
+  const x = v => labelW + pad + (v - min) * plot / span;
+  const zeroX = x(0);
+  const rows = items.map((item, i) => {
+    const cy = pad / 2 + i * rowH, h = Math.min(rowH - 10, 18);
+    const left = Math.min(x(item.value), zeroX), w = Math.max(Math.abs(x(item.value) - zeroX), 1.5);
+    const colour = item.value >= 0 ? 'var(--viz-profit)' : 'var(--viz-loss)';
+    const positive = item.value >= 0, inside = w > 76;
+    const labelX = positive ? (inside ? left + w - 7 : left + w + 7)
+                            : (inside ? left + 7 : left - 7);
+    const anchor = positive ? (inside ? 'end' : 'start') : (inside ? 'start' : 'end');
+    return `<text x="${labelW}" y="${(cy + h / 2 + 4).toFixed(1)}" text-anchor="end"
+          fill="var(--viz-ink)" font-size="11">${esc(item.label)}</text>
+      <rect class="mark" x="${left.toFixed(1)}" y="${cy.toFixed(1)}" width="${w.toFixed(1)}"
+          height="${h}" rx="2" fill="${colour}" ${tip(item.label, money(item.value))}/>
+      <text x="${labelX.toFixed(1)}" y="${(cy + h / 2 + 4).toFixed(1)}" text-anchor="${anchor}"
+            fill="${inside ? '#ffffff' : 'var(--txt2)'}" font-size="10.5"
+            >${esc(money(item.value))}</text>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Netto per strumento"
+       style="height:${height}px">
+      <line x1="${zeroX.toFixed(1)}" y1="0" x2="${zeroX.toFixed(1)}" y2="${height}"
+            stroke="var(--viz-grid)"/>${rows}</svg>`;
+}
+
+/* Two counts per category, stacked: wins over losses. */
+function stackedChart(items, width, height) {
+  if (!items.length) return '';
+  const pad = 8, labelH = 16;
+  const totals = items.map(i => i.a + i.b);
+  const max = Math.max(...totals, 1);
+  const step = (width - 2 * pad) / items.length;
+  const barW = Math.max(Math.min(step - 14, 46), 6);
+  const scale = (height - pad - labelH) / max;
+  const bars = items.map((item, i) => {
+    const cx = pad + step * (i + 0.5), x = cx - barW / 2;
+    const hA = item.a * scale, hB = item.b * scale;
+    const yA = height - labelH - hA, yB = yA - hB - 2;      // 2px surface gap
+    const count = (value, top, h) => h > 15
+      ? `<text x="${cx.toFixed(1)}" y="${(top + h / 2 + 4).toFixed(1)}" text-anchor="middle"
+               fill="#ffffff" font-size="10.5">${value}</text>` : '';
+    return `<rect class="mark" x="${x.toFixed(1)}" y="${yA.toFixed(1)}" width="${barW.toFixed(1)}"
+          height="${Math.max(hA, 0).toFixed(1)}" rx="2" fill="var(--viz-profit)"
+          ${tip(item.label + ' · vinte', item.a)}/>${count(item.a, yA, hA)}
+      <rect class="mark" x="${x.toFixed(1)}" y="${yB.toFixed(1)}" width="${barW.toFixed(1)}"
+          height="${Math.max(hB, 0).toFixed(1)}" rx="2" fill="var(--viz-loss)"
+          ${tip(item.label + ' · perse', item.b)}/>${count(item.b, yB, hB)}
+      <text x="${cx.toFixed(1)}" y="${height - 3}" text-anchor="middle" fill="var(--viz-ink)"
+            font-size="10.5">${esc(item.label)}</text>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${width} ${height}" role="img"
+       aria-label="Operazioni vinte e perse per strumento" style="height:${height}px">${bars}</svg>`;
+}
+
+/* Ordered magnitude: one hue, darker as the band gets longer. */
+const BLUE_RAMP = ['#86b6ef','#6da7ec','#5598e7','#3987e5','#2a78d6','#256abf','#1c5cab','#184f95'];
+
+function histogramChart(items, width, height) {
+  if (!items.length) return '';
+  const pad = 8, labelH = 28;
+  const max = Math.max(...items.map(i => i.value), 1);
+  const step = (width - 2 * pad) / items.length;
+  const barW = Math.max(Math.min(step - 8, 54), 6);
+  const scale = (height - pad - labelH) / max;
+  const bars = items.map((item, i) => {
+    const cx = pad + step * (i + 0.5), h = item.value * scale;
+    const colour = BLUE_RAMP[Math.min(Math.floor(i * BLUE_RAMP.length / items.length),
+                                      BLUE_RAMP.length - 1)];
+    return `<rect class="mark" x="${(cx - barW / 2).toFixed(1)}" y="${(height - labelH - h).toFixed(1)}"
+          width="${barW.toFixed(1)}" height="${Math.max(h, 0).toFixed(1)}" rx="2" fill="${colour}"
+          ${tip(item.label, item.value + ' operazioni')}/>
+      <text x="${cx.toFixed(1)}" y="${(height - labelH - h - 5).toFixed(1)}" text-anchor="middle"
+            fill="var(--txt2)" font-size="10.5">${item.value}</text>
+      <text x="${cx.toFixed(1)}" y="${height - 8}" text-anchor="middle" fill="var(--viz-ink)"
+            font-size="10">${esc(item.label)}</text>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Operazioni per durata"
+       style="height:${height}px">${bars}</svg>`;
+}
+
+/* One tooltip element per panel, moved to whichever mark is under the pointer. */
+function wireTooltips() {
+  const panel = $('panel');
+  panel.querySelectorAll('.chart').forEach(chart => {
+    const bubble = document.createElement('div');
+    bubble.className = 'tip';
+    chart.appendChild(bubble);
+    chart.addEventListener('pointermove', event => {
+      const mark = event.target.closest('.mark');
+      if (!mark) { bubble.classList.remove('on'); return; }
+      bubble.innerHTML = `<span>${mark.dataset.label}</span> &nbsp;<b>${mark.dataset.value}</b>`;
+      const box = chart.getBoundingClientRect();
+      bubble.style.left = (event.clientX - box.left) + 'px';
+      bubble.style.top = (event.clientY - box.top - 6) + 'px';
+      bubble.classList.add('on');
+    });
+    chart.addEventListener('pointerleave', () => bubble.classList.remove('on'));
+  });
 }
 
 function pairsHtml(blocks) {
@@ -846,14 +1040,54 @@ function renderPanel() {
   }
   const block = blocks.find(b => (b.id || b.group) === activeTab && b.kind === 'table');
   if (!block) { $('panel').innerHTML = '<div class="empty">Sezione non presente</div>'; return; }
-  let head = '';
-  if (activeTab === 'daily') {
+  $('panel').innerHTML = chartsFor(activeTab, block) + tableHtml(block);
+  wireTooltips();
+  markOverflow();
+}
+
+/* Each tab leads with the picture its table then details. */
+function chartsFor(tab, block) {
+  const panel = $('panel').clientWidth || 900;
+  const full = Math.max(panel - 34, 320);
+  const wide = panel >= 860;
+  const half = wide ? Math.max(panel / 2 - 34, 300) : full;
+  if (tab === 'daily') {
     const points = block.rows.map(row => ({label: fmtIt(row[0]), value: row[3]}))
                              .filter(p => typeof p.value === 'number');
-    head = sparkline(points, 600, 120);
+    const nets = block.rows.map(row => ({label: fmtIt(row[0]), value: row[2]}))
+                           .filter(p => typeof p.value === 'number');
+    if (!points.length) return '';
+    const span = `${points[0].label} → ${points[points.length - 1].label}`;
+    const cards = chartCard('Curva del saldo', `${span} · ${money(points[points.length - 1].value)}`,
+                            lineChart(points, half, 150)) +
+                  chartCard('Netto giornaliero',
+                            `${nets.length} giornat${nets.length === 1 ? 'a' : 'e'}`,
+                            columnChart(nets, half, 150));
+    return cards ? `<div class="charts two">${cards}</div>` : '';
   }
-  $('panel').innerHTML = head + tableHtml(block);
-  markOverflow();
+  if (tab === 'symbols') {
+    const symbols = bySymbol(current);
+    if (!symbols.length) return '';
+    const legend = `<div class="legend">
+        <span><i style="background:var(--viz-profit)"></i>vinte</span>
+        <span><i style="background:var(--viz-loss)"></i>perse</span></div>`;
+    const cards = chartCard('Netto per strumento',
+                            `${symbols.length} strument${symbols.length === 1 ? 'o' : 'i'}`,
+                            barChart(symbols.map(s => ({label: s.symbol, value: s.net})), half, 46)) +
+                  chartCard('Operazioni vinte e perse', '',
+                            stackedChart(symbols.map(s => ({label: s.symbol, a: s.wins, b: s.losses})),
+                                         half, 170), legend);
+    return cards ? `<div class="charts two">${cards}</div>` : '';
+  }
+  if (tab === 'durations') {
+    const rows = block.rows.map(row => ({label: row[0], value: row[1]}));
+    if (!rows.length) return '';
+    const total = rows.reduce((a, r) => a + r.value, 0);
+    const card = chartCard('Operazioni per durata', `${total} operazioni`,
+                           histogramChart(rows, full, 170));
+    return card ? `<div class="charts">${card}</div>` : '';
+  }
+  return '';
 }
 
 /* The wide tables scroll sideways; fade the right edge while there is more to see. */
@@ -868,7 +1102,7 @@ function markOverflow() {
 function renderTabs() {
   const blocks = buildReport(current);
   const tabs = [['trades','Operazioni chiuse'], ['symbols','Per strumento'],
-                ['daily','Andamento'], ['orders','Ordini pendenti'],
+                ['durations','Durate'], ['daily','Andamento'], ['orders','Ordini pendenti'],
                 ['positions','Posizioni aperte'], ['transactions','Transazioni']]
     .map(([key, label]) => {
       const block = blocks.find(b => (b.id || b.group) === key && b.kind === 'table');
@@ -925,7 +1159,12 @@ async function handleFile(file) {
   }
 }
 
-window.addEventListener('resize', () => { if (current) markOverflow(); });
+let resizeTimer = null;
+window.addEventListener('resize', () => {
+  if (!current) return;
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(renderPanel, 150);       // charts are sized to their box
+});
 $('file').addEventListener('change', e => handleFile(e.target.files[0]));
 ['dragenter', 'dragover'].forEach(ev => $('drop').addEventListener(ev, e => {
   e.preventDefault(); $('drop').classList.add('over');
