@@ -142,6 +142,27 @@ luminosità e finisce in zona d'allerta accanto al rosso. Verde e rosso restano 
 Le fasce di durata (istogramma) usano una sola tinta che scurisce al crescere della
 fascia: è magnitudine ordinata, non identità, quindi niente palette categoriale.
 
+### Analisi della performance
+
+Il foglio `Performance` (e la scheda omonima nella pagina) aggiunge quello che i totali non
+dicono: drawdown massimo con date di inizio e fondo, serie consecutive di vittorie e
+perdite, e il netto ripartito per dimensione della posizione, direzione, giorno della
+settimana e ora di apertura.
+
+Il drawdown è misurato sul **P/L cumulato**, non sul saldo: il saldo si muove anche con
+depositi e prelievi, che non dicono nulla su come sia andato il trading. La sintesi è
+calcolata operazione per operazione; il grafico usa la serie di fine giornata, quindi il
+suo minimo è un po' meno profondo — è la stessa curva vista con passo diverso.
+
+### Registro multi-periodo
+
+```bash
+python3 tools/ctrader_statement_to_sheets.py Feb.html Mar.html Apr.html --register out/registro.csv
+```
+
+Una riga per statement — periodo, operazioni, netto, win rate, profit factor, aspettativa,
+drawdown, saldo, depositi, prelievi — ordinate per data di inizio, per confrontare i mesi.
+
 ### Controllo di quadratura
 
 A ogni conversione lo script confronta la somma della colonna `Net EUR` con il

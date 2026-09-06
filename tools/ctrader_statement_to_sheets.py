@@ -459,6 +459,132 @@ def by_day(data: dict) -> list[list]:
             for day, (n, net, _, balance) in sorted(days.items())]
 
 
+def closed_trades(data: dict):
+    """Trades in the order they closed, with a lookup of their output columns."""
+    history = data["sections"].get("History")
+    if not history or not history["rows"]:
+        return [], {}
+    headers, rows = view("History", history)
+    idx = {header: i for i, header in enumerate(headers)}
+    ordered = sorted(rows, key=lambda r: r[idx["Chiusura (UTC)"]] or dt.datetime.min)
+    return ordered, idx
+
+
+def tally_by(data: dict, key) -> dict:
+    """Trades, wins and net per bucket - the shape every breakdown below wants."""
+    rows, idx = closed_trades(data)
+    tally: dict = {}
+    for row in rows:
+        bucket = key(row, idx)
+        if bucket is None:
+            continue
+        entry = tally.setdefault(bucket, [0, 0, 0.0])
+        entry[0] += 1
+        net = row[idx["Netto EUR"]]
+        if isinstance(net, float):
+            if net > 0:
+                entry[1] += 1
+            entry[2] += net
+    return tally
+
+
+def breakdown_rows(tally: dict, order=None) -> list[list]:
+    keys = order if order is not None else sorted(tally, key=lambda k: -abs(tally[k][2]))
+    return [[key, tally[key][0], tally[key][1],
+             round(tally[key][1] / tally[key][0], 10) if tally[key][0] else None,
+             round(tally[key][2], 10),
+             round(tally[key][2] / tally[key][0], 10) if tally[key][0] else None]
+            for key in keys if key in tally]
+
+
+BREAKDOWN_HEADERS = ["Voce", "Operazioni", "Vinte", "Win rate", "Netto EUR", "Netto medio"]
+
+# Position size in lots, coarse enough that each band holds real trades.
+SIZE_BUCKETS = [("fino a 0,1", 0, 0.1), ("0,1-0,5", 0.1, 0.5), ("0,5-1", 0.5, 1.0),
+                ("1-5", 1.0, 5.0), ("oltre 5", 5.0, float("inf"))]
+WEEKDAYS = ["lunedi", "martedi", "mercoledi", "giovedi", "venerdi", "sabato", "domenica"]
+
+
+def by_size(data: dict) -> list[list]:
+    def bucket(row, idx):
+        quantity = row[idx["Quantita"]]
+        if not isinstance(quantity, float):
+            return None
+        return next(label for label, low, high in SIZE_BUCKETS if low < quantity <= high
+                    or (low == 0 and quantity <= high))
+    return breakdown_rows(tally_by(data, bucket), [label for label, _, _ in SIZE_BUCKETS])
+
+
+def by_direction(data: dict) -> list[list]:
+    return breakdown_rows(tally_by(data, lambda row, idx: row[idx["Direzione"]]),
+                          ["BUY", "SELL"])
+
+
+def by_weekday(data: dict) -> list[list]:
+    def weekday(row, idx):
+        closed = row[idx["Chiusura (UTC)"]]
+        return WEEKDAYS[closed.weekday()] if isinstance(closed, dt.datetime) else None
+    return breakdown_rows(tally_by(data, weekday), WEEKDAYS)
+
+
+def by_hour(data: dict) -> list[list]:
+    def hour(row, idx):
+        opened = row[idx["Apertura (UTC)"]]
+        return f"{opened.hour:02d}:00" if isinstance(opened, dt.datetime) else None
+    tally = tally_by(data, hour)
+    return breakdown_rows(tally, sorted(tally))
+
+
+def drawdown_summary(data: dict) -> dict:
+    """Worst peak-to-trough run of the cumulative net P/L.
+
+    Measured on the P/L, not on the balance: the balance also moves with deposits
+    and withdrawals (February: +4,560 and -2,780), which have nothing to do with
+    how the trading went.
+    """
+    rows, idx = closed_trades(data)
+    if not rows:
+        return {}
+    peak = cumulative = 0.0
+    peak_at = rows[0][idx["Chiusura (UTC)"]]
+    worst = {"drawdown": 0.0, "picco": 0.0, "da": None, "a": None}
+    for row in rows:
+        net = row[idx["Netto EUR"]]
+        cumulative += net if isinstance(net, float) else 0.0
+        if cumulative > peak:
+            peak, peak_at = cumulative, row[idx["Chiusura (UTC)"]]
+        if peak - cumulative > worst["drawdown"]:
+            worst = {"drawdown": peak - cumulative, "picco": peak,
+                     "da": peak_at, "a": row[idx["Chiusura (UTC)"]]}
+    worst["finale"] = round(cumulative, 10)
+    worst["aperto"] = round(peak - cumulative, 10)
+    worst["drawdown"] = round(worst["drawdown"], 10)
+    worst["quota"] = (round(worst["drawdown"] / worst["picco"], 10)
+                      if worst["picco"] else None)
+    return worst
+
+
+def streaks(data: dict) -> dict:
+    """Longest runs of consecutive wins and losses, and the one still open."""
+    rows, idx = closed_trades(data)
+    if not rows:
+        return {}
+    best = {1: {"length": 0, "a": None}, -1: {"length": 0, "a": None}}
+    sign = length = 0
+    for row in rows:
+        net = row[idx["Netto EUR"]]
+        current = 1 if isinstance(net, float) and net > 0 else -1 if isinstance(net, float) and net < 0 else 0
+        if current == 0:
+            continue
+        length = length + 1 if current == sign else 1
+        sign = current
+        if length > best[sign]["length"]:
+            best[sign] = {"length": length, "a": row[idx["Chiusura (UTC)"]]}
+    return {"vinte": best[1]["length"], "vinte_fino": best[1]["a"],
+            "perse": best[-1]["length"], "perse_fino": best[-1]["a"],
+            "corrente": length * sign}
+
+
 # Fixed bins, coarse to keep the histogram readable: scalps, minutes, hours.
 DURATION_BUCKETS = [("meno di 1 min", 0, 1), ("1-5 min", 1, 5), ("5-15 min", 5, 15),
                     ("15-60 min", 15, 60), ("1-4 ore", 60, 240),
@@ -556,6 +682,33 @@ def build_report(data: dict) -> list[dict]:
             "kind": "table", "title": "DISTRIBUZIONE DURATE",
             "headers": ["Fascia", "Operazioni", "Netto EUR"],
             "rows": durations, "totals": None})
+
+    risk = drawdown_summary(data)
+    runs = streaks(data)
+    if risk:
+        blocks.append({"group": "performance", "id": "risk", "kind": "pairs",
+                       "title": "RISCHIO E DRAWDOWN (per operazione)", "rows": [
+                           ["Drawdown massimo", risk["drawdown"]],
+                           ["Drawdown sul picco", risk["quota"]],
+                           ["Dal", risk["da"]],
+                           ["Al", risk["a"]],
+                           ["Picco del P/L cumulato", risk["picco"]],
+                           ["P/L cumulato a fine periodo", risk["finale"]],
+                           ["Drawdown ancora aperto", risk["aperto"]],
+                           ["Serie vincente piu lunga", runs.get("vinte")],
+                           ["Serie perdente piu lunga", runs.get("perse")],
+                           ["Serie in corso a fine periodo", runs.get("corrente")],
+                       ]})
+
+    for block_id, title, label, rows in (
+            ("size", "PER DIMENSIONE", "Fascia (lotti)", by_size(data)),
+            ("direction", "PER DIREZIONE", "Direzione", by_direction(data)),
+            ("weekday", "PER GIORNO DELLA SETTIMANA", "Giorno", by_weekday(data)),
+            ("hour", "PER ORA DI APERTURA", "Ora (UTC)", by_hour(data))):
+        if rows:
+            blocks.append({"group": "performance", "id": block_id, "kind": "table",
+                           "title": title, "totals": None, "rows": rows,
+                           "headers": [label] + BREAKDOWN_HEADERS[1:]})
 
     days = by_day(data)
     if days:
@@ -803,11 +956,17 @@ def write_drive_csvs(data: dict, out_dir: str, budget: int = 9000) -> list[str]:
     ctx = value_context(data)
     written = []
 
-    rows, _ = stack_blocks(blocks, skip_trades=True)
-    path = os.path.join(out_dir, "00_riepilogo.csv")
-    size = write_csv_rows(path, rows, ctx)
-    written.append(path)
-    print(f"  {os.path.basename(path)}: {size} byte")
+    for name, groups in (("00_riepilogo", {"summary", "daily", "orders", "positions",
+                                            "transactions"}),
+                         ("01_performance", {"performance"})):
+        selected = [b for b in blocks if b["group"] in groups]
+        if not selected:
+            continue
+        rows, _ = stack_blocks(selected, skip_trades=True)
+        path = os.path.join(out_dir, f"{name}.csv")
+        size = write_csv_rows(path, rows, ctx)
+        written.append(path)
+        print(f"  {os.path.basename(path)}: {size} byte")
 
     trades = next((b for b in blocks if b.get("is_trades") and b["rows"]), None)
     if not trades:
@@ -829,7 +988,7 @@ def write_drive_csvs(data: dict, out_dir: str, budget: int = 9000) -> list[str]:
         chunks.append(current)
 
     start = 1
-    for n, chunk in enumerate(chunks, start=1):
+    for n, chunk in enumerate(chunks, start=2):
         stop = start + len(chunk) - 1
         title = f"OPERAZIONI CHIUSE · {start}-{stop} di {len(trades['rows'])}"
         path = os.path.join(out_dir, f"{n:02d}_operazioni_{start}-{stop}.csv")
@@ -867,6 +1026,38 @@ def write_gsheet_csv(data: dict, path: str) -> str:
 
 
 # --------------------------------------------------------------------------- #
+# Multi-period register
+# --------------------------------------------------------------------------- #
+
+REGISTER_HEADERS = ["Periodo", "Inizio", "Conto", "Operazioni", "Vinte", "Perse",
+                    "Win rate", "Netto EUR", "Profit factor", "Aspettativa",
+                    "Drawdown massimo", "Saldo finale", "Depositi", "Prelievi"]
+
+
+def register_row(data: dict) -> list:
+    """One statement condensed to a line, for tracking period against period."""
+    stats = compute_stats(data) or {}
+    risk = drawdown_summary(data)
+    period = data["meta"].get("Periodo", "")
+    start = typed(period.split(" - ")[0]) if period else None
+    return [period, start, data["meta"].get("Conto"),
+            stats.get("count"), stats.get("wins"), stats.get("losses"),
+            stats.get("win_rate"), stats.get("total"), stats.get("profit_factor"),
+            stats.get("expectancy"), risk.get("drawdown"),
+            summary_value(data, "Saldo", "Balance"),
+            summary_value(data, "Depositi", "Deposit"),
+            summary_value(data, "Prelievi", "Withdrawal")]
+
+
+def write_register(statements: list[dict], path: str) -> str:
+    rows = sorted((register_row(data) for data in statements),
+                  key=lambda row: row[1] or dt.date.min)
+    ctx = {"formulas": False, "stats": {}, "sums": {}, "symbols": []}
+    return path if write_csv_rows(
+        path, [["REGISTRO PERIODI"], list(REGISTER_HEADERS)] + rows, ctx) else path
+
+
+# --------------------------------------------------------------------------- #
 # XLSX output
 # --------------------------------------------------------------------------- #
 
@@ -876,11 +1067,16 @@ PCT_FMT = '0.00%;[Red]-0.00%'
 DATE_FMT = 'dd/mm/yyyy hh:mm:ss'
 
 MONEY_COLS = {"Swap", "Commissioni", "Lordo EUR", "Netto EUR", "Saldo EUR", "Importo EUR",
-              "Netto medio", "Saldo fine giornata"}
+              "Netto medio", "Saldo fine giornata", "Drawdown massimo",
+              "Picco del P/L cumulato", "P/L cumulato a fine periodo",
+              "Drawdown ancora aperto", "Aspettativa", "Saldo finale", "Depositi",
+              "Prelievi"}
 PRICE_COLS = {"Prezzo entrata", "Prezzo uscita", "Prezzo ordine", "Stop loss", "Take profit"}
-PCT_LABELS = {"P/L % sul saldo", "Win rate"}
+PCT_LABELS = {"P/L % sul saldo", "Win rate", "Drawdown sul picco"}
+REGISTER_MONEY = {"Aspettativa", "Drawdown massimo", "Saldo finale", "Depositi", "Prelievi"}
 SHEETS = [("summary", "Riepilogo"), ("trades", "Operazioni"), ("daily", "Andamento"),
-          ("orders", "Ordini"), ("positions", "Posizioni"), ("transactions", "Transazioni")]
+          ("performance", "Performance"), ("orders", "Ordini"), ("positions", "Posizioni"),
+          ("transactions", "Transazioni")]
 
 
 def number_format(label, value):
@@ -988,6 +1184,21 @@ def add_charts(wb, placed: dict, data: dict) -> None:
             for i in range(span)]
         style_chart(chart, "Operazioni per durata")
         wb[durations["sheet"]].add_chart(chart, f"I{durations['first'] + 31}")
+
+    for block_id, title in (("size", "Netto per dimensione (EUR)"),
+                            ("direction", "Netto per direzione (EUR)"),
+                            ("weekday", "Netto per giorno (EUR)")):
+        spot = placed.get(block_id)
+        if not spot:
+            continue
+        chart = BarChart()
+        chart.type, chart.overlap = "col", 100
+        chart.add_data(block_ref(spot, "Netto EUR", header=True), titles_from_data=True)
+        chart.set_categories(categories(spot))
+        source = {"size": by_size, "direction": by_direction, "weekday": by_weekday}[block_id]
+        paint_by_sign(chart.series[0], [row[4] for row in source(data)])
+        style_chart(chart, title)
+        wb[spot["sheet"]].add_chart(chart, f"I{spot['first'] - 1}")
 
     daily = placed.get("daily")
     if daily and daily["last"] > daily["first"]:
@@ -1228,9 +1439,12 @@ def shrink_xlsx(path: str) -> int:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("statement", help="cTrader statement .html file")
+    ap.add_argument("statement", nargs="+", help="one or more cTrader statement .html files")
     ap.add_argument("--xlsx", help="write a Google Sheets ready workbook here")
     ap.add_argument("--csv-dir", help="write one CSV per section into this directory")
+    ap.add_argument("--register", metavar="FILE",
+                    help="write one line per statement (period, trades, net, win rate, "
+                         "profit factor, drawdown) for tracking period against period")
     ap.add_argument("--drive-csv", metavar="DIR",
                     help="write the report as several CSVs, each small enough to upload "
                          "through the Drive connector (summary plus the trades in parts)")
@@ -1241,14 +1455,23 @@ def main(argv=None) -> int:
                          "ready to upload to Google Drive as a native Google Sheet")
     args = ap.parse_args(argv)
 
-    if not any((args.xlsx, args.csv_dir, args.gsheet_csv, args.drive_csv)):
-        ap.error("choose at least one of --xlsx / --csv-dir / --gsheet-csv / --drive-csv")
+    if not any((args.xlsx, args.csv_dir, args.gsheet_csv, args.drive_csv, args.register)):
+        ap.error("choose at least one of --xlsx / --csv-dir / --gsheet-csv / --drive-csv "
+                 "/ --register")
 
-    data = parse_statement(args.statement)
-    counts = ", ".join(f"{name}: {len(s['rows'])}" for name, s in data["sections"].items())
-    print(f"parsed {args.statement} -> {counts}")
-    for warning in check_consistency(data):
-        print(f"ATTENZIONE: {warning}", file=sys.stderr)
+    parsed = []
+    for path in args.statement:
+        data = parse_statement(path)
+        counts = ", ".join(f"{name}: {len(s['rows'])}"
+                           for name, s in data["sections"].items())
+        print(f"parsed {path} -> {counts}")
+        for warning in check_consistency(data):
+            print(f"ATTENZIONE ({os.path.basename(path)}): {warning}", file=sys.stderr)
+        parsed.append(data)
+
+    if args.register:
+        print("wrote", write_register(parsed, args.register))
+    data = parsed[0]        # the other outputs describe one statement at a time
 
     if args.csv_dir:
         for path in write_csvs(data, args.csv_dir):
