@@ -1,0 +1,1112 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AURUM Bar Pattern Lab — Identificatore pattern a barre multi-timeframe | KID Digital Wealth</title>
+<meta name="description" content="Identificatore di pattern a barre su vari timeframe: riconoscimento automatico di pattern a 1/2/3 barre, scoring di confluenza multi-timeframe e strumento di disegno Pattern a Barre (copia barre, specchia/ribalta, modello e visibilita per timeframe)." />
+<link rel="icon" href="./assets/favicon.svg" type="image/svg+xml"/>
+<link rel="canonical" href="https://medmaster1.github.io/chatbot/bar-pattern.html"/>
+<meta property="og:type" content="website"/>
+<meta property="og:site_name" content="KID Digital Wealth"/>
+<meta property="og:title" content="AURUM Bar Pattern Lab — pattern a barre multi-timeframe"/>
+<meta property="og:description" content="Riconoscimento pattern a barre su piu timeframe, scoring di confluenza e strumento di disegno Pattern a Barre in stile TradingView."/>
+<meta property="og:url" content="https://medmaster1.github.io/chatbot/bar-pattern.html"/>
+<meta property="og:image" content="https://medmaster1.github.io/chatbot/assets/og.png"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+/* ============================================================================
+   AURUM BAR PATTERN LAB — identificatore pattern a barre multi-timeframe
+   Single-file. Dati Yahoo Finance via proxy CORS, fallback sintetico locale.
+   ========================================================================== */
+:root{
+  --bg:#05080f; --bg2:#080d18;
+  --panel:#0a111f; --panel2:#0d1526; --panel3:#101a30;
+  --line:rgba(150,170,205,.10); --line2:rgba(150,170,205,.20);
+  --txt:#cdd9ee; --txt2:#8294b4; --txt3:#5f7193;
+  --gold:#e7b54a; --gold2:#caa14a;
+  --green:#23d18b; --red:#ff4d5e; --blue:#48a0ff; --violet:#9b7bff;
+  --shadow:0 14px 40px -18px rgba(0,0,0,.9);
+  --mono:'JetBrains Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--mono);background:var(--bg);color:var(--txt);font-size:12px;line-height:1.35;-webkit-font-smoothing:antialiased;overflow:hidden}
+button,input,select{font-family:var(--mono);color:inherit}
+button{cursor:pointer}
+a{color:inherit;text-decoration:none}
+::selection{background:var(--gold);color:#000}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:rgba(150,170,205,.2);border-radius:4px}
+
+.app{display:grid;grid-template-rows:auto auto 1fr auto;height:100vh}
+
+/* ---- Header ---- */
+.hdr{display:flex;align-items:center;gap:14px;padding:8px 14px;background:linear-gradient(180deg,#0a1322,#070d18);border-bottom:1px solid var(--line2);flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px}
+.brand .mk{width:34px;height:34px;border-radius:8px;background:conic-gradient(from 210deg,var(--gold),#7c611f 55%,var(--gold));display:grid;place-items:center;color:#000;font-weight:800;box-shadow:0 0 0 1px rgba(231,181,74,.4)}
+.brand .nm{font-weight:800;color:#fff;letter-spacing:1px;font-size:15px}
+.brand .sb{font-size:9px;letter-spacing:2px;color:var(--txt3);text-transform:uppercase}
+.hdr .spacer{flex:1}
+.topnav{display:flex;gap:5px;flex-wrap:wrap}
+.topnav a{font-size:10px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--txt2);padding:6px 10px;border:1px solid var(--line2);border-radius:7px;transition:.15s}
+.topnav a:hover{color:#fff;border-color:var(--gold)}
+.topnav a.active{color:var(--gold);border-color:var(--gold)}
+
+/* ---- Barra strumenti ---- */
+.selbar{display:flex;align-items:center;gap:12px;padding:7px 14px;background:linear-gradient(180deg,#0a111f,#080d18);border-bottom:1px solid var(--line);overflow-x:auto}
+.selgrp{display:flex;align-items:center;gap:6px;flex:none}
+.selgrp .lbl{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--txt3);margin-right:2px}
+.chip{font-size:11px;font-weight:600;color:var(--txt2);padding:5px 11px;border:1px solid var(--line2);border-radius:7px;background:var(--panel);white-space:nowrap;transition:.14s}
+.chip:hover{color:#fff;border-color:var(--gold2)}
+.chip.active{color:#000;background:var(--gold);border-color:var(--gold);font-weight:700}
+.chip.tf.active{background:var(--blue);border-color:var(--blue);color:#001227}
+.sep{width:1px;align-self:stretch;background:var(--line2);flex:none;margin:2px}
+input[type=text],select{background:var(--panel2);border:1px solid var(--line2);border-radius:7px;padding:5px 8px;font-size:11px;color:var(--txt)}
+input[type=text]:focus,select:focus{outline:none;border-color:var(--gold2)}
+input[type=range]{accent-color:var(--gold);width:100%}
+input[type=color]{background:none;border:1px solid var(--line2);border-radius:6px;width:34px;height:24px;padding:1px;cursor:pointer}
+.sw{display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--txt2);cursor:pointer;white-space:nowrap}
+.sw input{accent-color:var(--gold)}
+
+/* ---- Layout principale ---- */
+.main{display:grid;grid-template-columns:272px 1fr 320px;gap:1px;background:var(--line);overflow:hidden}
+@media(max-width:1180px){.main{grid-template-columns:1fr;overflow:auto}}
+.col{background:var(--bg);overflow:auto;display:flex;flex-direction:column}
+.card{border-bottom:1px solid var(--line);padding:10px 12px}
+.card h3{font-size:9.5px;letter-spacing:1.6px;text-transform:uppercase;color:var(--txt3);margin-bottom:9px;display:flex;align-items:center;gap:7px}
+.card h3::before{content:'';width:3px;height:11px;background:var(--gold);border-radius:2px}
+
+/* ---- Chart ---- */
+.chartwrap{position:relative;flex:1;min-height:340px;background:var(--bg2)}
+#chart{width:100%;height:100%;display:block;cursor:crosshair}
+.chartbar{display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--line);background:var(--panel);flex-wrap:wrap}
+.chartbar .ttl{font-weight:700;color:#fff;font-size:13px;letter-spacing:.5px}
+.chartbar .meta{font-size:10px;color:var(--txt3)}
+.tag{font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:3px 7px;border-radius:5px;border:1px solid var(--line2);color:var(--txt2)}
+.tag.bull{color:var(--green);border-color:rgba(35,209,139,.45);background:rgba(35,209,139,.08)}
+.tag.bear{color:var(--red);border-color:rgba(255,77,94,.45);background:rgba(255,77,94,.08)}
+.tag.neu{color:var(--txt2)}
+.hint{position:absolute;left:10px;bottom:26px;font-size:10px;color:var(--txt3);background:rgba(5,8,15,.78);border:1px solid var(--line);border-radius:6px;padding:4px 8px;pointer-events:none}
+.readout{position:absolute;right:70px;top:8px;font-size:10px;color:var(--txt2);background:rgba(5,8,15,.8);border:1px solid var(--line);border-radius:6px;padding:4px 8px;pointer-events:none;white-space:pre}
+
+/* ---- Liste pattern ---- */
+.plist{display:flex;flex-direction:column;gap:6px}
+.pitem{border:1px solid var(--line2);border-left-width:3px;border-radius:8px;padding:7px 9px;background:var(--panel);transition:.14s;cursor:pointer}
+.pitem:hover{border-color:var(--gold2);background:var(--panel2)}
+.pitem.bull{border-left-color:var(--green)}
+.pitem.bear{border-left-color:var(--red)}
+.pitem.neu{border-left-color:var(--txt3)}
+.pitem .r1{display:flex;align-items:center;gap:7px;justify-content:space-between}
+.pitem .nm{font-weight:700;color:#fff;font-size:11.5px}
+.pitem .sc{font-size:10px;font-weight:700;color:var(--gold)}
+.pitem .r2{font-size:10px;color:var(--txt3);margin-top:3px;display:flex;gap:8px;flex-wrap:wrap}
+.pitem .desc{font-size:10px;color:var(--txt2);margin-top:4px;line-height:1.5}
+.empty{font-size:10.5px;color:var(--txt3);padding:6px 0;line-height:1.6}
+
+/* ---- Tabelle ---- */
+table{width:100%;border-collapse:collapse;font-size:10.5px}
+th{font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--txt3);text-align:right;padding:4px 5px;border-bottom:1px solid var(--line2);font-weight:600}
+th:first-child,td:first-child{text-align:left}
+td{padding:4px 5px;border-bottom:1px solid var(--line);text-align:right;color:var(--txt2);white-space:nowrap}
+#tfTable{table-layout:fixed}
+#tfTable td:nth-child(2){overflow:hidden;text-overflow:ellipsis;max-width:104px}
+#tfTable th:first-child,#tfTable td:first-child{width:34px}
+#tfTable th:nth-child(3),#tfTable td:nth-child(3){width:58px}
+#tfTable th:last-child,#tfTable td:last-child{width:38px}
+tr:hover td{background:rgba(150,170,205,.05)}
+td .up{color:var(--green)} td .dn{color:var(--red)}
+.bar{height:5px;border-radius:3px;background:rgba(150,170,205,.12);overflow:hidden;margin-top:4px}
+.bar i{display:block;height:100%;border-radius:3px;background:linear-gradient(90deg,var(--gold2),var(--gold))}
+
+/* ---- Bias gauge ---- */
+.gauge{border:1px solid var(--line2);border-radius:10px;padding:10px;background:linear-gradient(180deg,var(--panel2),var(--panel));text-align:center}
+.gauge .v{font-size:26px;font-weight:800;color:#fff;letter-spacing:1px}
+.gauge .l{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--txt3);margin-top:2px}
+.gauge .sub{font-size:10px;color:var(--txt2);margin-top:6px;line-height:1.5}
+.scale{position:relative;height:6px;border-radius:4px;margin-top:9px;background:linear-gradient(90deg,var(--red),#3c4661 50%,var(--green))}
+.scale i{position:absolute;top:-3px;width:2px;height:12px;background:#fff;border-radius:2px;box-shadow:0 0 6px rgba(255,255,255,.7)}
+
+/* ---- Pannello stile disegno ---- */
+.frow{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:7px}
+.frow .k{font-size:10px;color:var(--txt2);letter-spacing:.3px}
+.btn{font-size:10.5px;font-weight:700;letter-spacing:.5px;padding:6px 10px;border:1px solid var(--line2);border-radius:7px;background:var(--panel2);color:var(--txt2);transition:.14s}
+.btn:hover{color:#fff;border-color:var(--gold2)}
+.btn.primary{background:var(--gold);border-color:var(--gold);color:#000}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.ghost{background:transparent}
+.btn[disabled]{opacity:.42;cursor:not-allowed}
+.btnrow{display:flex;gap:6px;flex-wrap:wrap}
+.tfvis{display:flex;flex-wrap:wrap;gap:5px}
+.tfvis label{font-size:10px;border:1px solid var(--line2);border-radius:6px;padding:3px 7px;display:flex;align-items:center;gap:5px;cursor:pointer;color:var(--txt2)}
+.tfvis label:hover{border-color:var(--gold2)}
+
+/* ---- Footer ---- */
+.foot{display:flex;align-items:center;gap:12px;padding:5px 14px;background:var(--panel);border-top:1px solid var(--line2);font-size:9.5px;color:var(--txt3);flex-wrap:wrap}
+.foot .spacer{flex:1}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--txt3);display:inline-block;margin-right:5px}
+.dot.ok{background:var(--green);box-shadow:0 0 7px rgba(35,209,139,.8)}
+.dot.warn{background:var(--gold)}
+.dot.err{background:var(--red)}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- HEADER -->
+  <header class="hdr">
+    <div class="brand">
+      <div class="mk">A</div>
+      <div>
+        <div class="nm">AURUM&nbsp;BAR&nbsp;PATTERN</div>
+        <div class="sb">Identificatore pattern a barre · multi-timeframe</div>
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <nav class="topnav">
+      <a href="./index.html">Strumenti</a>
+      <a href="./market-analysis.html">Market Analysis</a>
+      <a href="./gold-silver-terminal.html">Gold / Silver</a>
+      <a href="./confluence-helper.html">Confluence</a>
+      <a href="./tradingview.html">TradingView</a>
+      <a href="./bar-pattern.html" class="active">Bar Pattern</a>
+    </nav>
+  </header>
+
+  <!-- BARRA SELEZIONE -->
+  <div class="selbar">
+    <div class="selgrp">
+      <span class="lbl">Mercato</span>
+      <div id="symchips" style="display:flex;gap:6px"></div>
+    </div>
+    <div class="sep"></div>
+    <div class="selgrp">
+      <span class="lbl">Simbolo</span>
+      <input type="text" id="symIn" size="10" placeholder="es. AAPL" />
+      <button class="btn" id="symGo">Carica</button>
+    </div>
+    <div class="sep"></div>
+    <div class="selgrp">
+      <span class="lbl">Timeframe</span>
+      <div id="tfchips" style="display:flex;gap:6px"></div>
+    </div>
+    <div class="sep"></div>
+    <div class="selgrp">
+      <span class="lbl">Sensibilità</span>
+      <select id="sens">
+        <option value="strict">Alta (solo pattern netti)</option>
+        <option value="normal" selected>Media</option>
+        <option value="loose">Bassa (più segnali)</option>
+      </select>
+    </div>
+    <div class="sep"></div>
+    <label class="sw"><input type="checkbox" id="optTrend" checked/> filtro trend</label>
+    <label class="sw"><input type="checkbox" id="optVol" checked/> conferma volumi</label>
+    <label class="sw"><input type="checkbox" id="optMark" checked/> marker sul grafico</label>
+    <div class="sep"></div>
+    <button class="btn" id="btnReload">↻ Aggiorna</button>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+
+    <!-- COLONNA SX: scansione multi-timeframe -->
+    <div class="col">
+      <div class="card">
+        <h3>Bias di confluenza</h3>
+        <div class="gauge">
+          <div class="v" id="gVal">—</div>
+          <div class="l" id="gLbl">in attesa dati</div>
+          <div class="scale"><i id="gPin" style="left:50%"></i></div>
+          <div class="sub" id="gSub">Aggregato pesato dei pattern rilevati sull'ultima barra di ogni timeframe.</div>
+        </div>
+      </div>
+      <div class="card" style="flex:1">
+        <h3>Scansione timeframe</h3>
+        <table id="tfTable"><thead><tr><th>TF</th><th>Pattern</th><th>Bias</th><th>Score</th></tr></thead><tbody></tbody></table>
+        <div class="empty" id="tfEmpty">Caricamento dati…</div>
+      </div>
+    </div>
+
+    <!-- COLONNA CENTRO: grafico -->
+    <div class="col" style="overflow:hidden">
+      <div class="chartbar">
+        <span class="ttl" id="cTitle">—</span>
+        <span class="tag" id="cTf">—</span>
+        <span class="meta" id="cLast">—</span>
+        <span class="spacer" style="flex:1"></span>
+        <span class="meta">Modalità:</span>
+        <button class="chip active" data-mode="select" id="mSelect">Seleziona barre</button>
+        <button class="chip" data-mode="move" id="mMove">Sposta pattern</button>
+        <button class="btn primary" id="btnCopy" disabled>⧉ Copia pattern</button>
+      </div>
+      <div class="chartwrap">
+        <canvas id="chart"></canvas>
+        <div class="readout" id="readout"></div>
+        <div class="hint" id="hint">Trascina sul grafico per selezionare le barre · rotella = zoom · Shift+trascina = pan</div>
+      </div>
+    </div>
+
+    <!-- COLONNA DX: pattern + strumento disegno -->
+    <div class="col">
+      <div class="card">
+        <h3>Pattern sul timeframe attivo</h3>
+        <div class="plist" id="plist"></div>
+        <div class="empty" id="pEmpty">Nessun pattern rilevato nelle ultime barre.</div>
+      </div>
+
+      <div class="card">
+        <h3>Pattern a barre · disegno</h3>
+        <div class="empty" id="dwEmpty">Seleziona un intervallo di barre sul grafico e premi <b>Copia pattern</b>: le barre vengono copiate in un disegno trascinabile, confrontabile con altri movimenti di prezzo.</div>
+        <div id="dwPanel" style="display:none">
+          <div class="frow"><span class="k">Origine</span><span class="k" id="dwSrc" style="color:var(--txt)">—</span></div>
+          <div class="frow"><span class="k">Colore &amp; opacità</span>
+            <span style="display:flex;align-items:center;gap:6px">
+              <input type="color" id="dwColor" value="#48a0ff"/>
+              <input type="range" id="dwAlpha" min="10" max="100" value="80" style="width:78px"/>
+            </span>
+          </div>
+          <div class="frow"><span class="k">Specchiato / Ribaltato</span>
+            <span style="display:flex;gap:10px">
+              <label class="sw"><input type="checkbox" id="dwMirrorH"/> orizz.</label>
+              <label class="sw"><input type="checkbox" id="dwMirrorV"/> vert.</label>
+            </span>
+          </div>
+          <div class="frow"><span class="k">Modello</span>
+            <select id="dwModel">
+              <option value="bars">Barre (OHLC)</option>
+              <option value="candles" selected>Candele</option>
+              <option value="line">Linea</option>
+            </select>
+          </div>
+          <div class="frow"><span class="k">Fonte di prezzo</span>
+            <select id="dwSource">
+              <option value="c" selected>Close</option>
+              <option value="o">Open</option>
+              <option value="h">High</option>
+              <option value="l">Low</option>
+              <option value="hl2">HL2</option>
+              <option value="hlc3">HLC3</option>
+              <option value="ohlc4">OHLC4</option>
+            </select>
+          </div>
+          <div class="frow"><span class="k">Scala ampiezza</span><input type="range" id="dwScale" min="25" max="300" value="100" style="width:120px"/></div>
+          <div class="frow"><span class="k">Visibilità timeframe</span></div>
+          <div class="tfvis" id="dwVis"></div>
+          <div class="btnrow" style="margin-top:9px">
+            <button class="btn" id="dwReset">Riposiziona</button>
+            <button class="btn ghost" id="dwDelete">Elimina</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="flex:1">
+        <h3>Analoghi storici del pattern</h3>
+        <div class="empty" id="anEmpty">Copia un pattern per cercare movimenti simili nello storico del timeframe attivo.</div>
+        <div id="anWrap" style="display:none">
+          <div class="frow"><span class="k">Barre successive analizzate</span>
+            <select id="anFwd"><option>3</option><option selected>5</option><option>10</option><option>20</option></select>
+          </div>
+          <div class="frow"><span class="k">Esito medio</span><span class="k" id="anStat" style="color:var(--txt)">—</span></div>
+          <table id="anTable"><thead><tr><th>Data</th><th>Sim.</th><th>Fwd</th><th>Max</th><th>Min</th></tr></thead><tbody></tbody></table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="foot">
+    <span><i class="dot" id="stDot"></i><span id="stTxt">inizializzazione…</span></span>
+    <span class="spacer"></span>
+    <span id="stSrc">—</span>
+    <span>· Dati a scopo didattico · nessun consiglio d'investimento</span>
+    <a href="./legal.html" style="color:var(--gold)">Note legali</a>
+  </div>
+</div>
+
+<script>
+/* ============================================================================
+   1) CONFIGURAZIONE
+   ========================================================================== */
+const PRESETS=[
+  {id:'GC=F',  nm:'Oro'},
+  {id:'SI=F',  nm:'Argento'},
+  {id:'CL=F',  nm:'WTI'},
+  {id:'BZ=F',  nm:'Brent'},
+  {id:'^GSPC', nm:'S&P 500'},
+  {id:'^NDX',  nm:'Nasdaq'},
+  {id:'EURUSD=X', nm:'EUR/USD'},
+  {id:'BTC-USD', nm:'Bitcoin'},
+  {id:'AAPL',  nm:'Apple'},
+  {id:'NVDA',  nm:'Nvidia'}
+];
+/* Timeframe: peso = rilevanza nel punteggio di confluenza (più alto = più lento) */
+const TFS=[
+  {k:'M15', lb:'15m', yi:'15m', yr:'1mo',  w:0.55, ms:15*60e3},
+  {k:'H1',  lb:'1h',  yi:'60m', yr:'3mo',  w:0.90, ms:60*60e3},
+  {k:'H4',  lb:'4h',  from:'H1', group:4,  w:1.20, ms:4*60*60e3},
+  {k:'D1',  lb:'1D',  yi:'1d',  yr:'2y',   w:1.50, ms:24*60*60e3},
+  {k:'W1',  lb:'1W',  yi:'1wk', yr:'5y',   w:1.75, ms:7*24*60*60e3}
+];
+const TF=Object.fromEntries(TFS.map(t=>[t.k,t]));
+
+const state={
+  sym:'GC=F', symNm:'Oro', tf:'D1',
+  data:{},               // k -> [{t,o,h,l,c,v}]
+  src:'—',
+  sens:'normal',
+  trendFilter:true, volConfirm:true, markers:true,
+  view:{n:120, off:0},   // barre visibili, offset dal fondo
+  mode:'select',
+  sel:null,              // {a,b} indici barre selezionate
+  draw:null,             // pattern copiato
+  hover:null,
+  patterns:{},           // k -> [pattern]
+  fwd:5
+};
+
+/* ============================================================================
+   2) ACCESSO DATI — Yahoo Finance via proxy CORS, fallback sintetico
+   ========================================================================== */
+const PROXIES=[
+  u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+  u=>`https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(u)}`,
+  u=>`https://api.allorigins.win/get?url=${encodeURIComponent(u)}`
+];
+const yahooURL=(s,i,r)=>`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(s)}?interval=${i}&range=${r}`;
+
+async function getJSON(url,ms=14000){
+  const ctl=new AbortController(); const to=setTimeout(()=>ctl.abort(),ms);
+  try{ const r=await fetch(url,{signal:ctl.signal}); if(!r.ok) throw new Error('HTTP '+r.status); return await r.json(); }
+  finally{ clearTimeout(to); }
+}
+async function fetchViaProxies(url){
+  for(const p of PROXIES){
+    try{
+      const j=await getJSON(p(url));
+      if(j&&typeof j.contents==='string') return JSON.parse(j.contents);
+      if(j&&j.chart) return j;
+    }catch(e){}
+  }
+  throw new Error('proxy ko');
+}
+function parseYahoo(j){
+  const r=j&&j.chart&&j.chart.result&&j.chart.result[0]; if(!r) throw new Error('payload');
+  const t=r.timestamp||[], q=(r.indicators&&r.indicators.quote&&r.indicators.quote[0])||{}, out=[];
+  for(let i=0;i<t.length;i++){
+    const c=q.close?.[i]; if(c==null) continue;
+    out.push({t:t[i]*1000,o:q.open?.[i]??c,h:q.high?.[i]??c,l:q.low?.[i]??c,c,v:q.volume?.[i]||0});
+  }
+  return out;
+}
+/* Aggrega candele di un TF inferiore in gruppi di n barre (usato per il 4h) */
+function aggregate(candles,n){
+  const out=[];
+  for(let i=0;i<candles.length;i+=n){
+    const g=candles.slice(i,i+n); if(!g.length) continue;
+    out.push({t:g[0].t,o:g[0].o,h:Math.max(...g.map(x=>x.h)),l:Math.min(...g.map(x=>x.l)),c:g[g.length-1].c,v:g.reduce((s,x)=>s+(x.v||0),0)});
+  }
+  return out;
+}
+/* Serie sintetica deterministica (seed dal simbolo): usata se la rete non risponde,
+   così lo strumento resta utilizzabile anche offline. */
+function synthetic(sym,tfk,n=320){
+  let s=0; for(const ch of sym+tfk) s=(s*31+ch.charCodeAt(0))>>>0;
+  const rnd=()=>{ s=(s*1664525+1013904223)>>>0; return s/4294967296; };
+  const base={'GC=F':2350,'SI=F':29,'CL=F':78,'BZ=F':82,'^GSPC':5300,'^NDX':18600,'EURUSD=X':1.08,'BTC-USD':64000}[sym]||150;
+  const vol=base*0.011*(TF[tfk].ms/TF.D1.ms<1?Math.sqrt(TF[tfk].ms/TF.D1.ms):Math.sqrt(TF[tfk].ms/TF.D1.ms));
+  const out=[]; let p=base*(0.9+rnd()*0.2), drift=(rnd()-0.5)*vol*0.12, t0=Date.now()-n*TF[tfk].ms;
+  for(let i=0;i<n;i++){
+    if(i%37===0) drift=(rnd()-0.5)*vol*0.14;
+    const o=p, mv=drift+(rnd()-0.5)*vol*2, c=Math.max(base*0.3,o+mv);
+    const wick=Math.abs(mv)*(0.3+rnd())+vol*0.25*rnd();
+    out.push({t:t0+i*TF[tfk].ms,o,h:Math.max(o,c)+wick*rnd(),l:Math.min(o,c)-wick*rnd(),c,v:Math.round(1e5*(0.5+rnd()))});
+    p=c;
+  }
+  return out;
+}
+
+async function loadAll(){
+  setStatus('warn','caricamento dati '+state.sym+'…');
+  const res={}; let live=0, tried=0;
+  await Promise.all(TFS.filter(t=>!t.from).map(async t=>{
+    tried++;
+    try{
+      const j=await fetchViaProxies(yahooURL(state.sym,t.yi,t.yr));
+      const c=parseYahoo(j);
+      if(c.length>40){ res[t.k]=c; live++; return; }
+      throw new Error('poche barre');
+    }catch(e){ res[t.k]=synthetic(state.sym,t.k); }
+  }));
+  for(const t of TFS) if(t.from) res[t.k]=aggregate(res[t.from]||[],t.group);
+  state.data=res;
+  state.src = live===0 ? 'dati simulati (rete non disponibile)' : (live<tried? `Yahoo Finance · ${live}/${tried} TF live` : 'Yahoo Finance');
+  setStatus(live? (live<tried?'warn':'ok') : 'err', live? `${state.symNm||state.sym} · ${live}/${tried} timeframe live` : 'rete non disponibile · serie simulata');
+  document.getElementById('stSrc').textContent='Fonte: '+state.src;
+  analyseAll(); resetView(); renderAll();
+}
+function setStatus(cls,txt){
+  const d=document.getElementById('stDot'); d.className='dot '+cls;
+  document.getElementById('stTxt').textContent=txt;
+}
+
+/* ============================================================================
+   3) METRICHE DI BARRA E CONTESTO
+   ========================================================================== */
+function metrics(cs){
+  const n=cs.length, m={body:[],rng:[],us:[],ls:[],atr:[],sma20:[],sma50:[],vma:[],trend:[]};
+  let tr=[],sum20=0,sum50=0,sumv=0;
+  for(let i=0;i<n;i++){
+    const b=cs[i];
+    m.body[i]=Math.abs(b.c-b.o);
+    m.rng[i]=Math.max(b.h-b.l,1e-12);
+    m.us[i]=b.h-Math.max(b.o,b.c);
+    m.ls[i]=Math.min(b.o,b.c)-b.l;
+    tr[i]= i? Math.max(b.h-b.l,Math.abs(b.h-cs[i-1].c),Math.abs(b.l-cs[i-1].c)) : b.h-b.l;
+    m.atr[i]= i<13 ? avg(tr.slice(0,i+1)) : avg(tr.slice(i-13,i+1));
+    sum20+=b.c; if(i>=20) sum20-=cs[i-20].c; m.sma20[i]= i>=19? sum20/20 : null;
+    sum50+=b.c; if(i>=50) sum50-=cs[i-50].c; m.sma50[i]= i>=49? sum50/50 : null;
+    sumv+=b.v||0; if(i>=20) sumv-=cs[i-20].v||0; m.vma[i]= i>=19? sumv/20 : null;
+  }
+  for(let i=0;i<n;i++){
+    const f=m.sma20[i], s=m.sma50[i], c=cs[i].c;
+    let t=0;
+    if(f!=null){
+      const slope=(i>=5&&m.sma20[i-5]!=null)? (f-m.sma20[i-5])/Math.max(m.atr[i],1e-9) : 0;
+      if(c>f&&slope>0.08) t=1; else if(c<f&&slope<-0.08) t=-1;
+      if(s!=null){ if(f>s&&t>=0&&c>f) t=1; if(f<s&&t<=0&&c<f) t=-1; }
+    }
+    m.trend[i]=t;
+  }
+  return m;
+}
+const avg=a=>a.reduce((s,x)=>s+x,0)/(a.length||1);
+const sign=x=>x>0?1:(x<0?-1:0);
+/* Estremo di swing recente: quanto la barra è vicina al minimo/massimo delle ultime N barre */
+function swingPos(cs,i,look=20){
+  const a=Math.max(0,i-look), w=cs.slice(a,i+1);
+  const hi=Math.max(...w.map(x=>x.h)), lo=Math.min(...w.map(x=>x.l));
+  return hi===lo? .5 : (cs[i].c-lo)/(hi-lo);   // 0 = sul minimo, 1 = sul massimo
+}
+const SENS={strict:{doji:.06,pin:2.4,body:.9,min:62},normal:{doji:.10,pin:2.0,body:.82,min:48},loose:{doji:.15,pin:1.6,body:.72,min:34}};
+
+/* ============================================================================
+   4) MOTORE DI RICONOSCIMENTO PATTERN A BARRE
+   ========================================================================== */
+function detect(cs,opts){
+  const S=SENS[opts.sens]||SENS.normal, m=metrics(cs), out=[];
+  const add=(i,name,dir,nb,base,desc)=>out.push({i,name,dir,nb,base,desc});
+  for(let i=2;i<cs.length;i++){
+    const b=cs[i],p=cs[i-1],q=cs[i-2];
+    const body=m.body[i],rng=m.rng[i],us=m.us[i],ls=m.ls[i],atr=Math.max(m.atr[i],1e-9);
+    const up=b.c>b.o, dn=b.c<b.o, pUp=p.c>p.o, pDn=p.c<p.o;
+    const pBody=m.body[i-1],pRng=m.rng[i-1];
+    const rel=rng/atr;
+
+    /* --- una barra --- */
+    if(body<=S.doji*rng && rel>=.35){
+      if(us>2*body && ls>2*body) add(i,'Doji a trottola',0,1,34,'Corpo minimo con ombre da entrambi i lati: equilibrio tra compratori e venditori.');
+      else add(i,'Doji',0,1,32,'Apertura e chiusura quasi coincidenti: indecisione, spesso precede espansione di volatilità.');
+    }
+    if(body>=S.body*rng && rel>=.9) add(i,up?'Marubozu rialzista':'Marubozu ribassista',up?1:-1,1,52,'Barra a corpo pieno senza ombre rilevanti: pressione direzionale continua per tutta la sessione.');
+    if(ls>=S.pin*body && us<=.28*rng && body<=.4*rng && rel>=.55)
+      add(i,'Pin bar rialzista (hammer)',1,1,56,'Lungo minimo rifiutato: i venditori hanno perso il controllo entro la chiusura.');
+    if(us>=S.pin*body && ls<=.28*rng && body<=.4*rng && rel>=.55)
+      add(i,'Pin bar ribassista (shooting star)',-1,1,56,'Lungo massimo rifiutato: la spinta rialzista è stata assorbita entro la chiusura.');
+    if(b.h<p.h && b.l>p.l) add(i,'Inside bar',0,2,40,'Barra interamente contenuta nella precedente: compressione della volatilità, attesa di rottura.');
+    else if(b.h>p.h && b.l<p.l) add(i,'Outside bar '+(up?'rialzista':'ribassista'),up?1:-1,2,50,'Barra che ingloba il range precedente: espansione con presa di controllo di un lato.');
+    if(i>=6){
+      const last7=m.rng.slice(i-6,i+1);
+      if(rng===Math.min(...last7)) add(i,'NR7 · range minimo 7 barre',0,1,36,'Il range più stretto delle ultime 7 barre: compressione che tipicamente anticipa un movimento direzionale.');
+    }
+    if(rel>=1.8){
+      const pos=(b.c-b.l)/rng;
+      if(pos>=.75) add(i,'Wide range bar rialzista',1,1,48,'Range molto superiore alla media con chiusura sui massimi: partecipazione aggressiva in acquisto.');
+      else if(pos<=.25) add(i,'Wide range bar ribassista',-1,1,48,'Range molto superiore alla media con chiusura sui minimi: partecipazione aggressiva in vendita.');
+    }
+
+    /* --- due barre --- */
+    if(up&&pDn&&b.c>=p.o&&b.o<=p.c&&body>pBody*1.02&&pBody>.25*pRng)
+      add(i,'Engulfing rialzista',1,2,70,'Il corpo rialzista avvolge quello ribassista precedente: inversione di controllo nel breve.');
+    if(dn&&pUp&&b.c<=p.o&&b.o>=p.c&&body>pBody*1.02&&pBody>.25*pRng)
+      add(i,'Engulfing ribassista',-1,2,70,'Il corpo ribassista avvolge quello rialzista precedente: inversione di controllo nel breve.');
+    if(up&&pDn&&b.o>=Math.min(p.o,p.c)&&b.c<=Math.max(p.o,p.c)&&body<pBody*.62&&pBody>.5*pRng)
+      add(i,'Harami rialzista',1,2,52,'Piccolo corpo contenuto nel corpo ribassista precedente: la spinta al ribasso si esaurisce.');
+    if(dn&&pUp&&b.o<=Math.max(p.o,p.c)&&b.c>=Math.min(p.o,p.c)&&body<pBody*.62&&pBody>.5*pRng)
+      add(i,'Harami ribassista',-1,2,52,'Piccolo corpo contenuto nel corpo rialzista precedente: la spinta al rialzo si esaurisce.');
+    if(up&&pDn&&b.o<p.l&&b.c>p.c+(p.o-p.c)*.5&&b.c<p.o)
+      add(i,'Piercing line',1,2,60,'Apertura sotto il minimo precedente e recupero oltre metà del corpo ribassista.');
+    if(dn&&pUp&&b.o>p.h&&b.c<p.c-(p.c-p.o)*.5&&b.c>p.o)
+      add(i,'Dark cloud cover',-1,2,60,'Apertura sopra il massimo precedente e cedimento oltre metà del corpo rialzista.');
+    if(Math.abs(b.l-p.l)<=.12*atr&&up&&pDn&&ls>.3*rng)
+      add(i,'Tweezer bottom',1,2,54,'Due minimi allo stesso livello con reazione rialzista: supporto difeso.');
+    if(Math.abs(b.h-p.h)<=.12*atr&&dn&&pUp&&us>.3*rng)
+      add(i,'Tweezer top',-1,2,54,'Due massimi allo stesso livello con reazione ribassista: resistenza difesa.');
+    if(pDn&&up&&b.c>p.h&&m.rng[i-1]/atr>1.1)
+      add(i,'Two-bar reversal rialzista',1,2,58,'Barra ribassista ampia annullata dalla chiusura sopra il suo massimo.');
+    if(pUp&&dn&&b.c<p.l&&m.rng[i-1]/atr>1.1)
+      add(i,'Two-bar reversal ribassista',-1,2,58,'Barra rialzista ampia annullata dalla chiusura sotto il suo minimo.');
+
+    /* --- tre barre --- */
+    const qUp=q.c>q.o,qDn=q.c<q.o,qBody=m.body[i-2];
+    if(qDn&&qBody>.5*m.rng[i-2]&&pBody<=.4*pRng&&up&&b.c>q.o-(q.o-q.c)*.5)
+      add(i,'Morning star',1,3,74,'Corpo ribassista, barra di indecisione, recupero rialzista: struttura classica di minimo.');
+    if(qUp&&qBody>.5*m.rng[i-2]&&pBody<=.4*pRng&&dn&&b.c<q.o+(q.c-q.o)*.5)
+      add(i,'Evening star',-1,3,74,'Corpo rialzista, barra di indecisione, cedimento ribassista: struttura classica di massimo.');
+    if(qUp&&pUp&&up&&p.c>q.c&&b.c>p.c&&qBody>.55*m.rng[i-2]&&pBody>.55*pRng&&body>.55*rng)
+      add(i,'Three white soldiers',1,3,72,'Tre chiusure rialziste consecutive a corpo pieno: trend in accelerazione.');
+    if(qDn&&pDn&&dn&&p.c<q.c&&b.c<p.c&&qBody>.55*m.rng[i-2]&&pBody>.55*pRng&&body>.55*rng)
+      add(i,'Three black crows',-1,3,72,'Tre chiusure ribassiste consecutive a corpo pieno: trend in accelerazione.');
+    if(qDn&&pUp&&up&&p.o>=q.c&&p.c<=q.o&&b.c>q.o)
+      add(i,'Three inside up',1,3,66,'Harami rialzista confermato dalla chiusura sopra la barra madre.');
+    if(qUp&&pDn&&dn&&p.o<=q.c&&p.c>=q.o&&b.c<q.o)
+      add(i,'Three inside down',-1,3,66,'Harami ribassista confermato dalla chiusura sotto la barra madre.');
+  }
+
+  /* --- punteggio contestuale --- */
+  for(const p of out){
+    const i=p.i, atr=Math.max(m.atr[i],1e-9);
+    let s=p.base, why=[];
+    const sz=m.rng[i]/atr;
+    if(sz>1.3){ s+=7; why.push('range '+sz.toFixed(1)+'×ATR'); } else if(sz<.6){ s-=8; why.push('range compresso'); }
+    const t=m.trend[i];
+    if(p.dir!==0){
+      const pos=swingPos(cs,i);
+      const counterTrend = t!==0 && t!==p.dir;
+      if(counterTrend){
+        /* inversione contro trend: premiata solo se su estremo di swing */
+        const atExtreme = (p.dir>0&&pos<.25)||(p.dir<0&&pos>.75);
+        if(atExtreme){ s+=10; why.push('su estremo di swing'); }
+        else if(opts.trendFilter){ s-=16; why.push('contro trend'); }
+      }else if(t===p.dir){ s+=9; why.push('allineato al trend'); }
+      if((p.dir>0&&pos<.2)||(p.dir<0&&pos>.8)){ s+=5; why.push('reazione su estremo'); }
+    }
+    if(opts.volConfirm&&m.vma[i]&&cs[i].v){
+      const vr=cs[i].v/m.vma[i];
+      if(vr>1.4){ s+=8; why.push('volumi '+vr.toFixed(1)+'×'); }
+      else if(vr<.6){ s-=6; why.push('volumi sottili'); }
+    }
+    p.score=Math.max(1,Math.min(99,Math.round(s)));
+    p.why=why;
+    p.trend=t;
+    p.age=cs.length-1-i;
+  }
+  const min=(SENS[opts.sens]||SENS.normal).min;
+  return out.filter(p=>p.score>=min-14).sort((a,b)=>b.i-a.i||b.score-a.score);
+}
+
+function analyseAll(){
+  const opts={sens:state.sens,trendFilter:state.trendFilter,volConfirm:state.volConfirm};
+  state.patterns={};
+  for(const t of TFS){ const cs=state.data[t.k]||[]; state.patterns[t.k]= cs.length>10? detect(cs,opts) : []; }
+}
+
+/* ============================================================================
+   5) GRAFICO A BARRE / CANDELE
+   ========================================================================== */
+const cv=document.getElementById('chart'), ctx=cv.getContext('2d');
+const PAD={l:6,r:64,t:10,b:22};
+let GEO=null;
+
+function resizeCanvas(){
+  const r=cv.getBoundingClientRect(), dpr=Math.min(window.devicePixelRatio||1,2);
+  cv.width=Math.max(1,Math.round(r.width*dpr)); cv.height=Math.max(1,Math.round(r.height*dpr));
+  ctx.setTransform(dpr,0,0,dpr,0,0); GEO=null;
+}
+function candles(){ return state.data[state.tf]||[]; }
+function resetView(){
+  const n=candles().length;
+  state.view.off=0; state.view.n=Math.min(Math.max(40,state.view.n),Math.max(20,n));
+  state.sel=null; updateCopyBtn();
+}
+function geometry(){
+  const cs=candles(), r=cv.getBoundingClientRect(), W=r.width, H=r.height;
+  const end=Math.max(5,cs.length-state.view.off), start=Math.max(0,end-state.view.n);
+  const vis=cs.slice(start,end);
+  const bw=(W-PAD.l-PAD.r)/Math.max(1,end-start);
+  let hi=-Infinity, lo=Infinity;
+  for(const b of vis){ if(b.h>hi)hi=b.h; if(b.l<lo)lo=b.l; }
+  const d=state.draw;
+  if(d&&d.vis[state.tf]){ for(const p of drawPrices(d)){ if(p.h>hi)hi=p.h; if(p.l<lo)lo=p.l; } }
+  if(!isFinite(hi)||!isFinite(lo)){ hi=1; lo=0; }
+  const pad=(hi-lo)*0.06||1; hi+=pad; lo-=pad;
+  const y=p=>PAD.t+(hi-p)/(hi-lo)*(H-PAD.t-PAD.b);
+  const x=i=>PAD.l+(i-start+0.5)*bw;
+  const iAt=px=>start+(px-PAD.l)/bw-0.5;
+  GEO={cs,start,end,vis,bw,hi,lo,W,H,x,y,iAt,
+       priceAt:py=>hi-(py-PAD.t)/(H-PAD.t-PAD.b)*(hi-lo)};
+  return GEO;
+}
+function fmtP(v){
+  const a=Math.abs(v);
+  return a>=1000? v.toFixed(0) : a>=100? v.toFixed(1) : a>=10? v.toFixed(2) : a>=1? v.toFixed(3) : v.toFixed(5);
+}
+function fmtT(ms,tfk){
+  const d=new Date(ms), p=n=>String(n).padStart(2,'0');
+  return TF[tfk].ms<24*3600e3 ? `${p(d.getDate())}/${p(d.getMonth()+1)} ${p(d.getHours())}:${p(d.getMinutes())}`
+                              : `${p(d.getDate())}/${p(d.getMonth()+1)}/${String(d.getFullYear()).slice(2)}`;
+}
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+function render(){
+  if(!cv.getBoundingClientRect().width) return;
+  const g=geometry(), {W,H}=g;
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle=css('--bg2'); ctx.fillRect(0,0,W,H);
+
+  /* griglia + scala prezzi */
+  ctx.strokeStyle='rgba(150,170,205,.08)'; ctx.fillStyle=css('--txt3');
+  ctx.font='9px '+css('--mono'); ctx.textAlign='left'; ctx.lineWidth=1;
+  const steps=6;
+  for(let i=0;i<=steps;i++){
+    const p=g.lo+(g.hi-g.lo)*i/steps, y=Math.round(g.y(p))+.5;
+    ctx.beginPath(); ctx.moveTo(PAD.l,y); ctx.lineTo(W-PAD.r,y); ctx.stroke();
+    ctx.fillText(fmtP(p),W-PAD.r+6,y+3);
+  }
+  /* scala tempi */
+  const every=Math.max(1,Math.round(g.vis.length/6));
+  ctx.textAlign='center';
+  for(let k=0;k<g.vis.length;k+=every){
+    const i=g.start+k, x=g.x(i);
+    ctx.strokeStyle='rgba(150,170,205,.05)';
+    ctx.beginPath(); ctx.moveTo(x,PAD.t); ctx.lineTo(x,H-PAD.b); ctx.stroke();
+    ctx.fillStyle=css('--txt3'); ctx.fillText(fmtT(g.vis[k].t,state.tf),x,H-7);
+  }
+
+  /* selezione */
+  if(state.sel){
+    const a=Math.min(state.sel.a,state.sel.b), b=Math.max(state.sel.a,state.sel.b);
+    const x0=g.x(a)-g.bw/2, x1=g.x(b)+g.bw/2;
+    ctx.fillStyle='rgba(231,181,74,.10)'; ctx.fillRect(x0,PAD.t,x1-x0,H-PAD.t-PAD.b);
+    ctx.strokeStyle='rgba(231,181,74,.55)'; ctx.setLineDash([4,3]);
+    ctx.strokeRect(x0+.5,PAD.t+.5,x1-x0-1,H-PAD.t-PAD.b-1); ctx.setLineDash([]);
+    ctx.fillStyle=css('--gold'); ctx.textAlign='left'; ctx.font='9px '+css('--mono');
+    ctx.fillText((b-a+1)+' barre selezionate',x0+4,PAD.t+11);
+  }
+
+  /* candele */
+  const bw=g.bw, w=Math.max(1,Math.min(bw*0.7,18));
+  for(let k=0;k<g.vis.length;k++){
+    const b=g.vis[k], i=g.start+k, x=g.x(i), up=b.c>=b.o;
+    const col=up?css('--green'):css('--red');
+    ctx.strokeStyle=col; ctx.fillStyle=col; ctx.lineWidth=Math.min(1.4,Math.max(1,bw*.12));
+    ctx.beginPath(); ctx.moveTo(x,g.y(b.h)); ctx.lineTo(x,g.y(b.l)); ctx.stroke();
+    const yo=g.y(b.o), yc=g.y(b.c), top=Math.min(yo,yc), hgt=Math.max(1,Math.abs(yc-yo));
+    if(w>2.5){ ctx.fillRect(x-w/2,top,w,hgt); } else { ctx.fillRect(x-.6,top,1.4,hgt); }
+  }
+
+  if(state.markers) drawMarkers(g);
+  if(state.draw&&state.draw.vis[state.tf]) drawPattern(g,state.draw);
+  drawCrosshair(g);
+}
+
+function drawMarkers(g){
+  const ps=(state.patterns[state.tf]||[]).filter(p=>p.i>=g.start&&p.i<g.end&&p.score>=SENS[state.sens].min);
+  const seen=new Set();
+  for(const p of ps){
+    const key=p.i+'|'+sign(p.dir); if(seen.has(key))continue; seen.add(key);
+    const b=g.cs[p.i], x=g.x(p.i);
+    const col=p.dir>0?css('--green'):p.dir<0?css('--red'):css('--gold');
+    const yTop=g.y(b.h)-7, yBot=g.y(b.l)+7;
+    ctx.fillStyle=col; ctx.globalAlpha=.9;
+    ctx.beginPath();
+    if(p.dir>0){ ctx.moveTo(x,yBot-6); ctx.lineTo(x-4.5,yBot+1); ctx.lineTo(x+4.5,yBot+1); }
+    else if(p.dir<0){ ctx.moveTo(x,yTop+6); ctx.lineTo(x-4.5,yTop-1); ctx.lineTo(x+4.5,yTop-1); }
+    else { ctx.arc(x,yTop,3,0,Math.PI*2); }
+    ctx.closePath(); ctx.fill(); ctx.globalAlpha=1;
+  }
+}
+
+function drawCrosshair(g){
+  const h=state.hover; if(!h) return;
+  ctx.strokeStyle='rgba(150,170,205,.25)'; ctx.setLineDash([3,3]);
+  ctx.beginPath(); ctx.moveTo(h.x,PAD.t); ctx.lineTo(h.x,g.H-PAD.b);
+  ctx.moveTo(PAD.l,h.y); ctx.lineTo(g.W-PAD.r,h.y); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle=css('--panel3'); ctx.fillRect(g.W-PAD.r+2,h.y-7,PAD.r-4,14);
+  ctx.fillStyle=css('--gold'); ctx.font='9px '+css('--mono'); ctx.textAlign='left';
+  ctx.fillText(fmtP(g.priceAt(h.y)),g.W-PAD.r+6,h.y+3);
+}
+
+/* ---- Strumento "Pattern a barre": prezzi proiettati del disegno ---------- */
+function drawPrices(d){
+  const src=d.mirrorH? d.bars.slice().reverse() : d.bars;
+  const p0=src[0].o, out=[];
+  const k=d.scale/100*(d.mirrorV?-1:1);
+  const map=v=>d.anchorPrice*(1+((v-p0)/p0)*k);
+  for(const b of src) out.push({o:map(b.o),h:map(d.mirrorV?b.l:b.h),l:map(d.mirrorV?b.h:b.l),c:map(b.c)});
+  return out;
+}
+function srcPrice(b,s){
+  switch(s){case 'o':return b.o;case 'h':return b.h;case 'l':return b.l;
+    case 'hl2':return (b.h+b.l)/2;case 'hlc3':return (b.h+b.l+b.c)/3;case 'ohlc4':return (b.o+b.h+b.l+b.c)/4;default:return b.c;}
+}
+function drawPattern(g,d){
+  const pr=drawPrices(d), n=pr.length;
+  const hex=d.color, a=d.alpha/100;
+  ctx.save(); ctx.globalAlpha=a; ctx.strokeStyle=hex; ctx.fillStyle=hex;
+  const w=Math.max(1,Math.min(g.bw*0.6,16));
+  if(d.model==='line'){
+    ctx.lineWidth=1.6; ctx.beginPath();
+    for(let j=0;j<n;j++){ const x=g.x(d.anchor+j), y=g.y(srcPrice(pr[j],d.source)); j?ctx.lineTo(x,y):ctx.moveTo(x,y); }
+    ctx.stroke();
+    for(let j=0;j<n;j++){ const x=g.x(d.anchor+j), y=g.y(srcPrice(pr[j],d.source)); ctx.beginPath(); ctx.arc(x,y,1.8,0,Math.PI*2); ctx.fill(); }
+  }else{
+    ctx.lineWidth=1.2;
+    for(let j=0;j<n;j++){
+      const b=pr[j], x=g.x(d.anchor+j);
+      ctx.beginPath(); ctx.moveTo(x,g.y(b.h)); ctx.lineTo(x,g.y(b.l)); ctx.stroke();
+      if(d.model==='bars'){
+        ctx.beginPath(); ctx.moveTo(x-w/2,g.y(b.o)); ctx.lineTo(x,g.y(b.o));
+        ctx.moveTo(x,g.y(b.c)); ctx.lineTo(x+w/2,g.y(b.c)); ctx.stroke();
+      }else{
+        const yo=g.y(b.o),yc=g.y(b.c),top=Math.min(yo,yc),hgt=Math.max(1,Math.abs(yc-yo));
+        if(b.c>=b.o){ ctx.fillRect(x-w/2,top,w,hgt); }
+        else { ctx.globalAlpha=a*.35; ctx.fillRect(x-w/2,top,w,hgt); ctx.globalAlpha=a; ctx.strokeRect(x-w/2+.5,top+.5,w-1,hgt-1); }
+      }
+    }
+  }
+  /* cornice di manipolazione */
+  const x0=g.x(d.anchor)-g.bw/2, x1=g.x(d.anchor+n-1)+g.bw/2;
+  let hi=-Infinity,lo=Infinity; for(const b of pr){hi=Math.max(hi,b.h);lo=Math.min(lo,b.l);}
+  ctx.globalAlpha=.5; ctx.setLineDash([3,3]); ctx.strokeStyle=hex;
+  ctx.strokeRect(x0,g.y(hi)-4,x1-x0,g.y(lo)-g.y(hi)+8); ctx.setLineDash([]);
+  ctx.globalAlpha=.95; ctx.fillStyle=hex; ctx.font='9px '+css('--mono'); ctx.textAlign='left';
+  ctx.fillText(`PATTERN ${d.tf} · ${n} barre${d.mirrorH?' ·⇄':''}${d.mirrorV?' ·⇅':''}`,x0+3,g.y(hi)-8);
+  ctx.restore();
+}
+function hitPattern(g,px,py){
+  const d=state.draw; if(!d||!d.vis[state.tf]) return false;
+  const pr=drawPrices(d);
+  const x0=g.x(d.anchor)-g.bw, x1=g.x(d.anchor+pr.length-1)+g.bw;
+  let hi=-Infinity,lo=Infinity; for(const b of pr){hi=Math.max(hi,b.h);lo=Math.min(lo,b.l);}
+  return px>=x0&&px<=x1&&py>=g.y(hi)-14&&py<=g.y(lo)+14;
+}
+
+/* ============================================================================
+   6) INTERAZIONE GRAFICO
+   ========================================================================== */
+let drag=null;
+function mouse(e){ const r=cv.getBoundingClientRect(); return {x:e.clientX-r.left,y:e.clientY-r.top}; }
+
+cv.addEventListener('mousedown',e=>{
+  const g=geometry(), m=mouse(e), i=Math.round(g.iAt(m.x));
+  if(e.shiftKey){ drag={type:'pan',x:m.x,off:state.view.off}; return; }
+  if(state.mode==='move'&&hitPattern(g,m.x,m.y)){
+    drag={type:'move',x:m.x,y:m.y,anchor:state.draw.anchor,price:state.draw.anchorPrice};
+    cv.style.cursor='grabbing'; return;
+  }
+  if(state.mode==='select'){
+    const c=Math.max(0,Math.min(g.cs.length-1,i));
+    state.sel={a:c,b:c}; drag={type:'sel'}; updateCopyBtn(); render();
+  }
+});
+window.addEventListener('mousemove',e=>{
+  if(!drag){
+    const r=cv.getBoundingClientRect();
+    if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom){ if(state.hover){state.hover=null;render();updateReadout(null);} return; }
+    const g=geometry(), m=mouse(e); state.hover=m;
+    cv.style.cursor = (state.mode==='move'&&hitPattern(g,m.x,m.y))?'grab':'crosshair';
+    updateReadout(Math.round(g.iAt(m.x))); render(); return;
+  }
+  const g=geometry(), m=mouse(e);
+  if(drag.type==='pan'){
+    const dx=Math.round((m.x-drag.x)/g.bw);
+    state.view.off=Math.max(0,Math.min(g.cs.length-20,drag.off+dx)); render();
+  }else if(drag.type==='sel'){
+    state.sel.b=Math.max(0,Math.min(g.cs.length-1,Math.round(g.iAt(m.x)))); updateCopyBtn(); render();
+  }else if(drag.type==='move'){
+    const d=state.draw;
+    d.anchor=drag.anchor+(m.x-drag.x)/g.bw;
+    d.anchorPrice=drag.price*(1+(g.priceAt(m.y)-g.priceAt(drag.y))/Math.max(1e-9,g.priceAt(drag.y)));
+    render();
+  }
+});
+window.addEventListener('mouseup',()=>{ if(drag&&drag.type==='move')cv.style.cursor='grab'; drag=null; });
+cv.addEventListener('wheel',e=>{
+  e.preventDefault();
+  const cs=candles(); if(!cs.length) return;
+  const k=e.deltaY>0?1.12:1/1.12;
+  state.view.n=Math.max(20,Math.min(cs.length,Math.round(state.view.n*k)));
+  render();
+},{passive:false});
+cv.addEventListener('dblclick',()=>{ state.sel=null; updateCopyBtn(); render(); });
+
+function updateReadout(i){
+  const el=document.getElementById('readout'), cs=candles();
+  if(i==null||!cs[i]){ el.textContent=''; return; }
+  const b=cs[i], ch=i? (b.c/cs[i-1].c-1)*100 : 0;
+  const ps=(state.patterns[state.tf]||[]).filter(p=>p.i===i);
+  el.textContent=`${fmtT(b.t,state.tf)}   O ${fmtP(b.o)}  H ${fmtP(b.h)}  L ${fmtP(b.l)}  C ${fmtP(b.c)}  ${ch>=0?'+':''}${ch.toFixed(2)}%`
+    + (ps.length? '\n'+ps.map(p=>'• '+p.name+' ('+p.score+')').join('\n') : '');
+}
+function updateCopyBtn(){
+  const ok=!!state.sel&&Math.abs(state.sel.a-state.sel.b)>=0;
+  document.getElementById('btnCopy').disabled=!ok;
+}
+
+/* ============================================================================
+   7) PATTERN A BARRE — creazione e proprietà del disegno
+   ========================================================================== */
+function copyPattern(){
+  const cs=candles(); if(!state.sel||!cs.length) return;
+  const a=Math.min(state.sel.a,state.sel.b), b=Math.max(state.sel.a,state.sel.b);
+  const bars=cs.slice(a,b+1).map(x=>({o:x.o,h:x.h,l:x.l,c:x.c,t:x.t}));
+  if(bars.length<2){ setStatus('warn','seleziona almeno 2 barre per creare il pattern'); return; }
+  const prev=state.draw;
+  state.draw={
+    bars, tf:TF[state.tf].lb, tfKey:state.tf, from:{a,b},
+    anchor:Math.min(cs.length-1, b+3), anchorPrice:cs[Math.min(cs.length-1,b)].c,
+    color:prev?prev.color:'#48a0ff', alpha:prev?prev.alpha:80,
+    mirrorH:false, mirrorV:false,
+    model:prev?prev.model:'candles', source:prev?prev.source:'c',
+    scale:100, vis:Object.fromEntries(TFS.map(t=>[t.k,true]))
+  };
+  state.mode='move'; syncModeChips();
+  document.getElementById('dwEmpty').style.display='none';
+  document.getElementById('dwPanel').style.display='';
+  syncDrawPanel(); runAnalogues(); render();
+  setStatus('ok',`pattern di ${bars.length} barre copiato da ${state.sym} ${TF[state.tf].lb}`);
+}
+function syncDrawPanel(){
+  const d=state.draw; if(!d) return;
+  document.getElementById('dwSrc').textContent=`${state.symNm||state.sym} · ${d.tf} · ${d.bars.length} barre`;
+  document.getElementById('dwColor').value=d.color;
+  document.getElementById('dwAlpha').value=d.alpha;
+  document.getElementById('dwMirrorH').checked=d.mirrorH;
+  document.getElementById('dwMirrorV').checked=d.mirrorV;
+  document.getElementById('dwModel').value=d.model;
+  document.getElementById('dwSource').value=d.source;
+  document.getElementById('dwScale').value=d.scale;
+  const vis=document.getElementById('dwVis'); vis.innerHTML='';
+  for(const t of TFS){
+    const l=document.createElement('label');
+    l.innerHTML=`<input type="checkbox" ${d.vis[t.k]?'checked':''}/> ${t.lb}`;
+    l.querySelector('input').onchange=e=>{ d.vis[t.k]=e.target.checked; render(); };
+    vis.appendChild(l);
+  }
+  document.getElementById('dwSource').disabled = d.model!=='line';
+}
+function deletePattern(){
+  state.draw=null; state.mode='select'; syncModeChips();
+  document.getElementById('dwPanel').style.display='none';
+  document.getElementById('dwEmpty').style.display='';
+  document.getElementById('anWrap').style.display='none';
+  document.getElementById('anEmpty').style.display='';
+  render();
+}
+
+/* ============================================================================
+   8) ANALOGHI STORICI — ricerca di movimenti simili al pattern copiato
+   ========================================================================== */
+function shape(bars){ const p0=bars[0].c; return bars.map(b=>b.c/p0-1); }
+function corr(a,b){
+  const n=a.length, ma=avg(a), mb=avg(b);
+  let num=0,da=0,db=0;
+  for(let i=0;i<n;i++){ const x=a[i]-ma,y=b[i]-mb; num+=x*y; da+=x*x; db+=y*y; }
+  return (da&&db)? num/Math.sqrt(da*db) : 0;
+}
+function runAnalogues(){
+  const d=state.draw, cs=candles();
+  if(!d||cs.length<60){ return; }
+  const src=d.mirrorH? d.bars.slice().reverse() : d.bars;
+  let ref=shape(src); if(d.mirrorV) ref=ref.map(v=>-v);
+  const n=ref.length, fwd=state.fwd, rows=[];
+  for(let i=0;i+n+fwd<=cs.length;i++){
+    if(d.tfKey===state.tf && !(i+n-1<d.from.a || i>d.from.b)) continue;  // salta l'origine
+    const win=cs.slice(i,i+n), c=corr(ref,shape(win));
+    if(c<0.78) continue;
+    const end=i+n-1, base=cs[end].c;
+    const path=cs.slice(end+1,end+1+fwd);
+    if(path.length<fwd) continue;
+    rows.push({i,end,sim:c,t:cs[end].t,
+      fwd:(path[path.length-1].c/base-1)*100,
+      max:(Math.max(...path.map(x=>x.h))/base-1)*100,
+      min:(Math.min(...path.map(x=>x.l))/base-1)*100});
+  }
+  rows.sort((a,b)=>b.sim-a.sim);
+  /* evita sovrapposizioni ravvicinate */
+  const keep=[]; for(const r of rows){ if(keep.every(k=>Math.abs(k.end-r.end)>=n)) keep.push(r); if(keep.length>=12) break; }
+  renderAnalogues(keep,fwd);
+}
+function renderAnalogues(rows,fwd){
+  const wrap=document.getElementById('anWrap'), empty=document.getElementById('anEmpty');
+  const tb=document.querySelector('#anTable tbody'); tb.innerHTML='';
+  wrap.style.display=''; empty.style.display= rows.length? 'none':'';
+  if(!rows.length){ empty.textContent=`Nessun movimento storico sufficientemente simile su ${state.sym} ${TF[state.tf].lb}. Prova un timeframe più lungo o un pattern più corto.`; document.getElementById('anStat').textContent='—'; return; }
+  const m=avg(rows.map(r=>r.fwd)), win=rows.filter(r=>r.fwd>0).length/rows.length*100;
+  document.getElementById('anStat').innerHTML=
+    `<span class="${m>=0?'up':'dn'}" style="color:${m>=0?css('--green'):css('--red')}">${m>=0?'+':''}${m.toFixed(2)}%</span> su ${fwd} barre · ${win.toFixed(0)}% positivi · ${rows.length} casi`;
+  for(const r of rows){
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${fmtT(r.t,state.tf)}</td><td>${(r.sim*100).toFixed(0)}%</td>`+
+      `<td style="color:${r.fwd>=0?css('--green'):css('--red')}">${r.fwd>=0?'+':''}${r.fwd.toFixed(2)}%</td>`+
+      `<td style="color:${css('--green')}">+${r.max.toFixed(2)}%</td>`+
+      `<td style="color:${css('--red')}">${r.min.toFixed(2)}%</td>`;
+    tr.style.cursor='pointer';
+    tr.onclick=()=>{ const cs=candles(); state.view.off=Math.max(0,cs.length-r.end-Math.round(state.view.n*0.6)); render(); };
+    tb.appendChild(tr);
+  }
+}
+
+/* ============================================================================
+   9) PANNELLI: scansione multi-timeframe, bias, lista pattern
+   ========================================================================== */
+function tfSummary(k){
+  const ps=(state.patterns[k]||[]).filter(p=>p.age<=2&&p.score>=SENS[state.sens].min);
+  if(!ps.length) return null;
+  const top=ps.slice().sort((a,b)=>b.score-a.score||a.age-b.age)[0];
+  let net=0; for(const p of ps) net+=p.dir*(p.score/100)*(p.age===0?1:p.age===1?.6:.35);
+  return {top,net,all:ps};
+}
+function renderScan(){
+  const tb=document.querySelector('#tfTable tbody'), empty=document.getElementById('tfEmpty');
+  tb.innerHTML=''; let any=false, bias=0, wsum=0, parts=[];
+  for(const t of TFS){
+    const s=tfSummary(t.k), tr=document.createElement('tr');
+    tr.style.cursor='pointer'; tr.onclick=()=>selectTf(t.k);
+    if(s){
+      any=true; bias+=s.net*t.w; wsum+=t.w;
+      const dir=sign(s.net||s.top.dir);
+      if(dir) parts.push(`${t.lb} ${dir>0?'▲':'▼'}`);
+      tr.innerHTML=`<td style="color:${t.k===state.tf?css('--gold'):css('--txt')};font-weight:${t.k===state.tf?700:400}">${t.lb}</td>`+
+        `<td style="text-align:left;color:var(--txt)">${s.top.name}${s.all.length>1?` <span style="color:var(--txt3)">+${s.all.length-1}</span>`:''}</td>`+
+        `<td><span class="tag ${dir>0?'bull':dir<0?'bear':'neu'}">${dir>0?'Long':dir<0?'Short':'Neutro'}</span></td>`+
+        `<td style="color:var(--gold);font-weight:700">${s.top.score}</td>`;
+    }else{
+      tr.innerHTML=`<td style="color:${t.k===state.tf?css('--gold'):css('--txt3')}">${t.lb}</td>`+
+        `<td style="text-align:left;color:var(--txt3)">nessun pattern recente</td><td><span class="tag neu">—</span></td><td style="color:var(--txt3)">—</td>`;
+    }
+    tb.appendChild(tr);
+  }
+  empty.style.display=any?'none':'';
+  if(!any) empty.textContent='Nessun pattern sopra soglia sulle ultime barre. Abbassa la sensibilità per vedere più segnali.';
+  renderBias(wsum? bias/wsum : 0, parts);
+}
+function renderBias(v,parts){
+  const s=Math.max(-100,Math.min(100,Math.round(Math.tanh(v*1.6)*100)));
+  const el=document.getElementById('gVal'), lb=document.getElementById('gLbl');
+  el.textContent=(s>0?'+':'')+s;
+  el.style.color = s>=25?css('--green') : s<=-25?css('--red') : '#fff';
+  lb.textContent = s>=55?'long forte' : s>=25?'long' : s<=-55?'short forte' : s<=-25?'short' : 'neutro / no-trade';
+  document.getElementById('gPin').style.left=((s+100)/2)+'%';
+  document.getElementById('gSub').innerHTML = parts.length
+    ? 'Timeframe allineati: '+parts.join(' · ')
+    : 'Nessun pattern recente sopra soglia: nessuna confluenza da segnalare.';
+}
+function renderList(){
+  const wrap=document.getElementById('plist'), empty=document.getElementById('pEmpty');
+  const cs=candles(), min=SENS[state.sens].min;
+  const ps=(state.patterns[state.tf]||[]).filter(p=>p.score>=min&&p.age<=60).slice(0,14);
+  wrap.innerHTML=''; empty.style.display=ps.length?'none':'';
+  for(const p of ps){
+    const div=document.createElement('div');
+    div.className='pitem '+(p.dir>0?'bull':p.dir<0?'bear':'neu');
+    div.innerHTML=`<div class="r1"><span class="nm">${p.name}</span><span class="sc">${p.score}</span></div>`+
+      `<div class="r2"><span>${fmtT(cs[p.i].t,state.tf)}</span><span>${p.age===0?'ultima barra':p.age+' barre fa'}</span><span>${p.nb} barre</span>`+
+      `<span>${p.trend>0?'trend ↑':p.trend<0?'trend ↓':'trend piatto'}</span></div>`+
+      `<div class="desc">${p.desc}${p.why.length?' <span style="color:var(--txt3)">· '+p.why.join(' · ')+'</span>':''}</div>`+
+      `<div class="bar"><i style="width:${p.score}%"></i></div>`;
+    div.onclick=()=>{
+      state.sel={a:Math.max(0,p.i-p.nb+1),b:p.i};
+      state.view.off=Math.max(0,cs.length-p.i-Math.round(state.view.n*0.45));
+      updateCopyBtn(); render();
+    };
+    wrap.appendChild(div);
+  }
+}
+function renderHead(){
+  document.getElementById('cTitle').textContent=(state.symNm||state.sym)+' · '+state.sym;
+  document.getElementById('cTf').textContent=TF[state.tf].lb;
+  const cs=candles(), last=cs[cs.length-1];
+  document.getElementById('cLast').textContent= last
+    ? `${fmtP(last.c)}   ${cs.length>1?((last.c/cs[cs.length-2].c-1)*100>=0?'+':'')+((last.c/cs[cs.length-2].c-1)*100).toFixed(2)+'%':''}   ${cs.length} barre`
+    : '—';
+}
+const renderAll=()=>{ renderHead(); renderScan(); renderList(); render(); };
+
+/* ============================================================================
+   10) UI / EVENTI
+   ========================================================================== */
+function buildChips(){
+  const sc=document.getElementById('symchips'); sc.innerHTML='';
+  for(const p of PRESETS){
+    const b=document.createElement('button');
+    b.className='chip'+(p.id===state.sym?' active':''); b.textContent=p.nm; b.dataset.id=p.id;
+    b.onclick=()=>{ state.sym=p.id; state.symNm=p.nm; syncSymChips(); state.draw=null; deletePattern(); loadAll(); };
+    sc.appendChild(b);
+  }
+  const tc=document.getElementById('tfchips'); tc.innerHTML='';
+  for(const t of TFS){
+    const b=document.createElement('button');
+    b.className='chip tf'+(t.k===state.tf?' active':''); b.textContent=t.lb; b.dataset.k=t.k;
+    b.onclick=()=>selectTf(t.k);
+    tc.appendChild(b);
+  }
+}
+function syncSymChips(){ document.querySelectorAll('#symchips .chip').forEach(c=>c.classList.toggle('active',c.dataset.id===state.sym)); }
+function selectTf(k){
+  if(state.tf===k) return;
+  state.tf=k; state.sel=null; updateCopyBtn();
+  document.querySelectorAll('#tfchips .chip').forEach(c=>c.classList.toggle('active',c.dataset.k===k));
+  const cs=candles(); state.view.off=0; state.view.n=Math.min(state.view.n,Math.max(20,cs.length));
+  if(state.draw){ /* riancora il disegno sul nuovo timeframe */
+    state.draw.anchor=Math.max(0,cs.length-Math.round(state.view.n*0.4));
+    state.draw.anchorPrice=cs.length? cs[cs.length-1].c : state.draw.anchorPrice;
+    runAnalogues();
+  }
+  renderAll();
+}
+function syncModeChips(){
+  document.getElementById('mSelect').classList.toggle('active',state.mode==='select');
+  document.getElementById('mMove').classList.toggle('active',state.mode==='move');
+  document.getElementById('hint').textContent = state.mode==='move'
+    ? 'Trascina il pattern copiato per confrontarlo con altri movimenti · rotella = zoom · Shift+trascina = pan'
+    : 'Trascina sul grafico per selezionare le barre · doppio click = annulla · rotella = zoom · Shift+trascina = pan';
+}
+document.getElementById('mSelect').onclick=()=>{ state.mode='select'; syncModeChips(); };
+document.getElementById('mMove').onclick=()=>{ if(!state.draw){ setStatus('warn','copia prima un pattern dalle barre selezionate'); return; } state.mode='move'; syncModeChips(); };
+document.getElementById('btnCopy').onclick=copyPattern;
+document.getElementById('btnReload').onclick=()=>loadAll();
+document.getElementById('symGo').onclick=()=>{
+  const v=document.getElementById('symIn').value.trim().toUpperCase(); if(!v) return;
+  state.sym=v; state.symNm=''; syncSymChips(); deletePattern(); loadAll();
+};
+document.getElementById('symIn').addEventListener('keydown',e=>{ if(e.key==='Enter') document.getElementById('symGo').click(); });
+document.getElementById('sens').onchange=e=>{ state.sens=e.target.value; analyseAll(); renderAll(); };
+document.getElementById('optTrend').onchange=e=>{ state.trendFilter=e.target.checked; analyseAll(); renderAll(); };
+document.getElementById('optVol').onchange=e=>{ state.volConfirm=e.target.checked; analyseAll(); renderAll(); };
+document.getElementById('optMark').onchange=e=>{ state.markers=e.target.checked; render(); };
+document.getElementById('dwColor').oninput=e=>{ state.draw.color=e.target.value; render(); };
+document.getElementById('dwAlpha').oninput=e=>{ state.draw.alpha=+e.target.value; render(); };
+document.getElementById('dwMirrorH').onchange=e=>{ state.draw.mirrorH=e.target.checked; runAnalogues(); render(); };
+document.getElementById('dwMirrorV').onchange=e=>{ state.draw.mirrorV=e.target.checked; runAnalogues(); render(); };
+document.getElementById('dwModel').onchange=e=>{ state.draw.model=e.target.value; document.getElementById('dwSource').disabled=e.target.value!=='line'; render(); };
+document.getElementById('dwSource').onchange=e=>{ state.draw.source=e.target.value; render(); };
+document.getElementById('dwScale').oninput=e=>{ state.draw.scale=+e.target.value; render(); };
+document.getElementById('dwReset').onclick=()=>{
+  const cs=candles(); if(!state.draw||!cs.length) return;
+  state.draw.anchor=Math.max(0,cs.length-Math.round(state.view.n*0.4));
+  state.draw.anchorPrice=cs[cs.length-1].c; state.draw.scale=100;
+  document.getElementById('dwScale').value=100; render();
+};
+document.getElementById('dwDelete').onclick=deletePattern;
+document.getElementById('anFwd').onchange=e=>{ state.fwd=+e.target.value; runAnalogues(); };
+window.addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT') return;
+  if(e.key==='Escape'){ state.sel=null; updateCopyBtn(); render(); }
+  if(e.key==='c'||e.key==='C'){ if(!document.getElementById('btnCopy').disabled) copyPattern(); }
+  if(e.key==='m'||e.key==='M'){ document.getElementById(state.mode==='move'?'mSelect':'mMove').click(); }
+});
+window.addEventListener('resize',()=>{ resizeCanvas(); render(); });
+
+/* ---- Avvio ---- */
+buildChips(); syncModeChips(); resizeCanvas();
+document.getElementById('symIn').value=state.sym;
+loadAll().catch(e=>setStatus('err','errore caricamento: '+e.message));
+setInterval(()=>{ if(!drag) loadAll(); }, 5*60*1000);
+</script>
+</body>
+</html>

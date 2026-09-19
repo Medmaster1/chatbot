@@ -28,6 +28,7 @@ Tutto in **HTML/CSS/JS puro** (app single-file), pubblicato su **GitHub Pages**.
 | Confluence Helper | `confluence-helper.html` | Checklist top-down multi-timeframe con scoring di confluenza |
 | Equity / Stocks | `equity.html` | Analista azioni: fondamentali, earnings, rating, gamma, Investability Score |
 | TradingView | `tradingview.html` | Grafico avanzato real-time + ticker tape, analisi tecnica, info simbolo e calendario economico (widget free TradingView) su metalli, energia, indici, FX e crypto |
+| Bar Pattern Lab | `bar-pattern.html` | Identificatore di pattern a barre multi-timeframe (15m→1W): riconoscimento a 1/2/3 barre con scoring contestuale (trend, ATR, volumi, estremi di swing), bias di confluenza pesato per timeframe, strumento di disegno **Pattern a Barre** (copia barre, specchia/ribalta, modello barre/candele/linea con fonte di prezzo, visibilità per timeframe) e ricerca di analoghi storici. Dati Yahoo Finance via proxy CORS, fallback su serie simulata |
 | London Strategic Edge | `london-strategic-edge.html` | Market intelligence: dealer gamma exposure (GEX/DEX/VEX), muri call/put, gamma flip, IV/HV/VRP, options flow, narrativa GEX, screener universo e regime VIX. Ispirato a londonstrategicedge.com, dati reali **FlashAlpha** (`lab.flashalpha.com`, key nel browser) |
 
 ---
