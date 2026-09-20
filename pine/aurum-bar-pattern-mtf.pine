@@ -1,0 +1,488 @@
+//@version=6
+// =============================================================================
+// AURUM BAR PATTERN — Identificatore di pattern a barre su vari timeframe
+// KID Digital Wealth · versione Pine dello strumento bar-pattern.html
+//
+//  1) Riconosce 28 pattern a 1/2/3 barre con punteggio contestuale
+//     (trend SMA20/50, ampiezza su ATR, volumi, posizione su estremi di swing).
+//  2) Scansiona 5 timeframe e calcola un bias di confluenza pesato.
+//  3) Proiezione "Pattern a barre": copia un intervallo di barre e lo ridisegna
+//     in avanti, con specchiato/ribaltato, modello barre/candele/linea,
+//     fonte di prezzo, scala e visibilita per timeframe.
+//
+// Nessun consiglio d'investimento. Uso didattico.
+// =============================================================================
+indicator("AURUM Bar Pattern — pattern a barre MTF", shorttitle="AURUM BarPattern",
+     overlay=true, max_lines_count=500, max_boxes_count=500, max_labels_count=500)
+
+// ----------------------------------------------------------------------------
+// INPUT
+// ----------------------------------------------------------------------------
+gDet = "Riconoscimento"
+sens      = input.string("Media", "Sensibilita", options=["Alta (solo pattern netti)", "Media", "Bassa (piu segnali)"], group=gDet)
+useTrend  = input.bool(true,  "Filtro trend (penalizza i controtrend)", group=gDet)
+useVol    = input.bool(true,  "Conferma volumi", group=gDet)
+showMarks = input.bool(true,  "Marker sul grafico", group=gDet)
+showLbl   = input.bool(true,  "Etichette con nome pattern", group=gDet)
+lblBack   = input.int(60, "Etichette: ultime N barre", minval=5, maxval=500, group=gDet)
+
+gMtf = "Multi-timeframe"
+useMtf  = input.bool(true, "Attiva scansione multi-timeframe", group=gMtf)
+confirm = input.bool(true, "Usa solo barre chiuse (no repaint)", group=gMtf)
+tf1 = input.timeframe("15", "TF 1", inline="p1", group=gMtf)
+w1 = input.float(0.55, "peso", minval=0, step=0.05, inline="p1", group=gMtf)
+tf2 = input.timeframe("60", "TF 2", inline="p2", group=gMtf)
+w2 = input.float(0.90, "peso", minval=0, step=0.05, inline="p2", group=gMtf)
+tf3 = input.timeframe("240", "TF 3", inline="p3", group=gMtf)
+w3 = input.float(1.20, "peso", minval=0, step=0.05, inline="p3", group=gMtf)
+tf4 = input.timeframe("D", "TF 4", inline="p4", group=gMtf)
+w4 = input.float(1.50, "peso", minval=0, step=0.05, inline="p4", group=gMtf)
+tf5 = input.timeframe("W", "TF 5", inline="p5", group=gMtf)
+w5 = input.float(1.75, "peso", minval=0, step=0.05, inline="p5", group=gMtf)
+tblPos  = input.string("Basso sinistra", "Posizione tabella", options=["Alto destra","Alto sinistra","Basso destra","Basso sinistra"], group=gMtf)
+
+gDraw = "Pattern a barre (proiezione)"
+useDraw  = input.bool(false, "Attiva proiezione pattern", group=gDraw)
+tStart   = input.time(timestamp("01 Jan 2024 00:00 +0000"), "Prima barra del pattern", confirm=true, group=gDraw)
+tEnd     = input.time(timestamp("01 Mar 2024 00:00 +0000"), "Ultima barra del pattern", confirm=true, group=gDraw)
+dOffset  = input.int(3, "Ancora: barre dopo l'ultima", minval=-300, maxval=300, group=gDraw)
+dModel   = input.string("Candele", "Modello", options=["Barre (OHLC)","Candele","Linea"], group=gDraw)
+dSource  = input.string("close", "Fonte di prezzo (modello linea)", options=["close","open","high","low","hl2","hlc3","ohlc4"], group=gDraw)
+dMirrorH = input.bool(false, "Specchiato (orizzontale)", group=gDraw)
+dMirrorV = input.bool(false, "Ribaltato (verticale)", group=gDraw)
+dScale   = input.float(100, "Scala ampiezza %", minval=10, maxval=400, step=5, group=gDraw)
+dCol     = input.color(color.new(#48a0ff, 0), "Colore", group=gDraw)
+dTrans   = input.int(20, "Trasparenza", minval=0, maxval=90, group=gDraw)
+dTfList  = input.string("", "Visibile solo su timeframe (es. 60,240,D — vuoto = tutti)", group=gDraw)
+
+// Soglie di sensibilita
+dojiTh  = sens == "Alta (solo pattern netti)" ? 0.06 : sens == "Media" ? 0.10 : 0.15
+pinTh   = sens == "Alta (solo pattern netti)" ? 2.4  : sens == "Media" ? 2.0  : 1.6
+bodyTh  = sens == "Alta (solo pattern netti)" ? 0.90 : sens == "Media" ? 0.82 : 0.72
+minSc   = sens == "Alta (solo pattern netti)" ? 62   : sens == "Media" ? 48   : 34
+
+// ----------------------------------------------------------------------------
+// NOMI DEI PATTERN
+// ----------------------------------------------------------------------------
+f_name(int id) =>
+    switch id
+        1  => "Doji"
+        2  => "Doji a trottola"
+        3  => "Marubozu rialzista"
+        4  => "Marubozu ribassista"
+        5  => "Pin bar rialzista (hammer)"
+        6  => "Pin bar ribassista (shooting star)"
+        7  => "Inside bar"
+        8  => "Outside bar rialzista"
+        9  => "Outside bar ribassista"
+        10 => "NR7 · range minimo 7 barre"
+        11 => "Wide range bar rialzista"
+        12 => "Wide range bar ribassista"
+        13 => "Engulfing rialzista"
+        14 => "Engulfing ribassista"
+        15 => "Harami rialzista"
+        16 => "Harami ribassista"
+        17 => "Piercing line"
+        18 => "Dark cloud cover"
+        19 => "Tweezer bottom"
+        20 => "Tweezer top"
+        21 => "Two-bar reversal rialzista"
+        22 => "Two-bar reversal ribassista"
+        23 => "Morning star"
+        24 => "Evening star"
+        25 => "Three white soldiers"
+        26 => "Three black crows"
+        27 => "Three inside up"
+        28 => "Three inside down"
+        => "—"
+
+// ----------------------------------------------------------------------------
+// MOTORE DI RICONOSCIMENTO — ritorna [id, direzione, punteggio]
+// Chiamato sul grafico e, via request.security(), sugli altri timeframe.
+// ----------------------------------------------------------------------------
+f_scan() =>
+    body  = math.abs(close - open)
+    rng   = math.max(high - low, syminfo.mintick)
+    us    = high - math.max(open, close)
+    ls    = math.min(open, close) - low
+    pBody = math.abs(close[1] - open[1])
+    pRng  = math.max(high[1] - low[1], syminfo.mintick)
+    qBody = math.abs(close[2] - open[2])
+    qRng  = math.max(high[2] - low[2], syminfo.mintick)
+
+    atr   = math.max(ta.atr(14), syminfo.mintick)
+    sma20 = ta.sma(close, 20)
+    sma50 = ta.sma(close, 50)
+    vma   = ta.sma(volume, 20)
+    rngS  = high - low
+    low7  = ta.lowest(rngS, 7)
+    hh    = ta.highest(high, 21)
+    ll    = ta.lowest(low, 21)
+
+    // contesto: trend, posizione nello swing, volumi
+    slope = (sma20 - sma20[5]) / atr
+    int trendDir = close > sma20 and slope > 0.08 ? 1 : close < sma20 and slope < -0.08 ? -1 : 0
+    if not na(sma50)
+        if sma20 > sma50 and trendDir >= 0 and close > sma20
+            trendDir := 1
+        if sma20 < sma50 and trendDir <= 0 and close < sma20
+            trendDir := -1
+    pos = hh == ll ? 0.5 : (close - ll) / (hh - ll)
+    volR = na(vma) or vma == 0 ? na : volume / vma
+    rel  = rng / atr
+
+    // aggiustamenti di punteggio (comuni e per direzione)
+    float adjC = rel > 1.3 ? 7 : rel < 0.6 ? -8 : 0
+    if useVol and not na(volR)
+        adjC := adjC + (volR > 1.4 ? 8 : volR < 0.6 ? -6 : 0)
+    bullCounter = trendDir == -1
+    bearCounter = trendDir == 1
+    float adjB = bullCounter ? (pos < 0.25 ? 10 : (useTrend ? -16 : 0)) : (trendDir == 1 ? 9 : 0)
+    adjB := adjB + (pos < 0.20 ? 5 : 0)
+    float adjS = bearCounter ? (pos > 0.75 ? 10 : (useTrend ? -16 : 0)) : (trendDir == -1 ? 9 : 0)
+    adjS := adjS + (pos > 0.80 ? 5 : 0)
+
+    up  = close > open
+    dn  = close < open
+    pUp = close[1] > open[1]
+    pDn = close[1] < open[1]
+    qUp = close[2] > open[2]
+    qDn = close[2] < open[2]
+
+    int   bestId  = 0
+    int   bestDir = 0
+    float bestSc  = 0.0
+
+    // --- una barra ---------------------------------------------------------
+    if body <= dojiTh * rng and rel >= 0.35
+        isTop = us > 2 * body and ls > 2 * body
+        sc = (isTop ? 34 : 32) + adjC
+        if sc > bestSc
+            bestSc := sc
+            bestId := isTop ? 2 : 1
+            bestDir := 0
+    if body >= bodyTh * rng and rel >= 0.9
+        sc = 52 + adjC + (up ? adjB : adjS)
+        if sc > bestSc
+            bestSc := sc
+            bestId := up ? 3 : 4
+            bestDir := up ? 1 : -1
+    if ls >= pinTh * body and us <= 0.28 * rng and body <= 0.4 * rng and rel >= 0.55
+        sc = 56 + adjC + adjB
+        if sc > bestSc
+            bestSc := sc
+            bestId := 5
+            bestDir := 1
+    if us >= pinTh * body and ls <= 0.28 * rng and body <= 0.4 * rng and rel >= 0.55
+        sc = 56 + adjC + adjS
+        if sc > bestSc
+            bestSc := sc
+            bestId := 6
+            bestDir := -1
+    if high < high[1] and low > low[1]
+        sc = 40 + adjC
+        if sc > bestSc
+            bestSc := sc
+            bestId := 7
+            bestDir := 0
+    if high > high[1] and low < low[1]
+        sc = 50 + adjC + (up ? adjB : adjS)
+        if sc > bestSc
+            bestSc := sc
+            bestId := up ? 8 : 9
+            bestDir := up ? 1 : -1
+    if rngS <= low7
+        sc = 36 + adjC
+        if sc > bestSc
+            bestSc := sc
+            bestId := 10
+            bestDir := 0
+    if rel >= 1.8
+        p = (close - low) / rng
+        if p >= 0.75
+            sc = 48 + adjC + adjB
+            if sc > bestSc
+                bestSc := sc
+                bestId := 11
+                bestDir := 1
+        if p <= 0.25
+            sc = 48 + adjC + adjS
+            if sc > bestSc
+                bestSc := sc
+                bestId := 12
+                bestDir := -1
+
+    // --- due barre ---------------------------------------------------------
+    if up and pDn and close >= open[1] and open <= close[1] and body > pBody * 1.02 and pBody > 0.25 * pRng
+        sc = 70 + adjC + adjB
+        if sc > bestSc
+            bestSc := sc
+            bestId := 13
+            bestDir := 1
+    if dn and pUp and close <= open[1] and open >= close[1] and body > pBody * 1.02 and pBody > 0.25 * pRng
+        sc = 70 + adjC + adjS
+        if sc > bestSc
+            bestSc := sc
+            bestId := 14
+            bestDir := -1
+    if up and pDn and open >= math.min(open[1], close[1]) and close <= math.max(open[1], close[1]) and body < pBody * 0.62 and pBody > 0.5 * pRng
+        sc = 52 + adjC + adjB
+        if sc > bestSc
+            bestSc := sc
+            bestId := 15
+            bestDir := 1
+    if dn and pUp and open <= math.max(open[1], close[1]) and close >= math.min(open[1], close[1]) and body < pBody * 0.62 and pBody > 0.5 * pRng
+        sc = 52 + adjC + adjS
+        if sc > bestSc
+            bestSc := sc
+            bestId := 16
+            bestDir := -1
+    if up and pDn and open < low[1] and close > close[1] + (open[1] - close[1]) * 0.5 and close < open[1]
+        sc = 60 + adjC + adjB
+        if sc > bestSc
+            bestSc := sc
+            bestId := 17
+            bestDir := 1
+    if dn and pUp and open > high[1] and close < close[1] - (close[1] - open[1]) * 0.5 and close > open[1]
+        sc = 60 + adjC + adjS
+        if sc > bestSc
+            bestSc := sc
+            bestId := 18
+            bestDir := -1
+    if math.abs(low - low[1]) <= 0.12 * atr and up and pDn and ls > 0.3 * rng
+        sc = 54 + adjC + adjB
+        if sc > bestSc
+            bestSc := sc
+            bestId := 19
+            bestDir := 1
+    if math.abs(high - high[1]) <= 0.12 * atr and dn and pUp and us > 0.3 * rng
+        sc = 54 + adjC + adjS
+        if sc > bestSc
+            bestSc := sc
+            bestId := 20
+            bestDir := -1
+    if pDn and up and close > high[1] and pRng / atr > 1.1
+        sc = 58 + adjC + adjB
+        if sc > bestSc
+            bestSc := sc
+            bestId := 21
+            bestDir := 1
+    if pUp and dn and close < low[1] and pRng / atr > 1.1
+        sc = 58 + adjC + adjS
+        if sc > bestSc
+            bestSc := sc
+            bestId := 22
+            bestDir := -1
+
+    // --- tre barre ---------------------------------------------------------
+    if qDn and qBody > 0.5 * qRng and pBody <= 0.4 * pRng and up and close > open[2] - (open[2] - close[2]) * 0.5
+        sc = 74 + adjC + adjB
+        if sc > bestSc
+            bestSc := sc
+            bestId := 23
+            bestDir := 1
+    if qUp and qBody > 0.5 * qRng and pBody <= 0.4 * pRng and dn and close < open[2] + (close[2] - open[2]) * 0.5
+        sc = 74 + adjC + adjS
+        if sc > bestSc
+            bestSc := sc
+            bestId := 24
+            bestDir := -1
+    if qUp and pUp and up and close[1] > close[2] and close > close[1] and qBody > 0.55 * qRng and pBody > 0.55 * pRng and body > 0.55 * rng
+        sc = 72 + adjC + adjB
+        if sc > bestSc
+            bestSc := sc
+            bestId := 25
+            bestDir := 1
+    if qDn and pDn and dn and close[1] < close[2] and close < close[1] and qBody > 0.55 * qRng and pBody > 0.55 * pRng and body > 0.55 * rng
+        sc = 72 + adjC + adjS
+        if sc > bestSc
+            bestSc := sc
+            bestId := 26
+            bestDir := -1
+    if qDn and pUp and up and open[1] >= close[2] and close[1] <= open[2] and close > open[2]
+        sc = 66 + adjC + adjB
+        if sc > bestSc
+            bestSc := sc
+            bestId := 27
+            bestDir := 1
+    if qUp and pDn and dn and open[1] <= close[2] and close[1] >= open[2] and close < open[2]
+        sc = 66 + adjC + adjS
+        if sc > bestSc
+            bestSc := sc
+            bestId := 28
+            bestDir := -1
+
+    bestSc := bestId == 0 ? 0 : math.max(1, math.min(99, bestSc))
+    [bestId, bestDir, bestSc]
+
+// Versione non ripitturante (usa la barra chiusa precedente se richiesto)
+f_scanConf() =>
+    [i, d, s] = f_scan()
+    [confirm ? i[1] : i, confirm ? d[1] : d, confirm ? s[1] : s]
+
+// ----------------------------------------------------------------------------
+// SCANSIONE: grafico corrente + 5 timeframe
+// ----------------------------------------------------------------------------
+[cId, cDir, cSc] = f_scan()
+
+[i1, d1, s1] = request.security(syminfo.tickerid, tf1, f_scanConf(), lookahead=barmerge.lookahead_off)
+[i2, d2, s2] = request.security(syminfo.tickerid, tf2, f_scanConf(), lookahead=barmerge.lookahead_off)
+[i3, d3, s3] = request.security(syminfo.tickerid, tf3, f_scanConf(), lookahead=barmerge.lookahead_off)
+[i4, d4, s4] = request.security(syminfo.tickerid, tf4, f_scanConf(), lookahead=barmerge.lookahead_off)
+[i5, d5, s5] = request.security(syminfo.tickerid, tf5, f_scanConf(), lookahead=barmerge.lookahead_off)
+
+f_tanh(float x) =>
+    e = math.exp(2 * x)
+    (e - 1) / (e + 1)
+
+f_contrib(int d, float s, float w) =>
+    s >= minSc ? d * (s / 100.0) * w : 0.0
+f_weight(float s, float w) =>
+    s >= minSc ? w : 0.0
+
+num = f_contrib(d1, s1, w1) + f_contrib(d2, s2, w2) + f_contrib(d3, s3, w3) + f_contrib(d4, s4, w4) + f_contrib(d5, s5, w5)
+den = f_weight(s1, w1) + f_weight(s2, w2) + f_weight(s3, w3) + f_weight(s4, w4) + f_weight(s5, w5)
+bias = den > 0 ? math.round(f_tanh(num / den * 1.6) * 100) : 0
+biasTxt = bias >= 55 ? "LONG FORTE" : bias >= 25 ? "LONG" : bias <= -55 ? "SHORT FORTE" : bias <= -25 ? "SHORT" : "NEUTRO"
+
+// ----------------------------------------------------------------------------
+// MARKER ED ETICHETTE SUL TIMEFRAME CORRENTE
+// ----------------------------------------------------------------------------
+valid   = cId != 0 and cSc >= minSc
+bullSig = valid and cDir ==  1
+bearSig = valid and cDir == -1
+neutSig = valid and cDir ==  0
+
+plotshape(showMarks and bullSig, title="Pattern rialzista", style=shape.triangleup,   location=location.belowbar, color=color.new(#23d18b, 0), size=size.tiny)
+plotshape(showMarks and bearSig, title="Pattern ribassista", style=shape.triangledown, location=location.abovebar, color=color.new(#ff4d5e, 0), size=size.tiny)
+plotshape(showMarks and neutSig, title="Pattern neutro",    style=shape.circle,       location=location.abovebar, color=color.new(#e7b54a, 0), size=size.tiny)
+
+if showLbl and valid and bar_index > last_bar_index - lblBack
+    label.new(bar_index, cDir > 0 ? low : high,
+         text = f_name(cId) + " · " + str.tostring(cSc, "#"),
+         style = cDir > 0 ? label.style_label_up : label.style_label_down,
+         color = color.new(cDir > 0 ? #23d18b : cDir < 0 ? #ff4d5e : #e7b54a, 78),
+         textcolor = color.new(color.white, 0), size = size.tiny)
+
+// ----------------------------------------------------------------------------
+// TABELLA DI SCANSIONE MULTI-TIMEFRAME
+// ----------------------------------------------------------------------------
+f_tblPos() =>
+    switch tblPos
+        "Alto destra"    => position.top_right
+        "Alto sinistra"  => position.top_left
+        "Basso destra"   => position.bottom_right
+        => position.bottom_left
+
+var table tbl = table.new(f_tblPos(), 4, 7, border_width=1, frame_width=1, frame_color=color.new(#96aacd, 70))
+
+f_row(int r, string tfLbl, int id, int d, float s) =>
+    ok  = id != 0 and s >= minSc
+    col = not ok ? color.new(#5f7193, 0) : d > 0 ? color.new(#23d18b, 0) : d < 0 ? color.new(#ff4d5e, 0) : color.new(#e7b54a, 0)
+    table.cell(tbl, 0, r, tfLbl, text_color=color.new(#cdd9ee, 0), text_size=size.tiny, bgcolor=color.new(#0a111f, 10))
+    table.cell(tbl, 1, r, ok ? f_name(id) : "nessun pattern", text_color=color.new(ok ? #cdd9ee : #5f7193, 0), text_size=size.tiny, bgcolor=color.new(#0a111f, 10))
+    table.cell(tbl, 2, r, not ok ? "—" : d > 0 ? "LONG" : d < 0 ? "SHORT" : "NEUTRO", text_color=col, text_size=size.tiny, bgcolor=color.new(#0a111f, 10))
+    table.cell(tbl, 3, r, ok ? str.tostring(s, "#") : "—", text_color=color.new(#e7b54a, 0), text_size=size.tiny, bgcolor=color.new(#0a111f, 10))
+
+if useMtf and barstate.islast
+    table.cell(tbl, 0, 0, "TF",      text_color=color.new(#5f7193, 0), text_size=size.tiny, bgcolor=color.new(#080d18, 0))
+    table.cell(tbl, 1, 0, "PATTERN", text_color=color.new(#5f7193, 0), text_size=size.tiny, bgcolor=color.new(#080d18, 0))
+    table.cell(tbl, 2, 0, "BIAS",    text_color=color.new(#5f7193, 0), text_size=size.tiny, bgcolor=color.new(#080d18, 0))
+    table.cell(tbl, 3, 0, "SCORE",   text_color=color.new(#5f7193, 0), text_size=size.tiny, bgcolor=color.new(#080d18, 0))
+    f_row(1, tf1, i1, d1, s1)
+    f_row(2, tf2, i2, d2, s2)
+    f_row(3, tf3, i3, d3, s3)
+    f_row(4, tf4, i4, d4, s4)
+    f_row(5, tf5, i5, d5, s5)
+    bcol = bias >= 25 ? color.new(#23d18b, 0) : bias <= -25 ? color.new(#ff4d5e, 0) : color.new(#cdd9ee, 0)
+    table.cell(tbl, 0, 6, "BIAS", text_color=color.new(#e7b54a, 0), text_size=size.tiny, bgcolor=color.new(#0d1526, 0))
+    table.cell(tbl, 1, 6, "confluenza pesata", text_color=color.new(#8294b4, 0), text_size=size.tiny, bgcolor=color.new(#0d1526, 0))
+    table.cell(tbl, 2, 6, biasTxt, text_color=bcol, text_size=size.tiny, bgcolor=color.new(#0d1526, 0))
+    table.cell(tbl, 3, 6, (bias > 0 ? "+" : "") + str.tostring(bias), text_color=bcol, text_size=size.tiny, bgcolor=color.new(#0d1526, 0))
+
+// ----------------------------------------------------------------------------
+// PATTERN A BARRE — copia di un intervallo di barre e proiezione sul grafico
+// ----------------------------------------------------------------------------
+var array<float> pO = array.new_float()
+var array<float> pH = array.new_float()
+var array<float> pL = array.new_float()
+var array<float> pC = array.new_float()
+var array<line>  dLines = array.new<line>()
+var array<box>   dBoxes = array.new<box>()
+
+if useDraw and barstate.isconfirmed and time >= tStart and time <= tEnd and array.size(pO) < 150
+    array.push(pO, open)
+    array.push(pH, high)
+    array.push(pL, low)
+    array.push(pC, close)
+
+f_tfVisible() =>
+    clean = str.replace_all(dTfList, " ", "")
+    clean == "" or str.contains("," + clean + ",", "," + timeframe.period + ",")
+
+f_src(float o, float h, float l, float c) =>
+    switch dSource
+        "open"  => o
+        "high"  => h
+        "low"   => l
+        "hl2"   => (h + l) / 2
+        "hlc3"  => (h + l + c) / 3
+        "ohlc4" => (o + h + l + c) / 4
+        => c
+
+if barstate.islast
+    // pulizia dei disegni precedenti
+    while array.size(dLines) > 0
+        line.delete(array.pop(dLines))
+    while array.size(dBoxes) > 0
+        box.delete(array.pop(dBoxes))
+
+    n = array.size(pO)
+    if useDraw and n > 1 and f_tfVisible()
+        col   = color.new(dCol, dTrans)
+        k     = dScale / 100.0 * (dMirrorV ? -1 : 1)
+        first = dMirrorH ? n - 1 : 0
+        p0    = array.get(pO, first)
+        anchP = close
+        int prevX = na
+        float prevY = na
+        for j = 0 to n - 1
+            idx = dMirrorH ? n - 1 - j : j
+            o0 = array.get(pO, idx)
+            h0 = array.get(pH, idx)
+            l0 = array.get(pL, idx)
+            c0 = array.get(pC, idx)
+            o = anchP * (1 + ((o0 - p0) / p0) * k)
+            c = anchP * (1 + ((c0 - p0) / p0) * k)
+            hRaw = dMirrorV ? l0 : h0
+            lRaw = dMirrorV ? h0 : l0
+            h = anchP * (1 + ((hRaw - p0) / p0) * k)
+            l = anchP * (1 + ((lRaw - p0) / p0) * k)
+            x = bar_index + dOffset + j
+            if dModel == "Linea"
+                y = f_src(o, h, l, c)
+                if not na(prevX)
+                    array.push(dLines, line.new(prevX, prevY, x, y, color=col, width=2))
+                prevX := x
+                prevY := y
+            else
+                array.push(dLines, line.new(x, h, x, l, color=col, width=1))
+                if dModel == "Barre (OHLC)"
+                    array.push(dLines, line.new(x - 1, o, x, o, color=col, width=2))
+                    array.push(dLines, line.new(x, c, x + 1, c, color=col, width=2))
+                else
+                    array.push(dBoxes, box.new(x - 1, math.max(o, c), x + 1, math.min(o, c),
+                         border_color=col, bgcolor=color.new(dCol, c >= o ? dTrans : math.min(90, dTrans + 55))))
+        array.push(dLines, line.new(bar_index + dOffset, anchP, bar_index + dOffset + n - 1, anchP,
+             color=color.new(dCol, math.min(90, dTrans + 50)), style=line.style_dotted))
+
+// ----------------------------------------------------------------------------
+// ALERT
+// ----------------------------------------------------------------------------
+alertcondition(bullSig, "Pattern rialzista", "AURUM: pattern a barre rialzista sopra soglia")
+alertcondition(bearSig, "Pattern ribassista", "AURUM: pattern a barre ribassista sopra soglia")
+alertcondition(useMtf and ta.crossover(bias, 25),  "Confluenza LONG",  "AURUM: bias di confluenza multi-timeframe passato in area LONG")
+alertcondition(useMtf and ta.crossunder(bias, -25),"Confluenza SHORT", "AURUM: bias di confluenza multi-timeframe passato in area SHORT")
+
+if valid and barstate.isconfirmed
+    alert(f_name(cId) + " su " + syminfo.ticker + " " + timeframe.period + " · score " + str.tostring(cSc, "#") + " · bias MTF " + str.tostring(bias), alert.freq_once_per_bar_close)

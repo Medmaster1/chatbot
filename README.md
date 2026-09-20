@@ -31,6 +31,12 @@ Tutto in **HTML/CSS/JS puro** (app single-file), pubblicato su **GitHub Pages**.
 | Bar Pattern Lab | `bar-pattern.html` | Identificatore di pattern a barre multi-timeframe (15m→1W): riconoscimento a 1/2/3 barre con scoring contestuale (trend, ATR, volumi, estremi di swing), bias di confluenza pesato per timeframe, strumento di disegno **Pattern a Barre** (copia barre, specchia/ribalta, modello barre/candele/linea con fonte di prezzo, visibilità per timeframe) e ricerca di analoghi storici. Dati Yahoo Finance via proxy CORS, fallback su serie simulata |
 | London Strategic Edge | `london-strategic-edge.html` | Market intelligence: dealer gamma exposure (GEX/DEX/VEX), muri call/put, gamma flip, IV/HV/VRP, options flow, narrativa GEX, screener universo e regime VIX. Ispirato a londonstrategicedge.com, dati reali **FlashAlpha** (`lab.flashalpha.com`, key nel browser) |
 
+
+### Indicatori Pine Script (TradingView)
+| Indicatore | File | Cosa fa |
+|---|---|---|
+| AURUM Bar Pattern MTF | `pine/aurum-bar-pattern-mtf.pine` | Porting Pine v6 di `bar-pattern.html`: 28 pattern a 1/2/3 barre con scoring contestuale, tabella di scansione su 5 timeframe con bias di confluenza pesato, proiezione "pattern a barre" (copia barre, specchiato/ribaltato, modello barre/candele/linea, scala, visibilita per timeframe) e alert |
+
 ---
 
 ## Fonti dati (tutte free tier)
