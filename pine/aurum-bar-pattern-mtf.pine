@@ -481,8 +481,11 @@ if barstate.islast
 // ----------------------------------------------------------------------------
 alertcondition(bullSig, "Pattern rialzista", "AURUM: pattern a barre rialzista sopra soglia")
 alertcondition(bearSig, "Pattern ribassista", "AURUM: pattern a barre ribassista sopra soglia")
-alertcondition(useMtf and ta.crossover(bias, 25),  "Confluenza LONG",  "AURUM: bias di confluenza multi-timeframe passato in area LONG")
-alertcondition(useMtf and ta.crossunder(bias, -25),"Confluenza SHORT", "AURUM: bias di confluenza multi-timeframe passato in area SHORT")
+// ta.* valutate a livello globale, mai dentro un'espressione condizionale (CW10002)
+biasUp = ta.crossover(bias, 25)
+biasDn = ta.crossunder(bias, -25)
+alertcondition(useMtf and biasUp, "Confluenza LONG",  "AURUM: bias di confluenza multi-timeframe passato in area LONG")
+alertcondition(useMtf and biasDn, "Confluenza SHORT", "AURUM: bias di confluenza multi-timeframe passato in area SHORT")
 
 if valid and barstate.isconfirmed
     alert(f_name(cId) + " su " + syminfo.ticker + " " + timeframe.period + " · score " + str.tostring(cSc, "#") + " · bias MTF " + str.tostring(bias), alert.freq_once_per_bar_close)

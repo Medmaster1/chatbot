@@ -142,7 +142,7 @@ fill(pU2, pU1, color=fillB and showB2 and showB1 ? color.new(cBand, 95) : na, ti
 fill(pD1, pD2, color=fillB and showB2 and showB1 ? color.new(cBand, 95) : na, title="Area banda 2 inf")
 
 plot(showPrev ? prevVwap : na, "VWAP precedente", color=color.new(#8294b4, 20), style=plot.style_stepline, linewidth=1)
-plot(showHtf ? htfVwap : na, "VWAP " + htf, color=color.new(#9b7bff, 10), linewidth=2)
+plot(showHtf ? htfVwap : na, "VWAP superiore", color=color.new(#9b7bff, 10), linewidth=2)
 
 plotshape(anchorCond and not na(vwap), "Ancora", style=shape.xcross, location=location.belowbar, color=color.new(#e7b54a, 0), size=size.tiny)
 
@@ -186,12 +186,19 @@ if showTbl and barstate.islast
 // ----------------------------------------------------------------------------
 // ALERT
 // ----------------------------------------------------------------------------
+// ta.* valutate sempre a livello globale: dentro un'espressione condizionale
+// potrebbero non girare su ogni barra e falsare lo storico (CW10002).
+xUp1 = ta.crossover(high, up1)
+xDn1 = ta.crossunder(low, dn1)
+xUp2 = ta.crossover(high, up2)
+xDn2 = ta.crossunder(low, dn2)
+
 crossUp   = ta.crossover(close, vwap)
 crossDn   = ta.crossunder(close, vwap)
-touchUp1  = showB1 and ta.crossover(high, up1)
-touchDn1  = showB1 and ta.crossunder(low, dn1)
-touchUp2  = showB2 and ta.crossover(high, up2)
-touchDn2  = showB2 and ta.crossunder(low, dn2)
+touchUp1  = showB1 and xUp1
+touchDn1  = showB1 and xDn1
+touchUp2  = showB2 and xUp2
+touchDn2  = showB2 and xDn2
 
 alertcondition(crossUp,  "Prezzo sopra VWAP", "AURUM VWAP: il prezzo ha incrociato il VWAP al rialzo")
 alertcondition(crossDn,  "Prezzo sotto VWAP", "AURUM VWAP: il prezzo ha incrociato il VWAP al ribasso")
