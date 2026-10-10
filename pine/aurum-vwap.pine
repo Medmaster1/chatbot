@@ -18,11 +18,14 @@ indicator("AURUM VWAP — ancorato con bande", shorttitle="AURUM VWAP", overlay=
 // INPUT
 // ----------------------------------------------------------------------------
 gA = "Ancoraggio"
-anchorMode = input.string("Sessione", "Ancora il VWAP a",
-     options=["Sessione", "Settimana", "Mese", "Trimestre", "Anno", "Data personalizzata", "Swing high (N barre)", "Swing low (N barre)", "Inizio grafico"], group=gA)
+anchorMode = input.string("Automatico", "Ancora il VWAP a",
+     options=["Automatico", "Sessione", "Settimana", "Mese", "Trimestre", "Anno", "Data personalizzata", "Swing high (N barre)", "Swing low (N barre)", "Inizio grafico"],
+     tooltip="Automatico sceglie il periodo in base al timeframe del grafico: sessione su intraday, settimana sul giornaliero, mese sul settimanale, anno sul mensile.", group=gA)
 tAnchor = input.time(timestamp("01 Jan 2025 00:00 +0000"), "Data personalizzata", confirm=true, group=gA)
 swLen   = input.int(50, "Lunghezza swing (barre)", minval=5, maxval=500, group=gA)
 src     = input.source(hlc3, "Fonte di prezzo", group=gA)
+usePrec = input.bool(false, "Calcolo da timeframe inferiore", inline="pr", tooltip="Alimenta il VWAP con le barre intrabar invece che con le candele del grafico: il valore resta lo stesso cambiando timeframe. Piu' pesante da calcolare.", group=gA)
+precTf  = input.timeframe("1", "", inline="pr", group=gA)
 useRth  = input.bool(false, "Solo orario di contrattazione regolare", tooltip="Esclude pre e after market: le barre fuori sessione non alimentano il VWAP.", group=gA)
 
 gB = "Bande"
@@ -50,19 +53,48 @@ cBand = input.color(#48a0ff, "Colore bande", group=gX)
 // ----------------------------------------------------------------------------
 // CONDIZIONE DI ANCORAGGIO
 // ----------------------------------------------------------------------------
-newHH = high > ta.highest(high, swLen)[1]
-newLL = low  < ta.lowest(low, swLen)[1]
+// Un ancoraggio periodico ha senso solo se il periodo e' piu' lungo della barra
+// del grafico: altrimenti timeframe.change() sarebbe vero su ogni candela, il
+// VWAP si azzererebbe ogni barra e la linea resterebbe incollata ai prezzi.
+chartSec = timeframe.in_seconds(timeframe.period)
+autoTf   = chartSec < 86400 ? "D" : chartSec < 604800 ? "W" : chartSec < 2592000 ? "M" : "12M"
 
-anchorCond = switch anchorMode
-    "Sessione"            => timeframe.change("D")
-    "Settimana"           => timeframe.change("W")
-    "Mese"                => timeframe.change("M")
-    "Trimestre"           => timeframe.change("3M")
-    "Anno"                => timeframe.change("12M")
-    "Data personalizzata" => time >= tAnchor and time[1] < tAnchor
-    "Swing high (N barre)"=> newHH
-    "Swing low (N barre)" => newLL
-    => false
+anchorTf = switch anchorMode
+    "Automatico" => autoTf
+    "Sessione"   => "D"
+    "Settimana"  => "W"
+    "Mese"       => "M"
+    "Trimestre"  => "3M"
+    "Anno"       => "12M"
+    => ""
+
+periodicAnchor = anchorTf != ""
+effTf     = periodicAnchor ? anchorTf : "D"
+anchorSec = timeframe.in_seconds(effTf)
+tfOk      = not periodicAnchor or chartSec < anchorSec
+
+// tutte le condizioni valutate a livello globale, su ogni barra
+chgEff   = timeframe.change(effTf)
+newHH    = high > ta.highest(high, swLen)[1]
+newLL    = low  < ta.lowest(low, swLen)[1]
+dateHit  = time >= tAnchor and time[1] < tAnchor
+
+anchorCond = periodicAnchor ? (tfOk and chgEff) :
+     anchorMode == "Data personalizzata" ? dateHit :
+     anchorMode == "Swing high (N barre)" ? newHH :
+     anchorMode == "Swing low (N barre)" ? newLL : false
+
+// etichetta dell'ancora realmente in uso (per la tabella)
+anchorLbl = not periodicAnchor ? anchorMode :
+     not tfOk ? "inizio grafico (TF ≥ " + effTf + ")" :
+     anchorMode == "Automatico" ? "automatico · " + effTf : anchorMode
+
+// dati intrabar per il calcolo ad alta precisione.
+// Il timeframe richiesto non deve mai superare quello del grafico, altrimenti
+// request.security_lower_tf() va in errore: se serve, ripiega sul grafico.
+precOn   = usePrec and chartSec > timeframe.in_seconds(precTf)
+safePrec = precOn ? precTf : timeframe.period
+[ltfSrc, ltfVol] = request.security_lower_tf(syminfo.tickerid, safePrec, [src, volume])
 
 inSession = not useRth or not na(time(timeframe.period, session.regular))
 started   = anchorMode == "Data personalizzata" ? time >= tAnchor : true
@@ -86,9 +118,18 @@ if anchorCond
     sumPV2 := 0.0
 
 if started and inSession
-    sumPV  := sumPV + src * w
-    sumV   := sumV + w
-    sumPV2 := sumPV2 + src * src * w
+    if precOn and array.size(ltfSrc) > 0
+        for k = 0 to array.size(ltfSrc) - 1
+            pk = array.get(ltfSrc, k)
+            vk = array.get(ltfVol, k)
+            wk = nz(vk) > 0 ? vk : 1.0
+            sumPV  := sumPV + pk * wk
+            sumV   := sumV + wk
+            sumPV2 := sumPV2 + pk * pk * wk
+    else
+        sumPV  := sumPV + src * w
+        sumV   := sumV + w
+        sumPV2 := sumPV2 + src * src * w
 
 vwap = sumV > 0 ? sumPV / sumV : na
 curVwap := vwap
@@ -111,10 +152,10 @@ dn3 = f_band(mult3, false)
 // Calcolato sulle barre del grafico con reset al cambio di periodo superiore:
 // nessuna richiesta HTF, quindi nessun repaint.
 // ----------------------------------------------------------------------------
-f_htfVwap() =>
+f_htfVwap(bool reset) =>
     var float pv = 0.0
     var float vv = 0.0
-    if timeframe.change(htf)
+    if reset
         pv := 0.0
         vv := 0.0
     wv = nz(volume) > 0 ? volume : 1.0
@@ -122,7 +163,10 @@ f_htfVwap() =>
     vv := vv + wv
     vv > 0 ? pv / vv : na
 
-htfVwap = f_htfVwap()
+htfSec  = timeframe.in_seconds(htf)
+htfOk   = chartSec < htfSec            // sotto questa soglia il VWAP superiore non ha senso
+htfChg  = timeframe.change(htf)
+htfVwap = f_htfVwap(htfChg)
 
 // ----------------------------------------------------------------------------
 // PLOT
@@ -142,7 +186,7 @@ fill(pU2, pU1, color=fillB and showB2 and showB1 ? color.new(cBand, 95) : na, ti
 fill(pD1, pD2, color=fillB and showB2 and showB1 ? color.new(cBand, 95) : na, title="Area banda 2 inf")
 
 plot(showPrev ? prevVwap : na, "VWAP precedente", color=color.new(#8294b4, 20), style=plot.style_stepline, linewidth=1)
-plot(showHtf ? htfVwap : na, "VWAP superiore", color=color.new(#9b7bff, 10), linewidth=2)
+plot(showHtf and htfOk ? htfVwap : na, "VWAP superiore", color=color.new(#9b7bff, 10), linewidth=2)
 
 plotshape(anchorCond and not na(vwap), "Ancora", style=shape.xcross, location=location.belowbar, color=color.new(#e7b54a, 0), size=size.tiny)
 
@@ -167,7 +211,7 @@ f_tblPos() =>
         "Basso destra"  => position.bottom_right
         => position.bottom_left
 
-var table tbl = table.new(f_tblPos(), 2, 6, border_width=1, frame_width=1, frame_color=color.new(#96aacd, 70))
+var table tbl = table.new(f_tblPos(), 2, 7, border_width=1, frame_width=1, frame_color=color.new(#96aacd, 70))
 
 f_cell(int r, string k, string v, color vc) =>
     table.cell(tbl, 0, r, k, text_color=color.new(#8294b4, 0), text_size=size.tiny, bgcolor=color.new(#0a111f, 10))
@@ -176,12 +220,16 @@ f_cell(int r, string k, string v, color vc) =>
 if showTbl and barstate.islast
     sideCol = close >= vwap ? color.new(cUp, 0) : color.new(cDn, 0)
     table.cell(tbl, 0, 0, "AURUM VWAP", text_color=color.new(#e7b54a, 0), text_size=size.tiny, bgcolor=color.new(#080d18, 0))
-    table.cell(tbl, 1, 0, anchorMode, text_color=color.new(#cdd9ee, 0), text_size=size.tiny, bgcolor=color.new(#080d18, 0))
+    table.cell(tbl, 1, 0, anchorLbl, text_color=color.new(tfOk ? #cdd9ee : #e7b54a, 0), text_size=size.tiny, bgcolor=color.new(#080d18, 0))
     f_cell(1, "VWAP", str.tostring(vwap, format.mintick), color.new(#cdd9ee, 0))
     f_cell(2, "Prezzo", close >= vwap ? "sopra VWAP" : "sotto VWAP", sideCol)
     f_cell(3, "Distanza", na(distPct) ? "—" : (distPct >= 0 ? "+" : "") + str.tostring(distPct, "#.##") + "%", sideCol)
     f_cell(4, "Z-score", na(zScore) ? "—" : str.tostring(zScore, "#.##") + "σ", sideCol)
     f_cell(5, "Zona", zone, color.new(#cdd9ee, 0))
+    warn = not tfOk ? "TF grafico ≥ ancora: VWAP da inizio grafico" :
+         showHtf and not htfOk ? "VWAP superiore nascosto: TF grafico ≥ " + htf :
+         precOn ? "precisione intrabar " + precTf : "ok"
+    f_cell(6, "Stato", warn, color.new(warn == "ok" ? #5f7193 : #e7b54a, 0))
 
 // ----------------------------------------------------------------------------
 // ALERT
