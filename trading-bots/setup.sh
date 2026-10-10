@@ -58,7 +58,7 @@ setup_nofx() {
   if command -v docker >/dev/null 2>&1; then
     echo "   avvio con Docker: docker compose -f $VENDOR/nofx/docker-compose.prod.yml up -d"
   else
-    echo "   Docker assente: build da sorgente (Go 1.21+, Node 18+) — vedi README"
+    echo "   Docker assente: build da sorgente (Go 1.25+, Node 18+) — vedi README"
   fi
   echo "   ✓ NOFX clonato — UI su http://localhost:3000 dopo l'avvio"
 }

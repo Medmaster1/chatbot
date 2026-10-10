@@ -29,7 +29,35 @@ Tutto viene installato in `trading-bots/vendor/` (ignorato da git). In alternati
 [`SETUP_PROMPT.md`](./SETUP_PROMPT.md) in una sessione di Claude Code: è il "prompt di setup" del
 video, fa fare tutto all'agente.
 
-Requisiti: Python 3.11+, git; Docker consigliato per NOFX (oppure Go 1.21+ e Node 18+).
+Requisiti: Python 3.11+, git; Docker consigliato per NOFX (oppure Go 1.25+ e Node 18+).
+
+## Il programma: `run.sh`
+
+Dopo il setup, tutto si comanda da un unico pannello:
+
+```bash
+./run.sh backtest 20240101-          # scarica i dati 1h e backtesta BreakoutStrategy
+./run.sh hyperopt 200                # ottimizza i parametri (attenzione all'overfitting)
+./run.sh dryrun                      # bot in dry-run in background, Web UI/API su :8080
+./run.sh status                      # profitto e trade aperti (REST API)
+./run.sh logs | ./run.sh stop
+./run.sh alpha list                  # libreria di 462 alpha di Vibe-Trading (senza key LLM)
+./run.sh vibe "Backtesta un momentum su NVDA e MSFT negli ultimi 2 anni"   # richiede key LLM
+./run.sh vibe-web                    # Web UI Vibe-Trading su :8899
+./run.sh nofx-up | ./run.sh nofx-down  # NOFX via Docker, UI su :3000
+```
+
+L'exchange si cambia al volo con `EXCHANGE=kraken ./run.sh backtest` (default: quello della config,
+`binance`). Binance blocca alcune aree geografiche (errore 451): in quel caso usa `kraken`,
+`kucoin`, `gate`, `okx`, … La strategia si cambia con `STRATEGY=NomeStrategia`.
+
+### Risultato di riferimento della strategia d'esempio
+
+Backtest `BreakoutStrategy` su KuCoin, BTC/USDT + ETH/USDT, 1h, 2024 (wallet 10.000 USDT):
+**228 trade, win rate 43%, −11,9%, drawdown max 26%**. In un anno in cui BTC è più che
+raddoppiato, la strategia ha perso: è la dimostrazione pratica del consiglio del video. La
+strategia d'esempio serve a provare il flusso, non a fare soldi: va migliorata (con Vibe-Trading o
+hyperopt) e validata fuori campione in dry-run prima di qualunque uso reale.
 
 ---
 
@@ -91,7 +119,7 @@ Per il paper trading crea un account gratuito su [Alpaca](https://alpaca.markets
 
 ```bash
 docker compose -f vendor/nofx/docker-compose.prod.yml up -d     # UI su http://localhost:3000
-# senza Docker:  cd vendor/nofx && go build -o nofx && ./nofx   +   cd web && npm i && npm run dev
+# senza Docker (Go 1.25+):  cd vendor/nofx && go build -o nofx && ./nofx   +   cd web && npm i && npm run dev
 ```
 
 Dalla UI: collega l'exchange (Hyperliquid per l'autopilot, oppure un CEX), scegli il modello AI,

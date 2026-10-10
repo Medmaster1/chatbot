@@ -25,4 +25,5 @@ Sei il mio assistente di setup. Installa e configura questi tre progetti open-so
 Regole:
 - Tutto parte in **paper / dry-run**. Non passare mai al live senza mia conferma esplicita.
 - Le API key degli exchange devono essere senza permesso di prelievo.
+- Per backtest, dry-run e stato usa `trading-bots/run.sh` (`./run.sh help`); se Binance risponde 451 usa `EXCHANGE=kraken`.
 - Alla fine dammi un riepilogo: cosa è installato, come avviarlo, URL e prossimi passi.
