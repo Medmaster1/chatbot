@@ -30,6 +30,11 @@ Tutto in **HTML/CSS/JS puro** (app single-file), pubblicato su **GitHub Pages**.
 | TradingView | `tradingview.html` | Grafico avanzato real-time + ticker tape, analisi tecnica, info simbolo e calendario economico (widget free TradingView) su metalli, energia, indici, FX e crypto |
 | London Strategic Edge | `london-strategic-edge.html` | Market intelligence: dealer gamma exposure (GEX/DEX/VEX), muri call/put, gamma flip, IV/HV/VRP, options flow, narrativa GEX, screener universo e regime VIX. Ispirato a londonstrategicedge.com, dati reali **FlashAlpha** (`lab.flashalpha.com`, key nel browser) |
 
+### Trading bots (locale, non pubblicati sul sito)
+| Kit | Cartella | Cosa fa |
+|---|---|---|
+| AI trading bots | [`trading-bots/`](./trading-bots/) | Setup dei 3 repo open-source del video *"3 free Github repos … AI trading"*: **Freqtrade** (esecuzione/backtest, strategia breakout BTC/ETH in dry-run), **Vibe-Trading** (agente di ricerca strategie, paper su Alpaca), **NOFX** (terminal LLM → exchange). `./setup.sh` + prompt per Claude Code |
+
 ---
 
 ## Fonti dati (tutte free tier)
