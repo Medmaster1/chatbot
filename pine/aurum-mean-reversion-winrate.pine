@@ -1,0 +1,174 @@
+//@version=6
+// =============================================================================
+// AURUM MEAN REVERSION — strategia ad alto win rate (misurabile)
+// KID Digital Wealth
+//
+// Archetipo: ritorno alla media nel senso del trend di fondo (RSI corto in
+// ipervenduto sopra la media lenta, e simmetrico al ribasso). E' la famiglia
+// di sistemi con la percentuale di operazioni vincenti piu' alta: target
+// piccoli, stop ampi, permanenza breve.
+//
+// ATTENZIONE: un win rate alto NON significa che il sistema guadagni. Questo
+// script mostra sempre, nella tabella, anche profit factor, payoff, attesa
+// per operazione e drawdown: sono quei numeri a dire se la strategia regge.
+// La percentuale di vincite si alza semplicemente stringendo il target e
+// allargando lo stop, al prezzo di perdite rare ma grandi.
+//
+// Nessun consiglio d'investimento. Uso didattico, da validare su dati propri.
+// =============================================================================
+strategy("AURUM Mean Reversion — alto win rate", shorttitle="AURUM MR",
+     overlay=true, initial_capital=10000,
+     default_qty_type=strategy.percent_of_equity, default_qty_value=20,
+     commission_type=strategy.commission.percent, commission_value=0.02,
+     slippage=1, process_orders_on_close=true, calc_on_every_tick=false,
+     margin_long=0, margin_short=0)
+
+// ----------------------------------------------------------------------------
+// INPUT
+// ----------------------------------------------------------------------------
+gS = "Segnale"
+dirMode  = input.string("Solo long", "Direzione", options=["Solo long", "Long e short", "Solo short"], group=gS)
+trendLen = input.int(200, "Media di trend (filtro)", minval=20, group=gS)
+rsiLen   = input.int(2,  "Lunghezza RSI", minval=2, maxval=14, tooltip="RSI molto corto (2-4): e' la chiave dell'alto win rate.", group=gS)
+rsiBuy   = input.int(10, "RSI ipervenduto (ingresso long)", minval=1, maxval=49, group=gS)
+rsiSell  = input.int(90, "RSI ipercomprato (ingresso short)", minval=51, maxval=99, group=gS)
+needDown = input.int(2, "Chiusure consecutive a favore", minval=0, maxval=5, tooltip="Numero di barre discendenti (o ascendenti per lo short) richieste prima dell'ingresso.", group=gS)
+maxZ     = input.float(0.0, "Distanza minima dalla media in ATR", minval=0, step=0.25, tooltip="0 = filtro disattivato. Chiede che il prezzo sia gia' esteso rispetto alla media veloce.", group=gS)
+
+gE = "Uscite"
+exitFast = input.bool(true,  "Uscita al rientro sulla media veloce", inline="e1", group=gE)
+fastLen  = input.int(5, "", minval=2, inline="e1", group=gE)
+exitRsi  = input.bool(true,  "Uscita su RSI neutro", inline="e2", group=gE)
+rsiOut   = input.int(60, "", minval=50, maxval=95, inline="e2", group=gE)
+useTp    = input.bool(false, "Target fisso in ATR", inline="e3", group=gE)
+tpAtr    = input.float(1.0, "", minval=0.1, step=0.1, inline="e3", group=gE)
+useSl    = input.bool(true,  "Stop in ATR", inline="e4", group=gE)
+slAtr    = input.float(3.0, "", minval=0.5, step=0.5, tooltip="Stop ampio: alza il win rate ma rende rare e grandi le perdite.", inline="e4", group=gE)
+maxBars  = input.int(10, "Uscita a tempo (barre)", minval=0, tooltip="0 = disattivata.", group=gE)
+atrLen   = input.int(14, "Lunghezza ATR", minval=2, group=gE)
+
+gF = "Filtri"
+useDates = input.bool(false, "Limita il periodo di test", group=gF)
+dFrom    = input.time(timestamp("01 Jan 2015 00:00 +0000"), "Da", group=gF)
+dTo      = input.time(timestamp("01 Jan 2030 00:00 +0000"), "A", group=gF)
+useSess  = input.bool(false, "Solo una fascia oraria", inline="s", group=gF)
+sessStr  = input.session("0900-1700", "", inline="s", group=gF)
+
+gV = "Visualizzazione"
+showTbl = input.bool(true, "Tabella statistiche", group=gV)
+tblPos  = input.string("Alto destra", "Posizione tabella", options=["Alto destra","Alto sinistra","Basso destra","Basso sinistra"], group=gV)
+showMa  = input.bool(true, "Mostra le medie", group=gV)
+
+// ----------------------------------------------------------------------------
+// CALCOLI (tutte le ta.* a livello globale, mai dentro condizioni)
+// ----------------------------------------------------------------------------
+rsi      = ta.rsi(close, rsiLen)
+maTrend  = ta.sma(close, trendLen)
+maFast   = ta.sma(close, fastLen)
+atr      = ta.atr(atrLen)
+fallRun  = ta.falling(close, math.max(needDown, 1))
+riseRun  = ta.rising(close, math.max(needDown, 1))
+
+inDates  = not useDates or (time >= dFrom and time <= dTo)
+inSess   = not useSess or not na(time(timeframe.period, sessStr))
+tradeOk  = inDates and inSess and not na(maTrend) and barstate.isconfirmed
+
+allowLong  = dirMode != "Solo short"
+allowShort = dirMode != "Solo long"
+
+stretchOk = maxZ == 0 or math.abs(close - maFast) >= maxZ * atr
+
+longSetup  = allowLong  and close > maTrend and rsi < rsiBuy  and (needDown == 0 or fallRun) and stretchOk
+shortSetup = allowShort and close < maTrend and rsi > rsiSell and (needDown == 0 or riseRun) and stretchOk
+
+// ----------------------------------------------------------------------------
+// ORDINI
+// ----------------------------------------------------------------------------
+if tradeOk and longSetup and strategy.position_size == 0
+    strategy.entry("Long", strategy.long)
+if tradeOk and shortSetup and strategy.position_size == 0
+    strategy.entry("Short", strategy.short)
+
+entryPrice = strategy.position_avg_price
+longSl  = entryPrice - slAtr * atr
+longTp  = entryPrice + tpAtr * atr
+shortSl = entryPrice + slAtr * atr
+shortTp = entryPrice - tpAtr * atr
+
+if strategy.position_size > 0
+    strategy.exit("Uscita L", from_entry="Long", stop=useSl ? longSl : na, limit=useTp ? longTp : na)
+if strategy.position_size < 0
+    strategy.exit("Uscita S", from_entry="Short", stop=useSl ? shortSl : na, limit=useTp ? shortTp : na)
+
+// barra d'ingresso letta solo quando una posizione esiste davvero:
+// chiamare entry_bar_index() senza operazioni aperte darebbe indice fuori range
+var int entryBar = na
+if strategy.opentrades > 0
+    entryBar := strategy.opentrades.entry_bar_index(strategy.opentrades - 1)
+if strategy.position_size == 0
+    entryBar := na
+barsIn = na(entryBar) ? 0 : bar_index - entryBar
+
+closeLong  = strategy.position_size > 0 and ((exitFast and close > maFast) or (exitRsi and rsi > rsiOut) or (maxBars > 0 and barsIn >= maxBars))
+closeShort = strategy.position_size < 0 and ((exitFast and close < maFast) or (exitRsi and rsi < 100 - rsiOut) or (maxBars > 0 and barsIn >= maxBars))
+
+if closeLong
+    strategy.close("Long", comment="uscita")
+if closeShort
+    strategy.close("Short", comment="uscita")
+
+// ----------------------------------------------------------------------------
+// GRAFICA
+// ----------------------------------------------------------------------------
+plot(showMa ? maTrend : na, "Media di trend", color=color.new(#e7b54a, 20), linewidth=2)
+plot(showMa ? maFast : na, "Media veloce", color=color.new(#48a0ff, 30), linewidth=1)
+plotshape(tradeOk and longSetup and strategy.position_size == 0, "Setup long", shape.triangleup, location.belowbar, color.new(#23d18b, 0), size=size.tiny)
+plotshape(tradeOk and shortSetup and strategy.position_size == 0, "Setup short", shape.triangledown, location.abovebar, color.new(#ff4d5e, 0), size=size.tiny)
+
+// ----------------------------------------------------------------------------
+// STATISTICHE — win rate insieme a cio' che lo rende (o no) sostenibile
+// ----------------------------------------------------------------------------
+f_tblPos() =>
+    switch tblPos
+        "Alto destra"   => position.top_right
+        "Alto sinistra" => position.top_left
+        "Basso destra"  => position.bottom_right
+        => position.bottom_left
+
+var table tbl = table.new(f_tblPos(), 2, 9, border_width=1, frame_width=1, frame_color=color.new(#96aacd, 70))
+
+f_cell(int r, string k, string v, color vc) =>
+    table.cell(tbl, 0, r, k, text_color=color.new(#8294b4, 0), text_size=size.tiny, bgcolor=color.new(#0a111f, 10))
+    table.cell(tbl, 1, r, v, text_color=vc, text_size=size.tiny, bgcolor=color.new(#0a111f, 10))
+
+if showTbl and barstate.islast
+    n       = strategy.closedtrades
+    wins    = strategy.wintrades
+    losses  = strategy.losstrades
+    wr      = n > 0 ? wins / n * 100 : na
+    pf      = strategy.grossloss > 0 ? strategy.grossprofit / strategy.grossloss : na
+    avgW    = wins > 0 ? strategy.grossprofit / wins : na
+    avgL    = losses > 0 ? strategy.grossloss / losses : na
+    payoff  = not na(avgW) and not na(avgL) and avgL > 0 ? avgW / avgL : na
+    expect  = n > 0 ? strategy.netprofit / n : na
+    ddPct   = strategy.initial_capital > 0 ? strategy.max_drawdown / strategy.initial_capital * 100 : na
+    netPct  = strategy.initial_capital > 0 ? strategy.netprofit / strategy.initial_capital * 100 : na
+    wrCol   = na(wr) ? color.new(#5f7193, 0) : wr >= 65 ? color.new(#23d18b, 0) : wr >= 50 ? color.new(#e7b54a, 0) : color.new(#ff4d5e, 0)
+    pfCol   = na(pf) ? color.new(#5f7193, 0) : pf >= 1.5 ? color.new(#23d18b, 0) : pf >= 1.0 ? color.new(#e7b54a, 0) : color.new(#ff4d5e, 0)
+
+    table.cell(tbl, 0, 0, "AURUM MR", text_color=color.new(#e7b54a, 0), text_size=size.tiny, bgcolor=color.new(#080d18, 0))
+    table.cell(tbl, 1, 0, dirMode, text_color=color.new(#cdd9ee, 0), text_size=size.tiny, bgcolor=color.new(#080d18, 0))
+    f_cell(1, "Operazioni", str.tostring(n), color.new(#cdd9ee, 0))
+    f_cell(2, "Win rate", na(wr) ? "—" : str.tostring(wr, "#.#") + "%", wrCol)
+    f_cell(3, "Profit factor", na(pf) ? "—" : str.tostring(pf, "#.##"), pfCol)
+    f_cell(4, "Payoff medio", na(payoff) ? "—" : str.tostring(payoff, "#.##") + "×", color.new(#cdd9ee, 0))
+    f_cell(5, "Attesa / trade", na(expect) ? "—" : str.tostring(expect, "#.##"), expect > 0 ? color.new(#23d18b, 0) : color.new(#ff4d5e, 0))
+    f_cell(6, "Netto", na(netPct) ? "—" : (netPct >= 0 ? "+" : "") + str.tostring(netPct, "#.#") + "%", netPct >= 0 ? color.new(#23d18b, 0) : color.new(#ff4d5e, 0))
+    f_cell(7, "Max drawdown", na(ddPct) ? "—" : "-" + str.tostring(ddPct, "#.#") + "%", color.new(#ff4d5e, 0))
+    f_cell(8, "Campione", n < 30 ? "troppo piccolo" : n < 100 ? "limitato" : "accettabile", n < 30 ? color.new(#ff4d5e, 0) : n < 100 ? color.new(#e7b54a, 0) : color.new(#23d18b, 0))
+
+// ----------------------------------------------------------------------------
+// ALERT
+// ----------------------------------------------------------------------------
+alertcondition(longSetup,  "Setup long",  "AURUM MR: ritorno alla media in acquisto")
+alertcondition(shortSetup, "Setup short", "AURUM MR: ritorno alla media in vendita")
