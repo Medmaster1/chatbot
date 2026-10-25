@@ -37,6 +37,7 @@ Tutto in **HTML/CSS/JS puro** (app single-file), pubblicato su **GitHub Pages**.
 |---|---|---|
 | AURUM Bar Pattern MTF | `pine/aurum-bar-pattern-mtf.pine` | Porting Pine v6 di `bar-pattern.html`: 28 pattern a 1/2/3 barre con scoring contestuale, tabella di scansione su 5 timeframe con bias di confluenza pesato, proiezione "pattern a barre" (copia barre, specchiato/ribaltato, modello barre/candele/linea, scala, visibilita per timeframe) e alert |
 | AURUM VWAP | `pine/aurum-vwap.pine` | VWAP ancorato (sessione, settimana, mese, trimestre, anno, data scelta, swing high/low, inizio grafico) con 3 coppie di bande a deviazione standard pesata o percentuale, VWAP del periodo precedente, VWAP di timeframe superiore senza repaint, tabella di stato (distanza %, z-score, zona) e alert su incroci e bande |
+| AURUM Sessions | `pine/aurum-sessions.pine` | Le tre sessioni operative (Asia, Londra, New York): sfondo e box del range, mediana, range di apertura, livelli massimo/minimo della sessione precedente estesi, evidenziazione della sovrapposizione Londra/NY, tabella con range corrente e medio per sessione, alert su aperture e rotture |
 
 ---
 
