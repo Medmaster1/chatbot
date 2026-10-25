@@ -3,13 +3,15 @@
 // AURUM SESSIONS — le tre sessioni operative (Asia, Londra, New York)
 // KID Digital Wealth
 //
-//  · Evidenzia a schermo Asia, Londra e New York con sfondo, box del range,
-//    linea mediana e range di apertura dei primi N minuti.
-//  · Tiene i massimi/minimi della sessione precedente come livelli estesi:
-//    sono i riferimenti che il mercato va a prendere nella sessione dopo.
-//  · Evidenzia la sovrapposizione Londra/New York, la fascia piu' liquida.
-//  · Tabella con range corrente, range medio e direzione di ogni sessione.
-//  · Alert su apertura/chiusura sessione e rottura dei livelli precedenti.
+//  · Asia, Londra e New York con sfondo, box del range, mediana e range di
+//    apertura dei primi N minuti. Ogni sessione ha il proprio fuso orario,
+//    cosi' gli orari seguono da soli i cambi di ora legale.
+//  · Massimi/minimi della sessione precedente come livelli estesi, con
+//    rilevazione delle prese di liquidita' (sweep: rottura e rientro).
+//  · Breakout del range di apertura segnalato a grafico e in alert.
+//  · Sovrapposizione Londra/New York evidenziata: la fascia piu' liquida.
+//  · Tabella con range corrente, range medio, durata e statistica storica di
+//    quante volte la sessione rompe i livelli di quella precedente.
 //
 // Funziona solo su grafici intraday: su giornaliero o superiore una sessione
 // non e' distinguibile dentro la barra e l'indicatore si disattiva.
@@ -23,87 +25,142 @@ indicator("AURUM Sessions — Asia / Londra / New York", shorttitle="AURUM Sessi
 // INPUT
 // ----------------------------------------------------------------------------
 gG = "Generale"
-tz      = input.string("UTC", "Fuso orario delle sessioni", options=["UTC", "Exchange", "Europe/Rome", "Europe/London", "America/New_York", "Asia/Tokyo"], tooltip="Gli orari sotto sono letti in questo fuso. I valori predefiniti sono in UTC.", group=gG)
-showBg  = input.bool(true,  "Sfondo delle sessioni", group=gG)
-showBox = input.bool(true,  "Box con massimo/minimo di sessione", group=gG)
-showMid = input.bool(false, "Linea mediana del range", group=gG)
-showLvl = input.bool(true,  "Livelli della sessione precedente", group=gG)
-extBars = input.int(60, "Estensione livelli (barre)", minval=5, maxval=500, group=gG)
-showLbl = input.bool(true,  "Etichetta con il range a fine sessione", group=gG)
-orMin   = input.int(30, "Range di apertura (minuti, 0 = off)", minval=0, maxval=240, group=gG)
+tz       = input.string("UTC", "Fuso orario predefinito", options=["UTC", "Exchange", "Europe/Rome", "Europe/London", "America/New_York", "Asia/Tokyo"], tooltip="Usato dalle sessioni impostate su '(globale)'.", group=gG)
+keepSess = input.int(15, "Sessioni storiche da disegnare", minval=1, maxval=100, tooltip="Limita box, livelli ed etichette alle ultime N sessioni: grafico piu' pulito e piu' leggero.", group=gG)
+showBg   = input.bool(true,  "Sfondo delle sessioni", group=gG)
+showBox  = input.bool(true,  "Box con massimo/minimo di sessione", group=gG)
+showMid  = input.bool(false, "Linea mediana del range", group=gG)
+showLvl  = input.bool(true,  "Livelli della sessione precedente", group=gG)
+extBars  = input.int(60, "Estensione livelli (barre)", minval=5, maxval=500, group=gG)
+showLbl  = input.bool(true,  "Etichetta con il range a fine sessione", group=gG)
+orMin    = input.int(30, "Range di apertura (minuti, 0 = off)", minval=0, maxval=240, group=gG)
+showSwp  = input.bool(true,  "Segnala le prese di liquidita' (sweep)", tooltip="Il prezzo buca il massimo/minimo della sessione precedente e rientra entro la chiusura della barra.", group=gG)
+showOrB  = input.bool(true,  "Segnala il breakout del range di apertura", group=gG)
 
 gA = "Asia"
-a1On  = input.bool(true, "Attiva", inline="a", group=gA)
-a1Ses = input.session("0000-0900", "", inline="a", group=gA)
-a1Col = input.color(color.new(#9b7bff, 0), "", inline="a", group=gA)
+a1On  = input.bool(true, "Attiva", inline="a1", group=gA)
+a1Ses = input.session("0000-0900", "", inline="a1", group=gA)
+a1Col = input.color(color.new(#9b7bff, 0), "", inline="a1", group=gA)
+a1Tz  = input.string("(globale)", "Fuso", options=["(globale)", "UTC", "Asia/Tokyo", "Europe/Rome", "Europe/London", "America/New_York"], group=gA)
 
 gL = "Londra"
-l1On  = input.bool(true, "Attiva", inline="l", group=gL)
-l1Ses = input.session("0700-1600", "", inline="l", group=gL)
-l1Col = input.color(color.new(#48a0ff, 0), "", inline="l", group=gL)
+l1On  = input.bool(true, "Attiva", inline="l1", group=gL)
+l1Ses = input.session("0700-1600", "", inline="l1", group=gL)
+l1Col = input.color(color.new(#48a0ff, 0), "", inline="l1", group=gL)
+l1Tz  = input.string("(globale)", "Fuso", options=["(globale)", "UTC", "Asia/Tokyo", "Europe/Rome", "Europe/London", "America/New_York"], group=gL)
 
 gN = "New York"
-n1On  = input.bool(true, "Attiva", inline="n", group=gN)
-n1Ses = input.session("1200-2100", "", inline="n", group=gN)
-n1Col = input.color(color.new(#e7b54a, 0), "", inline="n", group=gN)
+n1On  = input.bool(true, "Attiva", inline="n1", group=gN)
+n1Ses = input.session("1200-2100", "", inline="n1", group=gN)
+n1Col = input.color(color.new(#e7b54a, 0), "", inline="n1", group=gN)
+n1Tz  = input.string("(globale)", "Fuso", options=["(globale)", "UTC", "Asia/Tokyo", "Europe/Rome", "Europe/London", "America/New_York"], group=gN)
 
 gO = "Extra"
 showOvl = input.bool(true, "Evidenzia sovrapposizione Londra / New York", group=gO)
 ovlCol  = input.color(color.new(#23d18b, 0), "Colore sovrapposizione", group=gO)
 showTbl = input.bool(true, "Tabella sessioni", group=gO)
 tblPos  = input.string("Basso destra", "Posizione tabella", options=["Alto destra","Alto sinistra","Basso destra","Basso sinistra"], group=gO)
-avgDays = input.int(20, "Giorni per il range medio", minval=3, maxval=200, group=gO)
+avgDays = input.int(20, "Sessioni per il range medio", minval=3, maxval=200, group=gO)
 
 // ----------------------------------------------------------------------------
-// GUARDIA SUL TIMEFRAME
+// GUARDIA SUL TIMEFRAME E FUSI
 // ----------------------------------------------------------------------------
 chartSec = timeframe.in_seconds(timeframe.period)
 intraday = chartSec < 86400
 // "Exchange" non e' un fuso valido per time(): va risolto nel fuso del simbolo
-tzStr    = tz == "Exchange" ? syminfo.timezone : tz
+tzStr = tz == "Exchange" ? syminfo.timezone : tz
+tzA   = a1Tz == "(globale)" ? tzStr : a1Tz
+tzL   = l1Tz == "(globale)" ? tzStr : l1Tz
+tzN   = n1Tz == "(globale)" ? tzStr : n1Tz
+
+// ----------------------------------------------------------------------------
+// PULIZIA DEI DISEGNI — tiene solo le ultime sessioni richieste
+// (funzioni globali: Pine non ammette definizioni annidate)
+// ----------------------------------------------------------------------------
+f_pushBox(array<box> arr, box b) =>
+    array.push(arr, b)
+    if array.size(arr) > keepSess * 2
+        box.delete(array.shift(arr))
+f_pushLine(array<line> arr, line l) =>
+    array.push(arr, l)
+    if array.size(arr) > keepSess * 3
+        line.delete(array.shift(arr))
+f_pushLabel(array<label> arr, label l) =>
+    array.push(arr, l)
+    if array.size(arr) > keepSess * 3
+        label.delete(array.shift(arr))
 
 // ----------------------------------------------------------------------------
 // MOTORE DI SESSIONE
 // Ogni chiamata della funzione ha il proprio stato: una per sessione.
-// Ritorna [dentro, apertura, chiusura, max, min, max prec., min prec., range medio]
 // ----------------------------------------------------------------------------
-f_session(string ses, bool on, color col, string nm) =>
-    var float hi      = na
-    var float lo      = na
-    var float op      = na
-    var float prevHi  = na
-    var float prevLo  = na
-    var float orHi    = na
-    var float orLo    = na
-    var float avgRng  = na
-    var int   cntRng  = 0
-    var int   startMs = na
+f_session(string ses, string tzS, bool on, color col, string nm) =>
+    var float hi       = na
+    var float lo       = na
+    var float op       = na
+    var float prevHi   = na
+    var float prevLo   = na
+    var float orHi     = na
+    var float orLo     = na
+    var float orHiF    = na
+    var float orLoF    = na
+    var bool  orDone   = false
+    var bool  sweptHi  = false
+    var bool  sweptLo  = false
+    var bool  brokeHi  = false
+    var bool  brokeLo  = false
+    var int   nWithPrev = 0
+    var int   cntBrkHi  = 0
+    var int   cntBrkLo  = 0
+    var float avgRng   = na
+    var int   cntRng   = 0
+    var int   startMs  = na
     var int   startBar = na
-    var box   bx      = na
-    var box   orBx    = na
-    var line  midLn   = na
+    var box   bx       = na
+    var box   orBx     = na
+    var line  midLn    = na
+    var array<box>   boxes  = array.new<box>()
+    var array<line>  lines  = array.new<line>()
+    var array<label> labels = array.new<label>()
 
-    t       = time(timeframe.period, ses, tzStr)
+    t       = time(timeframe.period, ses, tzS)
     inS     = on and intraday and not na(t)
     started = inS and not inS[1]
     ended   = not inS and inS[1] and on and intraday
 
+    bool sweepHiSig = false
+    bool sweepLoSig = false
+    bool orUpSig    = false
+    bool orDnSig    = false
+
     if started
-        prevHi  := hi
-        prevLo  := lo
-        hi      := high
-        lo      := low
-        op      := open
-        orHi    := high
-        orLo    := low
-        startMs := time
+        prevHi   := hi
+        prevLo   := lo
+        hi       := high
+        lo       := low
+        op       := open
+        orHi     := high
+        orLo     := low
+        orHiF    := na
+        orLoF    := na
+        orDone   := orMin == 0
+        sweptHi  := false
+        sweptLo  := false
+        brokeHi  := false
+        brokeLo  := false
+        startMs  := time
         startBar := bar_index
+        if not na(prevHi)
+            nWithPrev := nWithPrev + 1
         if showBox
             bx := box.new(bar_index, high, bar_index + 1, low, border_color=color.new(col, 30), bgcolor=na)
+            f_pushBox(boxes, bx)
         if showMid
             midLn := line.new(bar_index, hl2, bar_index + 1, hl2, color=color.new(col, 30), style=line.style_dashed)
+            f_pushLine(lines, midLn)
         if orMin > 0
             orBx := box.new(bar_index, high, bar_index + 1, low, border_color=color.new(col, 10), bgcolor=color.new(col, 85), border_style=line.style_dotted)
+            f_pushBox(boxes, orBx)
     else if inS
         hi := math.max(hi, high)
         lo := math.min(lo, low)
@@ -114,13 +171,43 @@ f_session(string ses, bool on, color col, string nm) =>
         if not na(midLn)
             line.set_xy1(midLn, nz(startBar, bar_index), math.avg(hi, lo))
             line.set_xy2(midLn, bar_index + 1, math.avg(hi, lo))
-        if orMin > 0 and not na(startMs) and time - startMs <= orMin * 60000
-            orHi := math.max(orHi, high)
-            orLo := math.min(orLo, low)
-            if not na(orBx)
-                box.set_top(orBx, orHi)
-                box.set_bottom(orBx, orLo)
-                box.set_right(orBx, bar_index + 1)
+
+        // range di apertura: si chiude allo scadere dei minuti impostati
+        if orMin > 0 and not na(startMs)
+            if time - startMs <= orMin * 60000
+                orHi := math.max(orHi, high)
+                orLo := math.min(orLo, low)
+                if not na(orBx)
+                    box.set_top(orBx, orHi)
+                    box.set_bottom(orBx, orLo)
+                    box.set_right(orBx, bar_index + 1)
+            else if not orDone
+                orHiF  := orHi
+                orLoF  := orLo
+                orDone := true
+
+        // breakout del range di apertura (prima chiusura oltre il bordo)
+        if orDone and not na(orHiF)
+            if close > orHiF and close[1] <= orHiF
+                orUpSig := true
+            if close < orLoF and close[1] >= orLoF
+                orDnSig := true
+
+        // rotture e prese di liquidita' sui livelli della sessione precedente
+        if not na(prevHi) and high > prevHi
+            if not brokeHi
+                brokeHi  := true
+                cntBrkHi := cntBrkHi + 1
+            if close < prevHi and not sweptHi
+                sweptHi    := true
+                sweepHiSig := true
+        if not na(prevLo) and low < prevLo
+            if not brokeLo
+                brokeLo  := true
+                cntBrkLo := cntBrkLo + 1
+            if close > prevLo and not sweptLo
+                sweptLo    := true
+                sweepLoSig := true
 
     if ended
         rng = hi - lo
@@ -128,28 +215,45 @@ f_session(string ses, bool on, color col, string nm) =>
             cntRng := math.min(cntRng + 1, avgDays)
             avgRng := na(avgRng) ? rng : avgRng + (rng - avgRng) / cntRng
         if showLvl
-            line.new(bar_index, hi, bar_index + extBars, hi, color=color.new(col, 25), width=1)
-            line.new(bar_index, lo, bar_index + extBars, lo, color=color.new(col, 25), width=1)
+            f_pushLine(lines, line.new(bar_index, hi, bar_index + extBars, hi, color=color.new(col, 25), width=1))
+            f_pushLine(lines, line.new(bar_index, lo, bar_index + extBars, lo, color=color.new(col, 25), width=1))
         if showLbl
-            label.new(bar_index, hi, nm + " " + str.tostring(hi - lo, format.mintick),
+            f_pushLabel(labels, label.new(bar_index, hi, nm + " " + str.tostring(hi - lo, format.mintick),
                  style=label.style_label_down, color=color.new(col, 80),
-                 textcolor=color.new(#cdd9ee, 0), size=size.tiny)
+                 textcolor=color.new(#cdd9ee, 0), size=size.tiny))
 
-    [inS, started, ended, hi, lo, prevHi, prevLo, op, avgRng]
+    // marcatori delle prese di liquidita'
+    if showSwp and sweepHiSig
+        f_pushLabel(labels, label.new(bar_index, high, "sweep " + nm, style=label.style_label_down,
+             color=color.new(#ff4d5e, 70), textcolor=color.new(#ff4d5e, 0), size=size.tiny))
+    if showSwp and sweepLoSig
+        f_pushLabel(labels, label.new(bar_index, low, "sweep " + nm, style=label.style_label_up,
+             color=color.new(#23d18b, 70), textcolor=color.new(#23d18b, 0), size=size.tiny))
 
-[inAsia, openAsia, closeAsia, hiAsia, loAsia, pHiAsia, pLoAsia, opAsia, avgAsia] = f_session(a1Ses, a1On, a1Col, "Asia")
-[inLdn,  openLdn,  closeLdn,  hiLdn,  loLdn,  pHiLdn,  pLoLdn,  opLdn,  avgLdn]  = f_session(l1Ses, l1On, l1Col, "Londra")
-[inNy,   openNy,   closeNy,   hiNy,   loNy,   pHiNy,   pLoNy,   opNy,   avgNy]   = f_session(n1Ses, n1On, n1Col, "New York")
+    elapsed = inS and not na(startMs) ? math.round((time - startMs) / 60000) : na
+    // 100.0 davanti: la divisione fra due interi in Pine tronca a intero
+    pctHi   = nWithPrev > 0 ? 100.0 * cntBrkHi / nWithPrev : na
+    pctLo   = nWithPrev > 0 ? 100.0 * cntBrkLo / nWithPrev : na
+    [inS, started, ended, hi, lo, prevHi, prevLo, op, avgRng, sweepHiSig, sweepLoSig, orUpSig, orDnSig, elapsed, pctHi, pctLo]
+
+[inAsia, openAsia, closeAsia, hiAsia, loAsia, pHiAsia, pLoAsia, opAsia, avgAsia, swpHiAsia, swpLoAsia, orUpAsia, orDnAsia, elAsia, pctHiAsia, pctLoAsia] = f_session(a1Ses, tzA, a1On, a1Col, "Asia")
+[inLdn,  openLdn,  closeLdn,  hiLdn,  loLdn,  pHiLdn,  pLoLdn,  opLdn,  avgLdn,  swpHiLdn,  swpLoLdn,  orUpLdn,  orDnLdn,  elLdn,  pctHiLdn,  pctLoLdn]  = f_session(l1Ses, tzL, l1On, l1Col, "Londra")
+[inNy,   openNy,   closeNy,   hiNy,   loNy,   pHiNy,   pLoNy,   opNy,   avgNy,   swpHiNy,   swpLoNy,   orUpNy,   orDnNy,   elNy,   pctHiNy,   pctLoNy]   = f_session(n1Ses, tzN, n1On, n1Col, "New York")
 
 inOverlap = inLdn and inNy
 
 // ----------------------------------------------------------------------------
-// SFONDO
+// SFONDO E MARCATORI
 // ----------------------------------------------------------------------------
 bgcolor(showBg and inOverlap and showOvl ? color.new(ovlCol, 88) : na, title="Sovrapposizione Londra/NY")
 bgcolor(showBg and inAsia and not inOverlap ? color.new(a1Col, 94) : na, title="Sessione Asia")
 bgcolor(showBg and inLdn and not inOverlap ? color.new(l1Col, 94) : na, title="Sessione Londra")
 bgcolor(showBg and inNy and not inOverlap ? color.new(n1Col, 94) : na, title="Sessione New York")
+
+orUp = orUpAsia or orUpLdn or orUpNy
+orDn = orDnAsia or orDnLdn or orDnNy
+plotshape(showOrB and orUp, "Breakout range apertura rialzista", shape.triangleup, location.belowbar, color.new(#23d18b, 0), size=size.tiny)
+plotshape(showOrB and orDn, "Breakout range apertura ribassista", shape.triangledown, location.abovebar, color.new(#ff4d5e, 0), size=size.tiny)
 
 // ----------------------------------------------------------------------------
 // TABELLA
@@ -161,57 +265,54 @@ f_tblPos() =>
         "Basso destra"  => position.bottom_right
         => position.bottom_left
 
-var table tbl = table.new(f_tblPos(), 5, 5, border_width=1, frame_width=1, frame_color=color.new(#96aacd, 70))
+var table tbl = table.new(f_tblPos(), 6, 5, border_width=1, frame_width=1, frame_color=color.new(#96aacd, 70))
 
-f_row(int r, string nm, color col, bool live, float hi, float lo, float op, float avg) =>
-    rng  = na(hi) or na(lo) ? na : hi - lo
-    dir  = na(op) ? 0 : close > op ? 1 : close < op ? -1 : 0
-    rel  = na(rng) or na(avg) or avg == 0 ? na : rng / avg * 100
+f_hdr(int c, string txt) =>
+    table.cell(tbl, c, 0, txt, text_color=color.new(#5f7193, 0), text_size=size.tiny, bgcolor=color.new(#080d18, 0))
+
+f_row(int r, string nm, color col, bool live, float hi, float lo, float op, float avg, float el, float pHi, float pLo) =>
+    rng   = na(hi) or na(lo) ? na : hi - lo
+    dir   = na(op) ? 0 : close > op ? 1 : close < op ? -1 : 0
+    rel   = na(rng) or na(avg) or avg == 0 ? na : rng / avg * 100
     stCol = live ? color.new(#23d18b, 0) : color.new(#5f7193, 0)
+    arrow = not live ? "" : dir > 0 ? " ▲" : dir < 0 ? " ▼" : ""
+    durTxt = live and not na(el) ? str.tostring(math.floor(el / 60), "#") + "h" + str.tostring(math.round(el % 60), "00") : "chiusa"
     table.cell(tbl, 0, r, nm, text_color=color.new(col, 0), text_size=size.tiny, bgcolor=color.new(#0a111f, 10))
-    arrow = dir > 0 ? " ▲" : dir < 0 ? " ▼" : ""
-    table.cell(tbl, 1, r, (live ? "in corso" : "chiusa") + arrow, text_color=stCol, text_size=size.tiny, bgcolor=color.new(#0a111f, 10))
+    table.cell(tbl, 1, r, durTxt + arrow, text_color=stCol, text_size=size.tiny, bgcolor=color.new(#0a111f, 10))
     table.cell(tbl, 2, r, na(hi) ? "—" : str.tostring(hi, format.mintick), text_color=color.new(#cdd9ee, 0), text_size=size.tiny, bgcolor=color.new(#0a111f, 10))
     table.cell(tbl, 3, r, na(lo) ? "—" : str.tostring(lo, format.mintick), text_color=color.new(#cdd9ee, 0), text_size=size.tiny, bgcolor=color.new(#0a111f, 10))
     table.cell(tbl, 4, r, na(rng) ? "—" : str.tostring(rng, format.mintick) + (na(rel) ? "" : " · " + str.tostring(rel, "#") + "%"),
          text_color=color.new(na(rel) or rel < 100 ? #8294b4 : #e7b54a, 0), text_size=size.tiny, bgcolor=color.new(#0a111f, 10))
+    table.cell(tbl, 5, r, na(pHi) ? "—" : "H " + str.tostring(pHi, "#") + "% · L " + str.tostring(pLo, "#") + "%",
+         text_color=color.new(#8294b4, 0), text_size=size.tiny, bgcolor=color.new(#0a111f, 10))
 
 if showTbl and barstate.islast
-    table.cell(tbl, 0, 0, intraday ? "SESSIONE" : "SOLO INTRADAY", text_color=color.new(intraday ? #5f7193 : #ff4d5e, 0), text_size=size.tiny, bgcolor=color.new(#080d18, 0))
-    table.cell(tbl, 1, 0, "STATO", text_color=color.new(#5f7193, 0), text_size=size.tiny, bgcolor=color.new(#080d18, 0))
-    table.cell(tbl, 2, 0, "MAX",   text_color=color.new(#5f7193, 0), text_size=size.tiny, bgcolor=color.new(#080d18, 0))
-    table.cell(tbl, 3, 0, "MIN",   text_color=color.new(#5f7193, 0), text_size=size.tiny, bgcolor=color.new(#080d18, 0))
-    table.cell(tbl, 4, 0, "RANGE · % MEDIA", text_color=color.new(#5f7193, 0), text_size=size.tiny, bgcolor=color.new(#080d18, 0))
-    f_row(1, "Asia",     a1Col, inAsia, hiAsia, loAsia, opAsia, avgAsia)
-    f_row(2, "Londra",   l1Col, inLdn,  hiLdn,  loLdn,  opLdn,  avgLdn)
-    f_row(3, "New York", n1Col, inNy,   hiNy,   loNy,   opNy,   avgNy)
+    f_hdr(0, intraday ? "SESSIONE" : "SOLO INTRADAY")
+    f_hdr(1, "DURATA")
+    f_hdr(2, "MAX")
+    f_hdr(3, "MIN")
+    f_hdr(4, "RANGE · % MEDIA")
+    f_hdr(5, "ROMPE LA PRECEDENTE")
+    f_row(1, "Asia",     a1Col, inAsia, hiAsia, loAsia, opAsia, avgAsia, elAsia, pctHiAsia, pctLoAsia)
+    f_row(2, "Londra",   l1Col, inLdn,  hiLdn,  loLdn,  opLdn,  avgLdn,  elLdn,  pctHiLdn,  pctLoLdn)
+    f_row(3, "New York", n1Col, inNy,   hiNy,   loNy,   opNy,   avgNy,   elNy,   pctHiNy,   pctLoNy)
     ovTxt = inOverlap ? "Londra + New York attive" : inAsia ? "fascia asiatica" : inLdn ? "solo Londra" : inNy ? "solo New York" : "fuori sessione"
     table.cell(tbl, 0, 4, "Fase", text_color=color.new(#e7b54a, 0), text_size=size.tiny, bgcolor=color.new(#0d1526, 0))
     table.cell(tbl, 1, 4, ovTxt, text_color=color.new(#cdd9ee, 0), text_size=size.tiny, bgcolor=color.new(#0d1526, 0))
     table.cell(tbl, 2, 4, "", bgcolor=color.new(#0d1526, 0))
     table.cell(tbl, 3, 4, "", bgcolor=color.new(#0d1526, 0))
-    table.cell(tbl, 4, 4, tz, text_color=color.new(#8294b4, 0), text_size=size.tiny, bgcolor=color.new(#0d1526, 0))
+    table.cell(tbl, 4, 4, "fuso " + tzStr, text_color=color.new(#8294b4, 0), text_size=size.tiny, bgcolor=color.new(#0d1526, 0))
+    table.cell(tbl, 5, 4, "ultime " + str.tostring(keepSess) + " sessioni", text_color=color.new(#8294b4, 0), text_size=size.tiny, bgcolor=color.new(#0d1526, 0))
 
 // ----------------------------------------------------------------------------
 // ALERT
 // ----------------------------------------------------------------------------
-// ta.* sempre a livello globale, mai dentro un and: altrimenti potrebbero non
-// essere valutate su ogni barra e lo storico risulterebbe incoerente (CW10002)
-xAsiaHi = ta.crossover(close, pHiAsia)
-xAsiaLo = ta.crossunder(close, pLoAsia)
-xLdnHi  = ta.crossover(close, pHiLdn)
-xLdnLo  = ta.crossunder(close, pLoLdn)
+alertcondition(openAsia, "Apertura Asia",     "AURUM Sessions: apertura della sessione asiatica")
+alertcondition(openLdn,  "Apertura Londra",   "AURUM Sessions: apertura della sessione di Londra")
+alertcondition(openNy,   "Apertura New York", "AURUM Sessions: apertura della sessione di New York")
+alertcondition(closeNy,  "Chiusura New York", "AURUM Sessions: chiusura della sessione di New York")
 
-breakAsiaHi = not na(pHiAsia) and xAsiaHi
-breakAsiaLo = not na(pLoAsia) and xAsiaLo
-breakLdnHi  = not na(pHiLdn)  and xLdnHi
-breakLdnLo  = not na(pLoLdn)  and xLdnLo
-
-alertcondition(openAsia,  "Apertura Asia",      "AURUM Sessions: apertura della sessione asiatica")
-alertcondition(openLdn,   "Apertura Londra",    "AURUM Sessions: apertura della sessione di Londra")
-alertcondition(openNy,    "Apertura New York",  "AURUM Sessions: apertura della sessione di New York")
-alertcondition(closeNy,   "Chiusura New York",  "AURUM Sessions: chiusura della sessione di New York")
-alertcondition(breakAsiaHi, "Rottura massimo Asia", "AURUM Sessions: rotto il massimo della sessione asiatica")
-alertcondition(breakAsiaLo, "Rottura minimo Asia",  "AURUM Sessions: rotto il minimo della sessione asiatica")
-alertcondition(breakLdnHi,  "Rottura massimo Londra", "AURUM Sessions: rotto il massimo della sessione di Londra")
-alertcondition(breakLdnLo,  "Rottura minimo Londra",  "AURUM Sessions: rotto il minimo della sessione di Londra")
+alertcondition(swpHiAsia or swpHiLdn or swpHiNy, "Sweep su massimo precedente", "AURUM Sessions: presa di liquidita' sopra il massimo della sessione precedente, con rientro")
+alertcondition(swpLoAsia or swpLoLdn or swpLoNy, "Sweep su minimo precedente",  "AURUM Sessions: presa di liquidita' sotto il minimo della sessione precedente, con rientro")
+alertcondition(orUp, "Breakout range apertura rialzista", "AURUM Sessions: rotto al rialzo il range di apertura della sessione")
+alertcondition(orDn, "Breakout range apertura ribassista", "AURUM Sessions: rotto al ribasso il range di apertura della sessione")

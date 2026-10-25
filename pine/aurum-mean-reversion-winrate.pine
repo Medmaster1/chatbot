@@ -145,7 +145,7 @@ if showTbl and barstate.islast
     n       = strategy.closedtrades
     wins    = strategy.wintrades
     losses  = strategy.losstrades
-    wr      = n > 0 ? wins / n * 100 : na
+    wr      = n > 0 ? 100.0 * wins / n : na   // 100.0 davanti: int/int in Pine tronca
     pf      = strategy.grossloss > 0 ? strategy.grossprofit / strategy.grossloss : na
     avgW    = wins > 0 ? strategy.grossprofit / wins : na
     avgL    = losses > 0 ? strategy.grossloss / losses : na
